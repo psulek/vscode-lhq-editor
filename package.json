@@ -34,7 +34,7 @@
         {
           "id": "lhqTreeView",
           "name": "LHQ Structure",
-          "when": "resourceExtname == .lhq"
+          "when": "lhqEditorEnabled"
         }
       ]
     },
