@@ -15,48 +15,47 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<vscode.TreeI
 
         context.subscriptions.push(
             vscode.window.onDidChangeActiveTextEditor(e => this.onActiveEditorChanged(e)),
+            vscode.window.onDidChangeVisibleTextEditors(e => this.onDidChangeVisibleTextEditors(e)),
+
             vscode.workspace.onDidChangeTextDocument(e => this.onDidChangeTextDocument(e)),
+            vscode.workspace.onDidOpenTextDocument(e => this.onDidOpenTextDocument(e))
         );
 
         this.onActiveEditorChanged(vscode.window.activeTextEditor);
     }
+    
+    private onDidChangeVisibleTextEditors(e: readonly vscode.TextEditor[]): any {
+        //console.log("LhqTreeDataProvider.onDidChangeVisibleTextEditors:");
+
+        const editor = e.find(x=>x.document.fileName === vscode.window.activeTextEditor?.document.fileName);
+        if (editor) {
+            console.log("LhqTreeDataProvider.onDidChangeVisibleTextEditors: Active editor found:", editor.document?.fileName ?? '-');
+        } else {
+            console.log("LhqTreeDataProvider.onDidChangeVisibleTextEditors: No active editor found");
+        }
+    }
+
+    private onDidOpenTextDocument(e: vscode.TextDocument): any {
+        console.log("LhqTreeDataProvider.onDidOpenTextDocument:", e?.fileName ?? '-');
+    }
+    
 
     private onDidChangeTextDocument(e: vscode.TextDocumentChangeEvent): void {
-        console.log("LhqTreeDataProvider.onDocumentChanged:", e.document.fileName);
-        if (this.currentDocument && e.document.uri.toString() === this.currentDocument.uri.toString() && e.document.fileName.endsWith('.lhq')) {
-            this.currentDocument = e.document;
-            this.refresh();
-        }
+        console.log("LhqTreeDataProvider.onDocumentChanged:", e.document?.fileName ?? '-');
+        this.updateDocument(e.document);
     }
-
-    private isValidDocument(document: vscode.TextDocument): boolean {
-        return document && document.uri.scheme === 'file' && document.fileName.endsWith('.lhq');
-    }
-
-
-    // public isSameDocument(document: vscode.TextDocument): boolean {
-    //     return this.currentDocument!! && document.uri.toString() === this.currentDocument.uri.toString();
-    // }
 
     public onActiveEditorChanged(e: vscode.TextEditor | undefined): void {
-        const activeDocument = e?.document;
-        console.log("Active editor changed:", activeDocument?.fileName ?? '-none-');
+        console.log("LhqTreeDataProvider.onActiveEditorChanged:", e?.document.fileName ?? '-');
+        this.updateDocument(e?.document);
+    }
 
-        if (activeDocument && activeDocument.uri.scheme === 'file' && activeDocument.fileName.endsWith('.lhq')) {
-            this.lhqEditorEnabled = true;
-            // Update tree to this document if it's different from current, or if tree was empty/not for this doc
-            if (this.currentDocument?.uri.toString() !== activeDocument.uri.toString() || !this.currentData) {
-                this.currentDocument = activeDocument;
-                this.refresh();
-            }
+    public hasActiveDocument(): boolean {
+        return this.currentDocument !== null && this.lhqEditorEnabled;
+    }
 
-        } else {
-            if (this.lhqEditorEnabled) { // Only change context and clear tree if it was previously enabled
-                this.lhqEditorEnabled = false;
-                this.currentDocument = null;
-                this.refresh(); // Clear the tree
-            }
-        }
+    public isSameDocument(document: vscode.TextDocument): boolean {
+        return this.currentDocument !== null && this.currentDocument.uri.toString() === document.uri.toString();
     }
 
     public get lhqEditorEnabled(): boolean {
@@ -71,12 +70,27 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<vscode.TreeI
         }
     }
 
-    public updateDocument(document: vscode.TextDocument | null) {
-        console.log("LhqTreeDataProvider.updateDocument with:", document?.fileName ?? 'null');
+    public updateDocument(document: vscode.TextDocument | undefined) {
+        console.log("LhqTreeDataProvider.updateDocument with:", document?.fileName ?? '-');
 
-        this.currentDocument = document;
-        this.lhqEditorEnabled = !!document;
-        this.refresh();
+        if (document && document.uri.scheme === 'file' && document.fileName.endsWith('.lhq')) {
+            this.lhqEditorEnabled = true;
+            if (this.currentDocument?.uri.toString() !== document.uri.toString() || !this.currentData) {
+                this.currentDocument = document;
+                this.refresh();
+            }
+
+        } else {
+            if (this.lhqEditorEnabled) {
+                this.lhqEditorEnabled = false;
+                this.currentDocument = null;
+                this.refresh();
+            }
+        }
+
+        // this.currentDocument = document;
+        // this.lhqEditorEnabled = !!document;
+        // this.refresh();
     }
 
     refresh(): void {
