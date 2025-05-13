@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { LhqTreeItem } from './treeItem';
+import { isEditorActive, isValidDocument, logger, setEditorActive } from './utils';
 
 export class LhqTreeDataProvider implements vscode.TreeDataProvider<vscode.TreeItem> {
     private _onDidChangeTreeData: vscode.EventEmitter<vscode.TreeItem | undefined | null | void> = new vscode.EventEmitter<vscode.TreeItem | undefined | null | void>();
@@ -8,8 +9,6 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<vscode.TreeI
 
     private currentData: any = null;
     private currentDocument: vscode.TextDocument | null = null;
-
-    private _lhqEditorEnabled: boolean = false;;
 
     constructor(private context: vscode.ExtensionContext) {
 
@@ -23,74 +22,68 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<vscode.TreeI
 
         this.onActiveEditorChanged(vscode.window.activeTextEditor);
     }
-    
-    private onDidChangeVisibleTextEditors(e: readonly vscode.TextEditor[]): any {
-        //console.log("LhqTreeDataProvider.onDidChangeVisibleTextEditors:");
 
-        const editor = e.find(x=>x.document.fileName === vscode.window.activeTextEditor?.document.fileName);
+    private onDidChangeVisibleTextEditors(e: readonly vscode.TextEditor[]): any {
+        const editor = e.find(x => x.document.fileName === vscode.window.activeTextEditor?.document.fileName);
         if (editor) {
-            console.log("LhqTreeDataProvider.onDidChangeVisibleTextEditors: Active editor found:", editor.document?.fileName ?? '-');
+            logger().log('debug', `LhqTreeDataProvider.onDidChangeVisibleTextEditors: Active editor found: ${editor.document?.fileName ?? '-'}`);
         } else {
-            console.log("LhqTreeDataProvider.onDidChangeVisibleTextEditors: No active editor found");
+            logger().log('debug', "LhqTreeDataProvider.onDidChangeVisibleTextEditors: No active editor found");
         }
     }
 
     private onDidOpenTextDocument(e: vscode.TextDocument): any {
-        console.log("LhqTreeDataProvider.onDidOpenTextDocument:", e?.fileName ?? '-');
+        logger().log('debug', `LhqTreeDataProvider.onDidOpenTextDocument: ${e?.fileName ?? '-'}`);
     }
-    
+
 
     private onDidChangeTextDocument(e: vscode.TextDocumentChangeEvent): void {
-        console.log("LhqTreeDataProvider.onDocumentChanged:", e.document?.fileName ?? '-');
+        logger().log('debug', `LhqTreeDataProvider.onDocumentChanged: ${e.document?.fileName ?? '-'}`);
         this.updateDocument(e.document);
     }
 
     public onActiveEditorChanged(e: vscode.TextEditor | undefined): void {
-        console.log("LhqTreeDataProvider.onActiveEditorChanged:", e?.document.fileName ?? '-');
+        logger().log('debug', `LhqTreeDataProvider.onActiveEditorChanged: ${e?.document.fileName ?? '-'}`);
         this.updateDocument(e?.document);
     }
 
     public hasActiveDocument(): boolean {
-        return this.currentDocument !== null && this.lhqEditorEnabled;
+        return this.currentDocument !== null && isEditorActive();
     }
 
     public isSameDocument(document: vscode.TextDocument): boolean {
         return this.currentDocument !== null && this.currentDocument.uri.toString() === document.uri.toString();
     }
 
-    public get lhqEditorEnabled(): boolean {
-        return this._lhqEditorEnabled;
-    }
-
-    public set lhqEditorEnabled(value: boolean) {
-        if (this._lhqEditorEnabled !== value) {
-            this._lhqEditorEnabled = value;
-            console.log("LhqTreeDataProviderlhqEditorEnabled changed to: ", value);
-            vscode.commands.executeCommand('setContext', 'lhqEditorEnabled', value);
-        }
-    }
+    // flag whenever that last active editor (not null) is other type than LHQ (tasks window, etc...)
+    private _lastActiveEditorNonLhq = false;
 
     public updateDocument(document: vscode.TextDocument | undefined) {
-        console.log("LhqTreeDataProvider.updateDocument with:", document?.fileName ?? '-');
+        if (document && !isValidDocument(document)) {
+            this._lastActiveEditorNonLhq = true;
+            logger().log('debug', `LhqTreeDataProvider.updateDocument skipped due to invalid document.`);
+            return;
+        }
 
-        if (document && document.uri.scheme === 'file' && document.fileName.endsWith('.lhq')) {
-            this.lhqEditorEnabled = true;
+        logger().log('debug', `LhqTreeDataProvider.updateDocument with: ${document?.fileName ?? '-'}`);
+        if (isValidDocument(document)) {
+            setEditorActive(true);
             if (this.currentDocument?.uri.toString() !== document.uri.toString() || !this.currentData) {
                 this.currentDocument = document;
                 this.refresh();
             }
-
         } else {
-            if (this.lhqEditorEnabled) {
-                this.lhqEditorEnabled = false;
-                this.currentDocument = null;
-                this.refresh();
+            if (isEditorActive()) {
+                if (!this._lastActiveEditorNonLhq) {
+                    this._lastActiveEditorNonLhq = false;
+                    setEditorActive(false);
+                    this.currentDocument = null;
+                    this.refresh();
+                } else {
+                    this._lastActiveEditorNonLhq = false;
+                }
             }
         }
-
-        // this.currentDocument = document;
-        // this.lhqEditorEnabled = !!document;
-        // this.refresh();
     }
 
     refresh(): void {
@@ -100,10 +93,9 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<vscode.TreeI
                 // In a real scenario, you'd parse your specific LHQ format
                 this.currentData = JSON.parse(this.currentDocument.getText());
             } catch (e) {
-                console.error("Error parsing LHQ file for TreeView:", e);
-                // Fallback to sample data or clear if parsing fails
-                this.currentData = sampleLhqData; // Or set to null to show an empty tree
-                vscode.window.showWarningMessage("Could not parse LHQ file for TreeView. Displaying sample data.");
+                logger().log('error', 'Error parsing LHQ file :', e as Error);
+                this.currentData = {};
+                vscode.window.showWarningMessage('Could not parse LHQ file for TreeView.');
             }
         } else {
             this.currentData = null;
