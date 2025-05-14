@@ -5,6 +5,12 @@ import { isEditorActive, isValidDocument, logger, setEditorActive } from './util
 
 import { LhqTreeItem } from './treeItem';
 
+const actions = {
+    addItem: 'lhqTreeView.addItem',
+    renameItem: 'lhqTreeView.renameItem',
+    deleteItem: 'lhqTreeView.deleteItem',
+};
+
 export class LhqTreeDataProvider implements vscode.TreeDataProvider<LhqTreeItem> {
     // flag whenever that last active editor (not null) is other type than LHQ (tasks window, etc...)
     private _lastActiveEditorNonLhq = false;
@@ -22,10 +28,45 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<LhqTreeItem>
             vscode.window.onDidChangeVisibleTextEditors(e => this.onDidChangeVisibleTextEditors(e)),
 
             vscode.workspace.onDidChangeTextDocument(e => this.onDidChangeTextDocument(e)),
-            vscode.workspace.onDidOpenTextDocument(e => this.onDidOpenTextDocument(e))
+            vscode.workspace.onDidOpenTextDocument(e => this.onDidOpenTextDocument(e)),
+
+            vscode.commands.registerCommand(actions.addItem, args => this.addItem(args)),
+            vscode.commands.registerCommand(actions.renameItem, args => this.renameItem(args)),
+            vscode.commands.registerCommand(actions.deleteItem, args => this.deleteItem(args)),
         );
 
+
+
         this.onActiveEditorChanged(vscode.window.activeTextEditor);
+    }
+
+    private async deleteItem(treeItem: LhqTreeItem): Promise<void> {
+        const element = treeItem.element;
+        const elementName = element.name;
+
+        let detail = treeItem.parentPath;
+
+        const confirmation = await vscode.window.showInformationMessage(
+            `Delete ${element.elementType} "${elementName}" ?`,
+            { modal: true, detail },
+            'Yes',
+            'No'
+        );
+
+        if (confirmation === 'Yes') {
+            vscode.window.showInformationMessage(`Item "${elementName}" deleted.`);
+            // Add deletion logic here
+        } else {
+            vscode.window.showInformationMessage(`Deletion of item "${elementName}" canceled.`);
+        }
+    }
+
+    private renameItem(treeItem: LhqTreeItem): any {
+        vscode.window.showInformationMessage(`Rename item clicked `);
+    }
+
+    private addItem(treeItem: LhqTreeItem): any {
+        vscode.window.showInformationMessage(`Add item clicked`);
     }
 
     private onDidChangeVisibleTextEditors(e: readonly vscode.TextEditor[]): any {

@@ -12,11 +12,18 @@
   "activationEvents": [],
   "main": "./dist/extension.js",
   "contributes": {
-    "languages": [{
-      "id": "lhq",
-      "aliases": ["LHQ", "lhq"],
-      "extensions": [".lhq"]
-    }],
+    "languages": [
+      {
+        "id": "lhq",
+        "aliases": [
+          "LHQ",
+          "lhq"
+        ],
+        "extensions": [
+          ".lhq"
+        ]
+      }
+    ],
     "customEditors": [
       {
         "viewType": "lhq.customEditor",
@@ -40,10 +47,54 @@
     },
     "commands": [
       {
-        "command": "lhq-editor-extension.helloWorld",
-        "title": "Hello World"
+        "command": "lhqTreeView.addItem",
+        "title": "Add Item",
+        "icon": "$(new-file)"
+      },
+      {
+        "command": "lhqTreeView.renameItem",
+        "title": "Rename Item",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "lhqTreeView.deleteItem",
+        "title": "Delete Item",
+        "icon": "$(trash)"
       }
-    ]
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "lhqTreeView.addItem",
+          "when": "view == lhqTreeView",
+          "group": "navigation"
+        },
+        {
+          "command": "lhqTreeView.renameItem",
+          "when": "view == lhqTreeView"
+        },
+        {
+          "command": "lhqTreeView.deleteItem",
+          "when": "view == lhqTreeView"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "lhqTreeView.addItem",
+          "when": "view == lhqTreeView"
+        },
+        {
+          "command": "lhqTreeView.renameItem",
+          "when": "view == lhqTreeView",
+          "group": "inline@1"
+        },
+        {
+          "command": "lhqTreeView.deleteItem",
+          "when": "view == lhqTreeView && (viewItem == category || viewItem == resource)",
+          "group": "inline@2"
+        }
+      ]
+    }
   },
   "scripts": {
     "vscode:prepublish": "pnpm run package",

@@ -13,19 +13,21 @@ export class LhqTreeItem extends vscode.TreeItem {
         public readonly collapsibleState: vscode.TreeItemCollapsibleState,
         public readonly element: ITreeElement
     ) {
-        super(label, collapsibleState);
+        // const lbl: vscode.TreeItemLabel | string =
+        //     element.elementType === 'resource'
+        //         ? label
+        //         : { label, highlights: [[0, label.length]] };
+        super({ label, highlights: [[0, label.length]] }, collapsibleState);
         this.description = `(${this.element.elementType})`;
-        const parentPath = element.paths.getParentPath('/', true);
-        this.tooltip = parentPath; //`${this.label} (${element.elementType})`;
+        this.parentPath = element.paths.getParentPath('/', true);
+
+        const icon = icons[this.element.elementType];
+        this.tooltip = new vscode.MarkdownString(`$(${icon}) ${this.parentPath}`, true);
+        //this.tooltip = this.parentPath;
 
         this.contextValue = element.elementType;
-
-        // const icon = `${this.element.elementType}.svg`;
-        // this.iconPath = {
-        //     light: vscode.Uri.file(path.join(__filename, '..', '..', 'resources', 'light', icon)),
-        //     dark: vscode.Uri.file(path.join(__filename, '..', '..', 'resources', 'dark', icon))
-        // };
-
-        this.iconPath = new vscode.ThemeIcon(icons[this.element.elementType]);
+        this.iconPath = new vscode.ThemeIcon(icon);
     }
+
+    public readonly parentPath: string;
 }
