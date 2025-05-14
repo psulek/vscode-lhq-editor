@@ -1,13 +1,18 @@
 import * as vscode from 'vscode';
-import { LhqTreeItem } from './treeItem';
+import { ICategoryElement, ICategoryLikeTreeElement, IResourceElement, type IRootModelElement, ITreeElement, type LhqModel, LhqValidationResult, generatorUtils } from '@lhq/lhq-generators';
+
 import { isEditorActive, isValidDocument, logger, setEditorActive } from './utils';
 
-export class LhqTreeDataProvider implements vscode.TreeDataProvider<vscode.TreeItem> {
-    private _onDidChangeTreeData: vscode.EventEmitter<vscode.TreeItem | undefined | null | void> = new vscode.EventEmitter<vscode.TreeItem | undefined | null | void>();
+import { LhqTreeItem } from './treeItem';
 
-    readonly onDidChangeTreeData: vscode.Event<vscode.TreeItem | undefined | null | void> = this._onDidChangeTreeData.event;
+export class LhqTreeDataProvider implements vscode.TreeDataProvider<LhqTreeItem> {
+    // flag whenever that last active editor (not null) is other type than LHQ (tasks window, etc...)
+    private _lastActiveEditorNonLhq = false;
 
-    private currentData: any = null;
+    private _onDidChangeTreeData: vscode.EventEmitter<LhqTreeItem | undefined | null | void> = new vscode.EventEmitter<LhqTreeItem | undefined | null | void>();
+    readonly onDidChangeTreeData: vscode.Event<LhqTreeItem | undefined | null | void> = this._onDidChangeTreeData.event;
+
+    private currentRootModel: IRootModelElement | null = null;
     private currentDocument: vscode.TextDocument | null = null;
 
     constructor(private context: vscode.ExtensionContext) {
@@ -51,12 +56,13 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<vscode.TreeI
         return this.currentDocument !== null && isEditorActive();
     }
 
+    private get documentPath(): string {
+        return this.currentDocument ? this.currentDocument.uri.fsPath : '';
+    }
+
     public isSameDocument(document: vscode.TextDocument): boolean {
         return this.currentDocument !== null && this.currentDocument.uri.toString() === document.uri.toString();
     }
-
-    // flag whenever that last active editor (not null) is other type than LHQ (tasks window, etc...)
-    private _lastActiveEditorNonLhq = false;
 
     public updateDocument(document: vscode.TextDocument | undefined) {
         if (document && !isValidDocument(document)) {
@@ -68,7 +74,7 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<vscode.TreeI
         logger().log('debug', `LhqTreeDataProvider.updateDocument with: ${document?.fileName ?? '-'}`);
         if (isValidDocument(document)) {
             setEditorActive(true);
-            if (this.currentDocument?.uri.toString() !== document.uri.toString() || !this.currentData) {
+            if (this.currentDocument?.uri.toString() !== document.uri.toString() || !this.currentRootModel) {
                 this.currentDocument = document;
                 this.refresh();
             }
@@ -88,79 +94,89 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<vscode.TreeI
 
     refresh(): void {
         if (this.currentDocument) {
+            let jsonObj: LhqModel | undefined;
+
+            this.currentRootModel = null;
             try {
-                // Attempt to parse the document content as JSON for the tree view
-                // In a real scenario, you'd parse your specific LHQ format
-                this.currentData = JSON.parse(this.currentDocument.getText());
-            } catch (e) {
-                logger().log('error', 'Error parsing LHQ file :', e as Error);
-                this.currentData = {};
-                vscode.window.showWarningMessage('Could not parse LHQ file for TreeView.');
+                const test = this.currentDocument.getText();
+                jsonObj = test?.length > 0 ? JSON.parse(test) as LhqModel : undefined;
+            } catch (ex) {
+                const error = `Error parsing LHQ file '${this.documentPath}'`;
+                logger().log('error', error, ex as Error);
+                jsonObj = undefined;
+                vscode.window.showWarningMessage(error);
             }
+
+            if (jsonObj) {
+                let validateResult: LhqValidationResult | undefined;
+
+                try {
+                    validateResult = generatorUtils.validateLhqModel(jsonObj);
+                    if (validateResult.success && validateResult.model) {
+                        this.currentRootModel = generatorUtils.createRootElement(validateResult.model);
+                    }
+                } catch (ex) {
+                    const error = `Error validating LHQ file '${this.documentPath}': ${ex}`;
+                    logger().log('error', error, ex as Error);
+                    vscode.window.showWarningMessage(error);
+                }
+
+                if (this.currentRootModel === null || this.currentRootModel === undefined) {
+                    const error = validateResult
+                        ? `Validation errors while parsing LHQ file '${this.documentPath}': \n${validateResult.error}`
+                        : `Error validating LHQ file '${this.documentPath}'`;
+                    logger().log('error', error);
+                    vscode.window.showWarningMessage(error);
+                }
+            }
+
         } else {
-            this.currentData = null;
+            this.currentRootModel = null;
         }
         this._onDidChangeTreeData.fire();
     }
 
-    getTreeItem(element: vscode.TreeItem): vscode.TreeItem {
+    getTreeItem(element: LhqTreeItem): vscode.TreeItem {
         return element;
     }
 
-    getChildren(element?: vscode.TreeItem): Thenable<vscode.TreeItem[]> {
-        if (!this.currentData) {
+    createTreeItem(element: ITreeElement): LhqTreeItem[] {
+        const mapResources = (resources: Readonly<IResourceElement[]>): LhqTreeItem[] =>
+            resources.map(x => new LhqTreeItem(x.name, vscode.TreeItemCollapsibleState.None, x));
+
+        const mapCategories = (categories: Readonly<ICategoryLikeTreeElement[]>): LhqTreeItem[] =>
+            categories.map(x => new LhqTreeItem(x.name, x.hasCategories || x.hasResources ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None, x));
+
+        switch (element.elementType) {
+            case 'model': {
+                const model = element as IRootModelElement;
+                const resources = mapResources(model.resources);
+                const categories = mapCategories(model.categories);
+                return categories.concat(resources);
+            }
+            case 'category': {
+                const category = element as ICategoryElement;
+                const resources = mapResources(category.resources);
+                const categories = mapCategories(category.categories);
+                return categories.concat(resources);
+            }
+            case 'resource': {
+                const resource = element as IResourceElement;
+                return [new LhqTreeItem(resource.name, vscode.TreeItemCollapsibleState.None, resource)];
+            }
+        }
+    }
+
+    getChildren(element?: LhqTreeItem): Thenable<LhqTreeItem[]> {
+        if (!this.currentRootModel) {
             return Promise.resolve([]);
         }
 
-        let items: vscode.TreeItem[] = [];
-        if (!element) { // Root
-            if (this.currentData.project && this.currentData.project.name) {
-                items.push(new LhqTreeItem(this.currentData.project.name, vscode.TreeItemCollapsibleState.Expanded, this.currentData.project));
-            } else { // If no project structure, maybe list top-level keys
-                Object.keys(this.currentData).forEach(key => {
-                    const value = this.currentData[key];
-                    const collapsibleState = typeof value === 'object' && value !== null ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None;
-                    items.push(new LhqTreeItem(key, collapsibleState, value));
-                });
-            }
-        } else if (element instanceof LhqTreeItem && element.data) {
-            const data = element.data;
-            if (data.folders && Array.isArray(data.folders)) {
-                items = data.folders.map((folder: any) => new LhqTreeItem(folder.name, vscode.TreeItemCollapsibleState.Collapsed, folder));
-            } else if (data.files && Array.isArray(data.files)) {
-                items = data.files.map((file: any) => new LhqTreeItem(file.name, vscode.TreeItemCollapsibleState.None, file));
-            } else if (typeof data === 'object') { // Generic object explorer
-                Object.keys(data).forEach(key => {
-                    const value = data[key];
-                    const collapsibleState = typeof value === 'object' && value !== null && Object.keys(value).length > 0 ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None;
-                    items.push(new LhqTreeItem(key, collapsibleState, value));
-                });
-            }
+        if (element) {
+            return Promise.resolve(this.createTreeItem(element.element));
         }
-        return Promise.resolve(items);
+
+        const rootItem = new LhqTreeItem(this.currentRootModel.name, vscode.TreeItemCollapsibleState.Expanded, this.currentRootModel);
+        return Promise.resolve([rootItem]);
     }
 }
-
-
-// Sample data for the TreeView
-export const sampleLhqData = {
-    "project": {
-        "name": "My LHQ Project",
-        "version": "1.0.0",
-        "folders": [
-            {
-                "name": "src",
-                "files": [
-                    { "name": "main.lhq" },
-                    { "name": "utils.lhq" }
-                ]
-            },
-            {
-                "name": "docs",
-                "files": [
-                    { "name": "readme.md" }
-                ]
-            }
-        ]
-    }
-};

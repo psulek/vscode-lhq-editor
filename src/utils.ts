@@ -1,4 +1,8 @@
 import * as vscode from 'vscode';
+import path from 'path';
+import fse from 'fs-extra';
+import { FileInfo, fileUtils, ReadFileInfoOptions } from '@lhq/lhq-generators';
+
 import { ILogger, VsCodeLogger } from './logger';
 
 const isEditorActiveContextKey = 'lhqEditorIsActive';
@@ -34,4 +38,12 @@ export function setEditorActive(active: boolean) {
 
 export function isValidDocument(document: vscode.TextDocument | null | undefined): document is vscode.TextDocument {
     return !!document && document.uri.scheme === 'file' && document.fileName.endsWith('.lhq');
+}
+
+export async function safeReadFile(fileName: string): Promise<string> {
+    return fileUtils.safeReadFile(fileName, fse.pathExists, fse.readFile);
+}
+
+export async function readFileInfo(inputPath: string, options?: ReadFileInfoOptions): Promise<FileInfo> {
+    return fileUtils.readFileInfo(inputPath, path, fse.pathExists, fse.readFile, options);
 }
