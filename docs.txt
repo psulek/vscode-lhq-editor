@@ -1,0 +1,5 @@
+vscode icons:
+https://code.visualstudio.com/api/references/icons-in-labels#icon-listing
+
+tree view:
+https://code.visualstudio.com/api/extension-guides/tree-view

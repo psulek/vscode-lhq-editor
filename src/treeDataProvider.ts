@@ -1,22 +1,27 @@
 import * as vscode from 'vscode';
-import { ICategoryElement, ICategoryLikeTreeElement, IResourceElement, type IRootModelElement, ITreeElement, type LhqModel, LhqValidationResult, generatorUtils } from '@lhq/lhq-generators';
+import type { ICategoryLikeTreeElement, IRootModelElement, ITreeElement, LhqModel, LhqValidationResult, TreeElementType } from '@lhq/lhq-generators';
+import { generatorUtils, isNullOrEmpty } from '@lhq/lhq-generators';
 
-import { isEditorActive, isValidDocument, logger, setEditorActive } from './utils';
+import { createTreeElementPaths, getElementFullPath, isEditorActive, isValidDocument, logger, setEditorActive, showMessageBox } from './utils';
 
 import { LhqTreeItem } from './treeItem';
 
 const actions = {
+   refresh: 'lhqTreeView.refresh',
     addItem: 'lhqTreeView.addItem',
     renameItem: 'lhqTreeView.renameItem',
     deleteItem: 'lhqTreeView.deleteItem',
 };
 
-export class LhqTreeDataProvider implements vscode.TreeDataProvider<LhqTreeItem> {
+export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement>, vscode.TreeDragAndDropController<ITreeElement> {
+    dropMimeTypes = ['application/vnd.code.tree.lhqTreeView'];
+    dragMimeTypes = ['text/uri-list'];
+
     // flag whenever that last active editor (not null) is other type than LHQ (tasks window, etc...)
     private _lastActiveEditorNonLhq = false;
 
-    private _onDidChangeTreeData: vscode.EventEmitter<LhqTreeItem | undefined | null | void> = new vscode.EventEmitter<LhqTreeItem | undefined | null | void>();
-    readonly onDidChangeTreeData: vscode.Event<LhqTreeItem | undefined | null | void> = this._onDidChangeTreeData.event;
+    private _onDidChangeTreeData: vscode.EventEmitter<(ITreeElement | undefined)[] | undefined> = new vscode.EventEmitter<ITreeElement[] | undefined>();
+    readonly onDidChangeTreeData: vscode.Event<any> = this._onDidChangeTreeData.event;
 
     private currentRootModel: IRootModelElement | null = null;
     private currentDocument: vscode.TextDocument | null = null;
@@ -30,43 +35,126 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<LhqTreeItem>
             vscode.workspace.onDidChangeTextDocument(e => this.onDidChangeTextDocument(e)),
             vscode.workspace.onDidOpenTextDocument(e => this.onDidOpenTextDocument(e)),
 
+            vscode.commands.registerCommand(actions.refresh, () => this.refresh()),
             vscode.commands.registerCommand(actions.addItem, args => this.addItem(args)),
             vscode.commands.registerCommand(actions.renameItem, args => this.renameItem(args)),
             vscode.commands.registerCommand(actions.deleteItem, args => this.deleteItem(args)),
         );
 
-
-
         this.onActiveEditorChanged(vscode.window.activeTextEditor);
+
+        const view = vscode.window.createTreeView('lhqTreeView', {
+            treeDataProvider: this,
+            showCollapseAll: true,
+            canSelectMany: true,
+            dragAndDropController: this
+        });
+        context.subscriptions.push(view);
     }
 
-    private async deleteItem(treeItem: LhqTreeItem): Promise<void> {
-        const element = treeItem.element;
+    public async handleDrag(source: ITreeElement[], treeDataTransfer: vscode.DataTransfer, _token: vscode.CancellationToken): Promise<void> {
+        const items = source.filter(x => x.elementType !== 'model').map<DragTreeItem>(x => ({
+            path: getElementFullPath(x),
+            type: x.elementType as Exclude<TreeElementType, 'model'>,
+        }));
+
+        if (items.length === 0 || _token.isCancellationRequested) {
+            return Promise.reject();
+        }
+
+        treeDataTransfer.set('application/vnd.code.tree.lhqTreeView', new vscode.DataTransferItem(items));
+    }
+
+    private getTreeItems(source: DragTreeItem[]): ITreeElement[] {
+        return isNullOrEmpty(this.currentRootModel)
+            ? []
+            : source.map(item => {
+                const treeItem = this.currentRootModel!.getElementByPath(createTreeElementPaths(item.path), item.type);
+                return treeItem;
+            }).filter(item => item !== undefined) as ITreeElement[];
+    }
+
+    public async handleDrop(target: ITreeElement | undefined, sources: vscode.DataTransfer, _token: vscode.CancellationToken): Promise<void> {
+        if (!target) {
+            return;
+        }
+
+        const transferItem = sources.get('application/vnd.code.tree.lhqTreeView');
+        if (!transferItem || _token.isCancellationRequested) {
+            return;
+        }
+
+        const items: DragTreeItem[] = transferItem.value;
+        if (!items || items.length === 0) {
+            return;
+        }
+
+        const treeItems = this.getTreeItems(items);
+        const itemCount = treeItems.length;
+        const firstParent = treeItems[0].parent;
+        const elemText = `${itemCount} element(s)`;
+
+        if (treeItems.length > 1) {
+            if (!treeItems.every(item => item.parent === firstParent)) {
+                showMessageBox('warn', `Cannot move ${elemText} with different parents.`);
+                return;
+            }
+        }
+
+        if (target === firstParent) {
+            showMessageBox('warn', `Cannot move ${elemText} to the same parent element '${getElementFullPath(target)}'.`);
+            return;
+        }
+
+
+
+        // const treeItems: Node[] = transferItem.value;
+        // let roots = this._getLocalRoots(treeItems);
+        // // Remove nodes that are already target's parent nodes
+        // roots = roots.filter(r => !this._isChild(this._getTreeElement(r.key), target));
+        // if (roots.length > 0) {
+        // 	// Reload parents of the moving elements
+        // 	const parents = roots.map(r => this.getParent(r));
+        // 	roots.forEach(r => this._reparentNode(r, target));
+        // 	this._onDidChangeTreeData.fire([...parents, target]);
+        // }
+    }
+
+    private async deleteItem(element: ITreeElement): Promise<void> {
         const elementName = element.name;
+        const parentPath = getElementFullPath(element);
 
-        let detail = treeItem.parentPath;
-
-        const confirmation = await vscode.window.showInformationMessage(
+        const confirmation = await showMessageBox('info',
             `Delete ${element.elementType} "${elementName}" ?`,
-            { modal: true, detail },
+            { modal: true, detail: parentPath },
             'Yes',
             'No'
         );
 
         if (confirmation === 'Yes') {
-            vscode.window.showInformationMessage(`Item "${elementName}" deleted.`);
+            showMessageBox('info', `Item "${elementName}" deleted.`);
             // Add deletion logic here
         } else {
-            vscode.window.showInformationMessage(`Deletion of item "${elementName}" canceled.`);
+            showMessageBox('info', `Deletion of item "${elementName}" canceled.`);
         }
     }
 
-    private renameItem(treeItem: LhqTreeItem): any {
-        vscode.window.showInformationMessage(`Rename item clicked `);
+    private async renameItem(element: ITreeElement): Promise<any> {
+        //showMessageBox('info', `Rename item '${element.name}' clicked `);
+
+        const newName = await vscode.window.showInputBox({
+            prompt: 'Enter new name',
+            value: element.name,
+        });
+
+        if (newName) {
+            element.name = newName;
+            this._onDidChangeTreeData.fire([element]);
+        }
     }
 
-    private addItem(treeItem: LhqTreeItem): any {
-        vscode.window.showInformationMessage(`Add item clicked`);
+    private addItem(element: ITreeElement): any {
+        showMessageBox('info', `Add item '${element.name}' clicked`);
     }
 
     private onDidChangeVisibleTextEditors(e: readonly vscode.TextEditor[]): any {
@@ -145,7 +233,7 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<LhqTreeItem>
                 const error = `Error parsing LHQ file '${this.documentPath}'`;
                 logger().log('error', error, ex as Error);
                 jsonObj = undefined;
-                vscode.window.showWarningMessage(error);
+                showMessageBox('err', error);
             }
 
             if (jsonObj) {
@@ -159,7 +247,7 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<LhqTreeItem>
                 } catch (ex) {
                     const error = `Error validating LHQ file '${this.documentPath}': ${ex}`;
                     logger().log('error', error, ex as Error);
-                    vscode.window.showWarningMessage(error);
+                    showMessageBox('err', error);
                 }
 
                 if (this.currentRootModel === null || this.currentRootModel === undefined) {
@@ -167,57 +255,45 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<LhqTreeItem>
                         ? `Validation errors while parsing LHQ file '${this.documentPath}': \n${validateResult.error}`
                         : `Error validating LHQ file '${this.documentPath}'`;
                     logger().log('error', error);
-                    vscode.window.showWarningMessage(error);
+                    showMessageBox('err', error);
                 }
             }
 
         } else {
             this.currentRootModel = null;
         }
-        this._onDidChangeTreeData.fire();
+
+        this._onDidChangeTreeData.fire(undefined);
     }
 
-    getTreeItem(element: LhqTreeItem): vscode.TreeItem {
-        return element;
+    getTreeItem(element: ITreeElement): vscode.TreeItem {
+        return new LhqTreeItem(element);
     }
 
-    createTreeItem(element: ITreeElement): LhqTreeItem[] {
-        const mapResources = (resources: Readonly<IResourceElement[]>): LhqTreeItem[] =>
-            resources.map(x => new LhqTreeItem(x.name, vscode.TreeItemCollapsibleState.None, x));
-
-        const mapCategories = (categories: Readonly<ICategoryLikeTreeElement[]>): LhqTreeItem[] =>
-            categories.map(x => new LhqTreeItem(x.name, x.hasCategories || x.hasResources ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None, x));
-
-        switch (element.elementType) {
-            case 'model': {
-                const model = element as IRootModelElement;
-                const resources = mapResources(model.resources);
-                const categories = mapCategories(model.categories);
-                return categories.concat(resources);
-            }
-            case 'category': {
-                const category = element as ICategoryElement;
-                const resources = mapResources(category.resources);
-                const categories = mapCategories(category.categories);
-                return categories.concat(resources);
-            }
-            case 'resource': {
-                const resource = element as IResourceElement;
-                return [new LhqTreeItem(resource.name, vscode.TreeItemCollapsibleState.None, resource)];
-            }
-        }
-    }
-
-    getChildren(element?: LhqTreeItem): Thenable<LhqTreeItem[]> {
+    getChildren(element?: ITreeElement): Thenable<ITreeElement[]> {
         if (!this.currentRootModel) {
             return Promise.resolve([]);
         }
 
+        let result: ITreeElement[] = [];
+
         if (element) {
-            return Promise.resolve(this.createTreeItem(element.element));
+            if (element.elementType === 'resource') {
+                result.push(element);
+            } else {
+                const categLikeElement = element as ICategoryLikeTreeElement;
+                result.push(...categLikeElement.categories);
+                result.push(...categLikeElement.resources);
+            }
+        } else {
+            result.push(this.currentRootModel);
         }
 
-        const rootItem = new LhqTreeItem(this.currentRootModel.name, vscode.TreeItemCollapsibleState.Expanded, this.currentRootModel);
-        return Promise.resolve([rootItem]);
+        return Promise.resolve(result);
     }
+}
+
+type DragTreeItem = {
+    path: string;
+    type: Exclude<TreeElementType, 'model'>;
 }

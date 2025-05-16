@@ -1,11 +1,12 @@
 import * as vscode from 'vscode';
 import path from 'path';
 import fse from 'fs-extra';
-import { FileInfo, fileUtils, ReadFileInfoOptions } from '@lhq/lhq-generators';
+import { FileInfo, fileUtils, ITreeElement, ReadFileInfoOptions, generatorUtils, ITreeElementPaths } from '@lhq/lhq-generators';
 
 import { ILogger, VsCodeLogger } from './logger';
 
 const isEditorActiveContextKey = 'lhqEditorIsActive';
+const messageBoxPrefix = '[LHQ Editor]';
 
 let _isEditorActive = false;
 let _logger: VsCodeLogger = new VsCodeLogger();
@@ -46,4 +47,31 @@ export async function safeReadFile(fileName: string): Promise<string> {
 
 export async function readFileInfo(inputPath: string, options?: ReadFileInfoOptions): Promise<FileInfo> {
     return fileUtils.readFileInfo(inputPath, path, fse.pathExists, fse.readFile, options);
+}
+
+export function getElementFullPath(element: ITreeElement): string {
+    return element.paths.getParentPath('/', true);
+}
+
+export function createTreeElementPaths(parentPath: string): ITreeElementPaths {
+    return generatorUtils.createTreeElementPaths(parentPath, '/');
+}
+
+export function showMessageBox<T extends string>(type: 'warn' | 'info' | 'err', message: string, 
+    options?: vscode.MessageOptions, ...items: T[]): Thenable<T | undefined> {
+    const msg = `${messageBoxPrefix} ${message}`;
+
+    options = options ?? {};
+
+    if (type === 'warn') {
+        return vscode.window.showWarningMessage(msg, options, ...items);
+    } else if (type === 'err') {
+        return vscode.window.showErrorMessage(msg, options, ...items);
+    } else {
+        return vscode.window.showInformationMessage(msg, options, ...items);
+    }
+}
+
+export function toPascalCasing(str: string): string {
+    return str.substring(0, 1).toUpperCase() + str.substring(1);
 }

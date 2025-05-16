@@ -1,31 +1,38 @@
-import { ITreeElement, TreeElementType } from '@lhq/lhq-generators';
+import { ICategoryLikeTreeElement, ITreeElement, TreeElementType } from '@lhq/lhq-generators';
 import * as vscode from 'vscode';
+import { getElementFullPath, toPascalCasing } from './utils';
 
 const icons: Record<TreeElementType, string> = {
     model: 'symbol-method',
     category: 'symbol-folder',
-    resource: 'symbol-file',
+    //resource: 'symbol-file',
+    // resource: 'primitive-square',
+    resource: 'debug-breakpoint-unverified',
 };
 
 export class LhqTreeItem extends vscode.TreeItem {
     constructor(
-        public readonly label: string,
-        public readonly collapsibleState: vscode.TreeItemCollapsibleState,
         public readonly element: ITreeElement
     ) {
-        // const lbl: vscode.TreeItemLabel | string =
-        //     element.elementType === 'resource'
-        //         ? label
-        //         : { label, highlights: [[0, label.length]] };
-        super({ label, highlights: [[0, label.length]] }, collapsibleState);
-        this.description = `(${this.element.elementType})`;
-        this.parentPath = element.paths.getParentPath('/', true);
+        const elementType = element.elementType;
+        let collapsibleState = elementType === 'resource'
+            ? vscode.TreeItemCollapsibleState.None
+            : vscode.TreeItemCollapsibleState.Expanded;
 
-        const icon = icons[this.element.elementType];
-        this.tooltip = new vscode.MarkdownString(`$(${icon}) ${this.parentPath}`, true);
-        //this.tooltip = this.parentPath;
+        if (elementType === 'category') {
+            const categLike = element as ICategoryLikeTreeElement;
+            collapsibleState = categLike.hasCategories || categLike.hasResources ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None;
+        }
 
-        this.contextValue = element.elementType;
+        const elementName = element.name;
+        super(elementName, collapsibleState);
+        this.parentPath = getElementFullPath(element);
+        this.contextValue = elementType;
+
+        const icon = icons[elementType];
+        const elemTypeStr = toPascalCasing(elementType === 'model' ? 'root' : elementType);
+        this.tooltip = new vscode.MarkdownString(`**${elemTypeStr}**: ${elementName} \`${this.parentPath}\``, true);
+
         this.iconPath = new vscode.ThemeIcon(icon);
     }
 
