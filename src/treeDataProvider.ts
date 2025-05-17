@@ -255,17 +255,17 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
         //jsonFormat()
 
         const documentUri = this.currentDocument.uri;
-        const formattingOptions: FormattingOptions = {
-            insertSpaces: this.documentIndent.type === 'space',
-            tabSize: this.documentIndent.amount,
-            keepLines: true
-        };
+        // const formattingOptions: FormattingOptions = {
+        //     insertSpaces: this.documentIndent.type === 'space',
+        //     tabSize: this.documentIndent.amount,
+        //     keepLines: true
+        // };
 
         //const edits = jsonModify(documentText, jsonPathToNameProperty, undefined, { formattingOptions });
 
         
 
-        const edits = renameJsonProperty(element, newName, documentText, this.documentIndent, this.currentDocument.eol);
+        const edits = renameJsonProperty(element, newName, documentText, this.documentIndent);
         if (!edits) {
             logger().log('debug', `RenameItem: jsonc-parser 'modify' produced no edits for path '${jsonPathToNameProperty.join('/')}' and new name '${newName}'. This might happen if the path is incorrect or value is already set.`);
             showMessageBox('info', 'No changes were applied. The name might already be set or the item structure is unexpected.');
