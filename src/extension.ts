@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { LhqEditorProvider } from './editorProvider';
 import { LhqTreeDataProvider } from './treeDataProvider';
 import { initializeDebugMode } from './utils';
+import { test1 } from './test1';
 
 export function activate(context: vscode.ExtensionContext) {
     initializeDebugMode(context.extensionMode);
