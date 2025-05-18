@@ -1,0 +1,53 @@
+diff --git a/lib/esm/impl/edit.js b/lib/esm/impl/edit.js
+index 4114d525b7fa2db6824ee4c3351c58aa4c6a4876..5600632233d29b6d441e175d72510c129fb636be 100644
+--- a/lib/esm/impl/edit.js
++++ b/lib/esm/impl/edit.js
+@@ -10,10 +10,16 @@ export function removeProperty(text, path, options) {
+ }
+ export function setProperty(text, originalPath, value, options) {
+     const path = originalPath.slice();
++    const pathLen = originalPath.length;
+     const errors = [];
+     const root = parseTree(text, errors);
++
+     let parent = void 0;
+     let lastSegment = void 0;
++    const newPropertyName = options.newPropertyName || undefined;
++    if (newPropertyName) {
++        value = undefined;
++    }
+     while (path.length > 0) {
+         lastSegment = path.pop();
+         parent = findNodeAtLocation(root, path);
+@@ -43,6 +49,18 @@ export function setProperty(text, originalPath, value, options) {
+                 if (!existing.parent) {
+                     throw new Error('Malformed AST');
+                 }
++                if (newPropertyName) {
++                    const eol = options.formattingOptions ? options.formattingOptions.eol || '' : '';
++                    let indent = options.formattingOptions ? options.formattingOptions.insertSpaces ? ' '.repeat(options.formattingOptions.tabSize || 4) : '\t' : '';
++                    indent = indent.repeat(pathLen);
++
++                    const propContent = eol + indent + JSON.stringify(newPropertyName) + ': ';
++                    return withFormatting(text, {
++                        offset: parent.offset + 1, length: existing.offset - parent.offset - 1,
++                        content: propContent
++                    }, options);
++                }
++
+                 const propertyIndex = parent.children.indexOf(existing.parent);
+                 let removeBegin;
+                 let removeEnd = existing.parent.offset + existing.parent.length;
+diff --git a/lib/esm/impl/format.js b/lib/esm/impl/format.js
+index 8663a1f385b08ddb8d2cc32bd3fc793b6751737c..32b3826306e15626c77a5dd1710787ea00b9de43 100644
+--- a/lib/esm/impl/format.js
++++ b/lib/esm/impl/format.js
+@@ -215,7 +215,7 @@ export function format(documentText, range, options) {
+     }
+     return editOperations;
+ }
+-function repeat(s, count) {
++export function repeat(s, count) {
+     let result = '';
+     for (let i = 0; i < count; i++) {
+         result += s;

@@ -1,2 +1,4 @@
 onlyBuiltDependencies:
   - esbuild
+patchedDependencies:
+  jsonc-parser@3.3.1: patches/jsonc-parser@3.3.1.patch

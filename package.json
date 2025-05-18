@@ -103,7 +103,14 @@
           "when": "view == lhqTreeView && (viewItem == category || viewItem == resource)"
         }
       ]
-    }
+    },
+    "keybindings": [
+      {
+        "command": "lhqTreeView.renameItem",
+        "key": "F2",
+        "when": "focusedView == lhqTreeView && lhqEditorIsActive"
+      }
+    ]
   },
   "scripts": {
     "vscode:prepublish": "pnpm run package",
@@ -137,6 +144,6 @@
     "@lhq/lhq-generators": "1.0.0-rc.23",
     "detect-indent": "^7.0.1",
     "fs-extra": "11.3.0",
-    "jsonc-parser": "^3.3.1"
+    "jsonc-parser": "3.3.1"
   }
 }

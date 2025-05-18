@@ -1,16 +1,11 @@
 import * as vscode from 'vscode';
 import path from 'path';
 import fse from 'fs-extra';
-import type { FileInfo, ReadFileInfoOptions, ITreeElementPaths, LhqModel, ITreeElement } from '@lhq/lhq-generators';
+import type { FileInfo, ReadFileInfoOptions, ITreeElementPaths, ITreeElement } from '@lhq/lhq-generators';
 import { fileUtils, generatorUtils, isNullOrEmpty, detectLineEndings, getLineEndingsRaw } from '@lhq/lhq-generators';
 
 import {
-    modify as jsonModify, parse as jsonParse, parseTree,
-    findNodeAtLocation, visit as jsonVisit, JSONVisitor, getNodePath, Node as jsonNode,
-    format as jsonFormat, findNodeAtOffset,
-    getNodeValue, EditResult, FormattingOptions,
-    ParseError,
-    JSONPath
+    modify as jsonModify, parseTree, type EditResult, type FormattingOptions, type ParseError, type JSONPath
 } from 'jsonc-parser';
 
 // @ts-ignore
@@ -112,13 +107,11 @@ function getElementJsonPathInModel(element: ITreeElement): (string | number)[] |
 
 export function renameJsonProperty(treeElement: ITreeElement, newPropertyName: string,
     jsonText: string, indentation: IdentationType): EditResult | undefined {
-    // jsonText: string, indentation: IdentationType, eol: vscode.EndOfLine): EditResult | undefined {
     const errs: ParseError[] = [];
     const tree = parseTree(jsonText, errs, { allowEmptyContent: true, allowTrailingComma: true });
 
-    if (tree) {
+    if (tree && errs?.length === 0) {
         const query = getElementJsonPathInModel(treeElement) as JSONPath;
-
         indentation = indentation ?? detectIndent(jsonText);
 
         const le = detectLineEndings(jsonText, undefined);
@@ -130,19 +123,11 @@ export function renameJsonProperty(treeElement: ITreeElement, newPropertyName: s
             eol
         } as unknown as FormattingOptions;
 
-        const opts2 = { formattingOptions, newPropertyName } as any;
-        const edits = jsonModify(jsonText, query, undefined, opts2);
+        return jsonModify(jsonText, query, undefined, { formattingOptions, newPropertyName } as any);
+    }
 
-        // const formatOpts: FormattingOptions = {
-        //     insertSpaces: formattingOptions.insertSpaces,
-        //     tabSize: formattingOptions.tabSize,
-        //     keepLines: formattingOptions.keepLines,
-        //     eol: eol === vscode.EndOfLine.LF ? '\n' : '\r\n'
-        // };
-
-        //const edits2 = jsonFormat(jsonText, { offset: 0, length: jsonText.length }, formatOpts);
-
-        return edits;
+    if (errs?.length > 0) {
+        throw new Error('Parsing model failed: ' + errs.map(e => e.error).join(', '));
     }
 
     return undefined;

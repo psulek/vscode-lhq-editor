@@ -15,6 +15,7 @@ import { LhqTreeItem } from './treeItem';
 // @ts-ignore
 import detectIndent from 'detect-indent';
 import { test1 } from './test1';
+import { validateName } from './validator';
 // import { createRequire } from 'module';
 // // @ts-ignore
 // const detectIndent = createRequire(import.meta.url)('detect-indent');
@@ -52,6 +53,7 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
     private currentDocument: vscode.TextDocument | null = null;
     private currentJsonModel: LhqModel | null = null;
     private documentIndent: IdentationType = defaultIdent;
+    private selectedElement: ITreeElement | undefined = undefined;
 
     constructor(private context: vscode.ExtensionContext) {
 
@@ -77,6 +79,12 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
             dragAndDropController: this
         });
         context.subscriptions.push(view);
+
+        context.subscriptions.push(
+            view.onDidChangeSelection(e => {
+                this.selectedElement = e.selection && e.selection.length > 0 ? e.selection[0]: undefined;
+            })
+        );
     }
 
     public async handleDrag(source: ITreeElement[], treeDataTransfer: vscode.DataTransfer, _token: vscode.CancellationToken): Promise<void> {
@@ -172,18 +180,34 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
             return;
         }
 
+        element = element || this.selectedElement;
+        if (!element) {
+            return;
+        }
+
         const originalName = element.name;
+        const elemPath = element.paths.getParentPath('/', true);
 
         const newName = await vscode.window.showInputBox({
-            prompt: `Enter new name for ${element.elementType} '${originalName}'`,
+            prompt: `Enter new name for ${element.elementType} '${originalName}' (${elemPath})`,
             value: originalName,
             validateInput: value => {
-                if (isNullOrEmpty(value)) {
-                    return 'Name cannot be empty.';
+                const valRes = validateName(value);
+                if (valRes === 'valid') {
+                    if (value === originalName) {
+                        return 'New name is the same as the old name.';
+                    }
+                } else {
+                    switch (valRes) {
+                        case 'nameIsEmpty':
+                            return 'Name cannot be empty.';
+                        case 'nameCannotBeginWithNumber':
+                            return 'Name cannot start with a number.';
+                        case 'nameCanContainOnlyAlphaNumeric':
+                            return 'Name can only contain alphanumeric characters and underscores.';
+                    }
                 }
-                if (value === originalName) {
-                    return 'New name is the same as the old name.';
-                }
+
                 return null;
             }
         });
@@ -205,86 +229,19 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
             return;
         }
 
-        //const rs = jsonVisit(documentText, visitor, { allowEmptyContent: true, allowTrailingComma: true });
-
-        const jsonPathToElementObject = this.getElementJsonPathInModel(element, lhqModelFromFile);
-
-        if (!jsonPathToElementObject) {
-            logger().log('error', `RenameItem: Could not determine JSON path for element '${getElementFullPath(element)}'.`);
-            showMessageBox('err', `Could not locate item '${originalName}' in the document structure for renaming.`);
+        let edits: EditResult | undefined;
+        try {
+            edits = renameJsonProperty(element, newName, documentText, this.documentIndent);
+            if (!edits) {
+                logger().log('debug', `RenameItem: jsonc-parser 'modify' produced no edits for path '${elemPath}' and new name '${newName}'. This might happen if the path is incorrect or value is already set.`);
+                showMessageBox('info', 'No changes were applied. The name might already be set or the item structure is unexpected.');
+                return;
+            }
+        } catch (error) {
+            logger().log('error', `RenameItem: Error while renaming item '${originalName}' to '${newName}' (${elemPath})`, error as Error);
+            showMessageBox('err', `Error while renaming item '${originalName}' to '${newName}': ${(error as Error).message}`);
             return;
         }
-
-        //const jsonPathToNameProperty = [...jsonPathToElementObject, 'name'];
-        const jsonPathToNameProperty = [...jsonPathToElementObject];
-
-
-        const errs: any = [];
-        const opts = { allowEmptyContent: true, allowTrailingComma: true };
-        const tree = parseTree(documentText, errs as any);
-
-        function findNode(nodes: jsonNode[] | undefined): jsonNode | undefined {
-            if (!nodes || nodes.length === 0) {
-                return undefined;
-            }
-
-            for (const node of nodes) {
-                const path = getNodePath(node);
-                if (path.length === jsonPathToNameProperty.length && path.every((p, i) => p === jsonPathToNameProperty[i])) {
-                    return node;
-                }
-                const childNode = findNode(node.children);
-                if (childNode) {
-                    return childNode;
-                }
-            }
-            return undefined;
-        }
-
-        // const r1 = findNodeAtLocation(tree!, jsonPathToNameProperty)!;
-        // const x1 = getNodeValue(r1);
-
-        const node = findNode(tree!.children);
-        //const x2 = getNodeValue(r2);
-
-        // const edits: EditResult = [];
-        // if (node) {
-        //     edits.push({ content: newName, offset: node.offset, length: newName.length });
-        // }
-
-        //jsonFormat()
-
-        const documentUri = this.currentDocument.uri;
-        // const formattingOptions: FormattingOptions = {
-        //     insertSpaces: this.documentIndent.type === 'space',
-        //     tabSize: this.documentIndent.amount,
-        //     keepLines: true
-        // };
-
-        //const edits = jsonModify(documentText, jsonPathToNameProperty, undefined, { formattingOptions });
-
-        
-
-        const edits = renameJsonProperty(element, newName, documentText, this.documentIndent);
-        if (!edits) {
-            logger().log('debug', `RenameItem: jsonc-parser 'modify' produced no edits for path '${jsonPathToNameProperty.join('/')}' and new name '${newName}'. This might happen if the path is incorrect or value is already set.`);
-            showMessageBox('info', 'No changes were applied. The name might already be set or the item structure is unexpected.');
-            return;
-        }
-
-        // const edits = jsonModify(documentText, jsonPathToNameProperty, newName, {
-        //     formattingOptions: {
-        //         insertSpaces: this.documentIndent.type === 'space',
-        //         tabSize: this.documentIndent.amount,
-        //         keepLines: true, // This option is specific to jsonc-parser's modify behavior
-        //     }
-        // });
-
-        // if (!edits || edits.length === 0) {
-        //     logger().log('warn', `RenameItem: jsonc-parser 'modify' produced no edits for path '${jsonPathToNameProperty.join('/')}' and new name '${newName}'. This might happen if the path is incorrect or value is already set.`);
-        //     showMessageBox('info', 'No changes were applied. The name might already be set or the item structure is unexpected.');
-        //     return;
-        // }
 
         const workspaceEdits: vscode.TextEdit[] = edits.map(edit =>
             new vscode.TextEdit(
@@ -297,109 +254,19 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
         );
 
         const workspaceEdit = new vscode.WorkspaceEdit();
-        workspaceEdit.set(documentUri, workspaceEdits);
+        workspaceEdit.set(this.currentDocument.uri, workspaceEdits);
 
         const success = await vscode.workspace.applyEdit(workspaceEdit);
-
         if (success) {
-            showMessageBox('info', `Item '${originalName}' renamed to '${newName}'. You can use standard Undo (Ctrl+Z) to revert.`);
-        } else {
-            logger().log('error', `RenameItem: vscode.workspace.applyEdit failed for '${originalName}' to '${newName}'.`);
+            element.name = newName;
+        }
+
+        //this._onDidChangeTreeData.fire([element]);
+
+        if (!success) {
+            logger().log('error', `RenameItem: vscode.workspace.applyEdit failed for '${originalName}' to '${newName}' (${elemPath})`);
             showMessageBox('err', `Failed to apply rename for item '${originalName}'.`);
         }
-    }
-
-    private getElementJsonPathInModel(element: ITreeElement, model: LhqModel): (string | number)[] | undefined {
-        if (!this.currentRootModel) {
-            logger().log('error', "getElementJsonPathInModel: currentRootModel is not available.");
-            return undefined;
-        }
-
-        const elementType = element.elementType;
-        if (elementType === 'model') {
-            return ['model'];
-        }
-
-        const paths = element.paths.getPaths(false);
-        const lastPath = paths.pop() ?? '';
-        const result: string[] = [];
-
-        if (!isNullOrEmpty(lastPath)) {
-            paths.every(p => result.push(...[`categories`, p]));
-            result.push(...[elementType === 'resource' ? 'resources' : 'categories', lastPath]);
-        }
-
-        return result;
-
-        //const fullPathString = getElementFullPath(element);
-        //const pathSegmentsFromName: string[] = fullPathString.split('/');
-
-        // let currentContextInRawModel: any = model;
-        // const jsonPath: (string | number)[] = [];
-
-        // const rootModelNameFromPath = pathSegmentsFromName[0];
-
-        // if (model.model && typeof model.model === 'object' && (model.model as any).name === rootModelNameFromPath) {
-        //     currentContextInRawModel = model.model;
-        //     jsonPath.push('model');
-        // } else if (this.currentRootModel.name === rootModelNameFromPath) {
-        //     if (model.model && typeof model.model === 'object') {
-        //         if ((model.model as any).name === rootModelNameFromPath) {
-        //             currentContextInRawModel = model.model;
-        //             jsonPath.push('model');
-        //         } else {
-        //             logger().log('warn', `getElementJsonPathInModel: Root model name '${rootModelNameFromPath}' matched currentRootModel.name, but not model.model.name. Assuming 'model.model' or 'model' as context if applicable.`);
-        //             if (model.model && typeof model.model === 'object') {
-        //                 currentContextInRawModel = model.model;
-        //                 jsonPath.push('model');
-        //             }
-        //         }
-        //     }
-        // } else {
-        //     logger().log('warn', `getElementJsonPathInModel: Root model name '${rootModelNameFromPath}' not directly found as 'model.model.name' or matching currentRootModel.name. Assuming 'model' or 'model.model' is the context.`);
-        //     if (model.model && typeof model.model === 'object') {
-        //         currentContextInRawModel = model.model;
-        //         jsonPath.push('model');
-        //     }
-        // }
-
-        // const segmentsToSearch = pathSegmentsFromName.slice(1);
-
-        // for (const segmentName of segmentsToSearch) {
-        //     let foundNextContext = false;
-        //     if (currentContextInRawModel && typeof currentContextInRawModel === 'object') {
-        //         if (Array.isArray(currentContextInRawModel.categories)) {
-        //             const index = currentContextInRawModel.categories.findIndex((cat: any) => cat.name === segmentName);
-        //             if (index !== -1) {
-        //                 jsonPath.push('categories', index);
-        //                 currentContextInRawModel = currentContextInRawModel.categories[index];
-        //                 foundNextContext = true;
-        //             }
-        //         }
-        //         if (!foundNextContext && Array.isArray(currentContextInRawModel.resources)) {
-        //             const index = currentContextInRawModel.resources.findIndex((res: any) => res.name === segmentName);
-        //             if (index !== -1) {
-        //                 jsonPath.push('resources', index);
-        //                 currentContextInRawModel = currentContextInRawModel.resources[index];
-        //                 foundNextContext = true;
-        //             }
-        //         }
-        //         if (!foundNextContext && Object.prototype.hasOwnProperty.call(currentContextInRawModel, segmentName) && typeof currentContextInRawModel[segmentName] === 'object') {
-        //             jsonPath.push(segmentName);
-        //             currentContextInRawModel = currentContextInRawModel[segmentName];
-        //             foundNextContext = true;
-        //         }
-
-        //         if (!foundNextContext) {
-        //             logger().log('error', `getElementJsonPathInModel: Segment '${segmentName}' not found or not an object/array in current JSON context. Path so far: ${jsonPath.join('/')}`);
-        //             return undefined;
-        //         }
-        //     } else {
-        //         logger().log('error', `getElementJsonPathInModel: Cannot traverse. Current JSON context is not an object for segment '${segmentName}'. Path: ${jsonPath.join('/')}`);
-        //         return undefined;
-        //     }
-        // }
-        // return jsonPath;
     }
 
     private addItem(element: ITreeElement): any {
@@ -407,26 +274,26 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
     }
 
     private onDidChangeVisibleTextEditors(e: readonly vscode.TextEditor[]): any {
-        const editor = e.find(x => x.document.fileName === vscode.window.activeTextEditor?.document.fileName);
-        if (editor) {
-            logger().log('debug', `LhqTreeDataProvider.onDidChangeVisibleTextEditors: Active editor found: ${editor.document?.fileName ?? '-'}`);
-        } else {
-            logger().log('debug', "LhqTreeDataProvider.onDidChangeVisibleTextEditors: No active editor found");
-        }
+        // const editor = e.find(x => x.document.fileName === vscode.window.activeTextEditor?.document.fileName);
+        // if (editor) {
+        //     logger().log('debug', `LhqTreeDataProvider.onDidChangeVisibleTextEditors: Active editor found: ${editor.document?.fileName ?? '-'}`);
+        // } else {
+        //     logger().log('debug', "LhqTreeDataProvider.onDidChangeVisibleTextEditors: No active editor found");
+        // }
     }
 
     private onDidOpenTextDocument(e: vscode.TextDocument): any {
-        logger().log('debug', `LhqTreeDataProvider.onDidOpenTextDocument: ${e?.fileName ?? '-'}`);
+        // logger().log('debug', `LhqTreeDataProvider.onDidOpenTextDocument: ${e?.fileName ?? '-'}`);
     }
 
 
     private onDidChangeTextDocument(e: vscode.TextDocumentChangeEvent): void {
-        logger().log('debug', `LhqTreeDataProvider.onDocumentChanged: ${e.document?.fileName ?? '-'}`);
+        // logger().log('debug', `LhqTreeDataProvider.onDocumentChanged: ${e.document?.fileName ?? '-'}`);
         this.updateDocument(e.document);
     }
 
     public onActiveEditorChanged(e: vscode.TextEditor | undefined): void {
-        logger().log('debug', `LhqTreeDataProvider.onActiveEditorChanged: ${e?.document.fileName ?? '-'}`);
+        // logger().log('debug', `LhqTreeDataProvider.onActiveEditorChanged: ${e?.document.fileName ?? '-'}`);
         this.updateDocument(e?.document);
     }
 
@@ -442,17 +309,17 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
         return this.currentDocument !== null && this.currentDocument.uri.toString() === document.uri.toString();
     }
 
-    public updateDocument(document: vscode.TextDocument | undefined) {
+    public updateDocument(document: vscode.TextDocument | undefined, forceRefresh = false): void {
         if (document && !isValidDocument(document)) {
             this._lastActiveEditorNonLhq = true;
-            logger().log('debug', `LhqTreeDataProvider.updateDocument skipped due to invalid document.`);
+            // logger().log('debug', `LhqTreeDataProvider.updateDocument skipped due to invalid document.`);
             return;
         }
 
-        logger().log('debug', `LhqTreeDataProvider.updateDocument with: ${document?.fileName ?? '-'}`);
+        // logger().log('debug', `LhqTreeDataProvider.updateDocument with: ${document?.fileName ?? '-'}`);
         if (isValidDocument(document)) {
             setEditorActive(true);
-            if (this.currentDocument?.uri.toString() !== document.uri.toString() || !this.currentRootModel) {
+            if (this.currentDocument?.uri.toString() !== document.uri.toString() || !this.currentRootModel || forceRefresh === true) {
                 this.currentDocument = document;
                 this.refresh();
             }
@@ -473,11 +340,6 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
     refresh(): void {
         if (this.currentDocument) {
             this.currentJsonModel = null;
-
-            // setTimeout(() => {
-            //     test1();
-            // }, 1);
-
 
             this.currentRootModel = null;
             try {

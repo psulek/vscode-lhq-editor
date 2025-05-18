@@ -30,13 +30,14 @@ export class LhqEditorProvider implements vscode.CustomTextEditorProvider {
             logger().log('debug', `LhqEditorProvider.onDidChangeTextDocument for active editor: ${e.document?.fileName ?? '-'}`);
             if (e.document.uri.toString() === document.uri.toString() && document.fileName.endsWith('.lhq')) {
                 this.updateWebviewContent(webviewPanel, e.document);
-                this.treeDataProvider.updateDocument(e.document);
+                this.treeDataProvider.updateDocument(e.document, e.contentChanges?.length > 0);
             }
         });
 
         const viewStateSubscription = webviewPanel.onDidChangeViewState(e => {
             const changedPanel = e.webviewPanel;
             logger().log('debug', `LhqEditorProvider.onDidChangeViewState for ${document.fileName}. Active: ${changedPanel.active}, Visible: ${changedPanel.visible}`);
+
 
             if (changedPanel.active && document.fileName.endsWith('.lhq')) {
                 // This specific webview panel became active

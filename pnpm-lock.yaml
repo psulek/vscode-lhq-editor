@@ -4,6 +4,11 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+patchedDependencies:
+  jsonc-parser@3.3.1:
+    hash: 8a42d602c7cbb279c3019214a62cef476bbe6718b537c56e082ac8a99ca89aa2
+    path: patches/jsonc-parser@3.3.1.patch
+
 importers:
 
   .:
@@ -18,8 +23,8 @@ importers:
         specifier: 11.3.0
         version: 11.3.0
       jsonc-parser:
-        specifier: ^3.3.1
-        version: 3.3.1
+        specifier: 3.3.1
+        version: 3.3.1(patch_hash=8a42d602c7cbb279c3019214a62cef476bbe6718b537c56e082ac8a99ca89aa2)
     devDependencies:
       '@types/fs-extra':
         specifier: ^11.0.4
@@ -3211,7 +3216,7 @@ snapshots:
 
   json-stable-stringify-without-jsonify@1.0.1: {}
 
-  jsonc-parser@3.3.1: {}
+  jsonc-parser@3.3.1(patch_hash=8a42d602c7cbb279c3019214a62cef476bbe6718b537c56e082ac8a99ca89aa2): {}
 
   jsonfile@6.1.0:
     dependencies:
