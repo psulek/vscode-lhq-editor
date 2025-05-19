@@ -1,24 +1,13 @@
 import * as vscode from 'vscode';
 import type { ICategoryLikeTreeElement, IRootModelElement, ITreeElement, LhqModel, LhqValidationResult, TreeElementType } from '@lhq/lhq-generators';
-import { generatorUtils, isNullOrEmpty } from '@lhq/lhq-generators';
-import {
-    modify as jsonModify, parse as jsonParse, parseTree,
-    findNodeAtLocation, visit as jsonVisit, JSONVisitor, getNodePath, Node as jsonNode,
-    format as jsonFormat, findNodeAtOffset,
-    getNodeValue, EditResult, FormattingOptions
-} from 'jsonc-parser';
-
-import { createTreeElementPaths, getElementFullPath, IdentationType, isEditorActive, isValidDocument, logger, renameJsonProperty, setEditorActive, showMessageBox } from './utils';
-
-import { LhqTreeItem } from './treeItem';
-
+import { generatorUtils, isNullOrEmpty, ModelSerializer } from '@lhq/lhq-generators';
+import type { EditResult } from 'jsonc-parser';
 // @ts-ignore
 import detectIndent from 'detect-indent';
-import { test1 } from './test1';
+import { createTreeElementPaths, getElementFullPath, IdentationType, isEditorActive, isValidDocument, logger, moveJsonProperty, renameJsonProperty, setEditorActive, showMessageBox } from './utils';
+import { LhqTreeItem } from './treeItem';
+
 import { validateName } from './validator';
-// import { createRequire } from 'module';
-// // @ts-ignore
-// const detectIndent = createRequire(import.meta.url)('detect-indent');
 
 const defaultIdent: IdentationType = {
     amount: 2,
@@ -33,11 +22,10 @@ const actions = {
     deleteItem: 'lhqTreeView.deleteItem',
 };
 
-// const visitor: JSONVisitor = {
-//   onObjectProperty: (property, _offset, _length, parent) => {
-//     console.log('onObjectProperty', property, _offset, _length, parent);
-//   }  
-// };
+type DragTreeItem = {
+    path: string;
+    type: Exclude<TreeElementType, 'model'>;
+}
 
 export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement>, vscode.TreeDragAndDropController<ITreeElement> {
     dropMimeTypes = ['application/vnd.code.tree.lhqTreeView'];
@@ -54,6 +42,7 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
     private currentJsonModel: LhqModel | null = null;
     private documentIndent: IdentationType = defaultIdent;
     private selectedElement: ITreeElement | undefined = undefined;
+    private view: vscode.TreeView<any>;
 
     constructor(private context: vscode.ExtensionContext) {
 
@@ -72,17 +61,17 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
 
         this.onActiveEditorChanged(vscode.window.activeTextEditor);
 
-        const view = vscode.window.createTreeView('lhqTreeView', {
+        this.view = vscode.window.createTreeView('lhqTreeView', {
             treeDataProvider: this,
             showCollapseAll: true,
             canSelectMany: true,
             dragAndDropController: this
         });
-        context.subscriptions.push(view);
+        context.subscriptions.push(this.view);
 
         context.subscriptions.push(
-            view.onDidChangeSelection(e => {
-                this.selectedElement = e.selection && e.selection.length > 0 ? e.selection[0]: undefined;
+            this.view.onDidChangeSelection(e => {
+                this.selectedElement = e.selection && e.selection.length > 0 ? e.selection[0] : undefined;
             })
         );
     }
@@ -106,11 +95,11 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
             : source.map(item => {
                 const treeItem = this.currentRootModel!.getElementByPath(createTreeElementPaths(item.path), item.type);
                 return treeItem;
-            }).filter(item => item !== undefined) as ITreeElement[];
+            }).filter(item => item !== undefined && item.elementType !== 'model') as ITreeElement[];
     }
 
     public async handleDrop(target: ITreeElement | undefined, sources: vscode.DataTransfer, _token: vscode.CancellationToken): Promise<void> {
-        if (!target) {
+        if (!target || target.elementType === 'resource') {
             return;
         }
 
@@ -124,13 +113,17 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
             return;
         }
 
-        const treeItems = this.getTreeItems(items);
-        const itemCount = treeItems.length;
-        const firstParent = treeItems[0].parent;
+        if (!this.currentDocument) {
+            return;
+        }
+
+        let sourceItems = this.getTreeItems(items);
+        const itemCount = sourceItems.length;
+        const firstParent = sourceItems[0].parent;
         const elemText = `${itemCount} element(s)`;
 
-        if (treeItems.length > 1) {
-            if (!treeItems.every(item => item.parent === firstParent)) {
+        if (sourceItems.length > 1) {
+            if (!sourceItems.every(item => item.parent === firstParent)) {
                 showMessageBox('warn', `Cannot move ${elemText} with different parents.`);
                 return;
             }
@@ -141,18 +134,55 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
             return;
         }
 
+        const targetElement = target as ICategoryLikeTreeElement;
+
+        sourceItems.forEach(item => {
+            const containsElement = targetElement.hasElement(item.name, item.elementType as Exclude<TreeElementType, 'model'>);
+            if (!containsElement) {
+                const oldPath = getElementFullPath(item);
+                const changed = item.changeParent(targetElement);
+                logger().log('debug', `LhqTreeDataProvider.handleDrop: ${item.elementType} '${oldPath}' moved to '${getElementFullPath(item)}', successfully: ${changed}`);
+            }
+        });
+
+        // move JSON properties in text document
+        const documentText = this.currentDocument.getText();
+        let edits: EditResult | undefined;
+        try {
+            edits = moveJsonProperty(sourceItems[0], targetElement, documentText, this.documentIndent);
+            if (!edits) {
+                //logger().log('debug', `RenameItem: jsonc-parser 'modify' produced no edits for path '${elemPath}' and new name '${newName}'. This might happen if the path is incorrect or value is already set.`);
+                //showMessageBox('info', 'No changes were applied. The name might already be set or the item structure is unexpected.');
+                return;
+            }
+        } catch (error) {
+            //logger().log('error', `RenameItem: Error while renaming item '${originalName}' to '${newName}' (${elemPath})`, error as Error);
+            //showMessageBox('err', `Error while renaming item '${originalName}' to '${newName}': ${(error as Error).message}`);
+            return;
+        }
+
+        const workspaceEdits: vscode.TextEdit[] = edits.map(edit =>
+            new vscode.TextEdit(
+                new vscode.Range(
+                    this.currentDocument!.positionAt(edit.offset),
+                    this.currentDocument!.positionAt(edit.offset + edit.length)
+                ),
+                edit.content
+            )
+        );
+
+        const workspaceEdit = new vscode.WorkspaceEdit();
+        workspaceEdit.set(this.currentDocument.uri, workspaceEdits);
+
+        const success = await vscode.workspace.applyEdit(workspaceEdit);
+        // ----
 
 
-        // const treeItems: Node[] = transferItem.value;
-        // let roots = this._getLocalRoots(treeItems);
-        // // Remove nodes that are already target's parent nodes
-        // roots = roots.filter(r => !this._isChild(this._getTreeElement(r.key), target));
-        // if (roots.length > 0) {
-        // 	// Reload parents of the moving elements
-        // 	const parents = roots.map(r => this.getParent(r));
-        // 	roots.forEach(r => this._reparentNode(r, target));
-        // 	this._onDidChangeTreeData.fire([...parents, target]);
-        // }
+        this._onDidChangeTreeData.fire([firstParent, targetElement]);
+
+        if (targetElement) {
+            this.view.reveal(targetElement, { expand: true, select: false, focus: false });
+        }
     }
 
     private async deleteItem(element: ITreeElement): Promise<void> {
@@ -176,7 +206,7 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
 
     private async renameItem(element: ITreeElement): Promise<void> {
         if (!this.currentDocument) {
-            showMessageBox('warn', 'No active document to rename item in.');
+            showMessageBox('info', 'No active document to rename item in.');
             return;
         }
 
@@ -217,18 +247,6 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
         }
 
         const documentText = this.currentDocument.getText();
-        let lhqModelFromFile: LhqModel;
-        try {
-            lhqModelFromFile = jsonParse(documentText) as LhqModel;
-            if (!lhqModelFromFile) {
-                throw new Error("Parsed model is null or undefined.");
-            }
-        } catch (e: any) {
-            logger().log('error', `RenameItem: Failed to parse current document ${this.documentPath}: ${e.message}`, e);
-            showMessageBox('err', `Failed to parse document. Cannot rename. Error: ${e.message}`);
-            return;
-        }
-
         let edits: EditResult | undefined;
         try {
             edits = renameJsonProperty(element, newName, documentText, this.documentIndent);
@@ -361,7 +379,7 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
                 try {
                     validateResult = generatorUtils.validateLhqModel(this.currentJsonModel);
                     if (validateResult.success && validateResult.model) {
-                        this.currentRootModel = generatorUtils.createRootElement(validateResult.model);
+                        this.currentRootModel = ModelSerializer.createRootElement(validateResult.model);
                     } else {
                         this.currentJsonModel = null;
                     }
@@ -401,21 +419,22 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
 
         if (element) {
             if (element.elementType === 'resource') {
-                result.push(element);
+                // Resources don't have children in this model, return empty or the element itself if it should be a leaf
+                // result.push(element); // If you want to show the resource itself as its own child (uncommon)
             } else {
                 const categLikeElement = element as ICategoryLikeTreeElement;
                 result.push(...categLikeElement.categories);
                 result.push(...categLikeElement.resources);
             }
         } else {
+            // If no element is provided, return the root(s)
             result.push(this.currentRootModel);
         }
 
         return Promise.resolve(result);
     }
-}
 
-type DragTreeItem = {
-    path: string;
-    type: Exclude<TreeElementType, 'model'>;
+    getParent(element: ITreeElement): vscode.ProviderResult<ITreeElement> {
+        return element.parent;
+    }
 }

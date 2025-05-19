@@ -141,7 +141,7 @@
     "typescript": "^5.8.3"
   },
   "dependencies": {
-    "@lhq/lhq-generators": "1.0.0-rc.23",
+    "@lhq/lhq-generators": "1.0.0-rc.28",
     "detect-indent": "^7.0.1",
     "fs-extra": "11.3.0",
     "jsonc-parser": "3.3.1"
