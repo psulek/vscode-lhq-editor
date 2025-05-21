@@ -1,15 +1,14 @@
 import * as vscode from 'vscode';
-import type { ICategoryLikeTreeElement, IRootModelElement, ITreeElement, LhqModel, LhqValidationResult, TreeElementType } from '@lhq/lhq-generators';
-import { generatorUtils, isNullOrEmpty, ModelSerializer } from '@lhq/lhq-generators';
-import type { EditResult } from 'jsonc-parser';
-// @ts-ignore
-import detectIndent from 'detect-indent';
-import { createTreeElementPaths, getElementFullPath, IdentationType, isEditorActive, isValidDocument, logger, moveJsonProperty, renameJsonProperty, setEditorActive, showMessageBox } from './utils';
+import type { FormattingOptions, ICategoryLikeTreeElement, IRootModelElement, ITreeElement, LhqModel, LhqValidationResult, TreeElementType } from '@lhq/lhq-generators';
+import { detectFormatting, generatorUtils, isNullOrEmpty, ModelSerializer } from '@lhq/lhq-generators';
+import type { Edit, EditResult } from 'jsonc-parser';
+import { createTreeElementPaths, delay, getElementFullPath, IndentationType, isEditorActive, isValidDocument, logger, moveOrDeleteJsonProperty, renameJsonProperty, setEditorActive, showMessageBox } from './utils';
 import { LhqTreeItem } from './treeItem';
 
 import { validateName } from './validator';
+import { test1 } from './test1';
 
-const defaultIdent: IdentationType = {
+const defaultIdent: IndentationType = {
     amount: 2,
     type: 'space',
     indent: '  '
@@ -40,7 +39,8 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
     private currentRootModel: IRootModelElement | null = null;
     private currentDocument: vscode.TextDocument | null = null;
     private currentJsonModel: LhqModel | null = null;
-    private documentIndent: IdentationType = defaultIdent;
+    //private currentIndentation: IndentationType = defaultIdent;
+    private currentFormatting: FormattingOptions = { indentation: { amount: 2, type: 'space', indent: '  ' }, eol: '\n' };
     private selectedElement: ITreeElement | undefined = undefined;
     private view: vscode.TreeView<any>;
 
@@ -74,6 +74,14 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
                 this.selectedElement = e.selection && e.selection.length > 0 ? e.selection[0] : undefined;
             })
         );
+    }
+
+    private get selectedCategoryLike(): ICategoryLikeTreeElement | undefined {
+        const element = this.selectedElement || this.currentRootModel;
+
+        return element && (element.elementType === 'category' || element.elementType === 'model')
+            ? element as ICategoryLikeTreeElement
+            : undefined;
     }
 
     public async handleDrag(source: ITreeElement[], treeDataTransfer: vscode.DataTransfer, _token: vscode.CancellationToken): Promise<void> {
@@ -136,49 +144,41 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
 
         const targetElement = target as ICategoryLikeTreeElement;
 
-        sourceItems.forEach(item => {
-            const containsElement = targetElement.hasElement(item.name, item.elementType as Exclude<TreeElementType, 'model'>);
-            if (!containsElement) {
-                const oldPath = getElementFullPath(item);
-                const changed = item.changeParent(targetElement);
-                logger().log('debug', `LhqTreeDataProvider.handleDrop: ${item.elementType} '${oldPath}' moved to '${getElementFullPath(item)}', successfully: ${changed}`);
-            }
-        });
+        sourceItems = sourceItems.filter(x => !targetElement.contains(x.name, x.elementType as Exclude<TreeElementType, 'model'>));
 
-        // move JSON properties in text document
-        const documentText = this.currentDocument.getText();
-        let edits: EditResult | undefined;
-        try {
-            edits = moveJsonProperty(sourceItems[0], targetElement, documentText, this.documentIndent);
-            if (!edits) {
-                //logger().log('debug', `RenameItem: jsonc-parser 'modify' produced no edits for path '${elemPath}' and new name '${newName}'. This might happen if the path is incorrect or value is already set.`);
-                //showMessageBox('info', 'No changes were applied. The name might already be set or the item structure is unexpected.');
-                return;
-            }
-        } catch (error) {
-            //logger().log('error', `RenameItem: Error while renaming item '${originalName}' to '${newName}' (${elemPath})`, error as Error);
-            //showMessageBox('err', `Error while renaming item '${originalName}' to '${newName}': ${(error as Error).message}`);
-            return;
-        }
+        // sourceItems.forEach(item => {
+        //     const containsElement = targetElement.hasElement(item.name, item.elementType as Exclude<TreeElementType, 'model'>);
+        //     if (!containsElement) {
+        //         const oldPath = getElementFullPath(item);
+        //         const changed = item.changeParent(targetElement);
+        //         logger().log('debug', `LhqTreeDataProvider.handleDrop: ${item.elementType} '${oldPath}' moved to '${getElementFullPath(item)}', successfully: ${changed}`);
+        //     }
+        // });
 
-        const workspaceEdits: vscode.TextEdit[] = edits.map(edit =>
-            new vscode.TextEdit(
-                new vscode.Range(
-                    this.currentDocument!.positionAt(edit.offset),
-                    this.currentDocument!.positionAt(edit.offset + edit.length)
-                ),
-                edit.content
-            )
-        );
+        // // move JSON properties in text document
+        // const documentText = this.currentDocument.getText();
+        // const workspaceEdits: vscode.TextEdit[] = [];
 
-        const workspaceEdit = new vscode.WorkspaceEdit();
-        workspaceEdit.set(this.currentDocument.uri, workspaceEdits);
+        // sourceItems.forEach(sourceItem => {
+        //     try {
+        //         const edits = moveOrDeleteJsonProperty('move', sourceItem, targetElement, documentText, this.currentIndentation);
+        //         if (edits) {
+        //             edits.forEach(edit => {
+        //                 workspaceEdits.push(new vscode.TextEdit(
+        //                     new vscode.Range(
+        //                         this.currentDocument!.positionAt(edit.offset),
+        //                         this.currentDocument!.positionAt(edit.offset + edit.length)
+        //                     ),
+        //                     edit.content
+        //                 ));
+        //             });
+        //         }
 
-        const success = await vscode.workspace.applyEdit(workspaceEdit);
-        // ----
+        //     } catch (error) {
+        //         logger().log('error', 'move json property error', error as Error);
+        //     }
+        // });
 
-
-        this._onDidChangeTreeData.fire([firstParent, targetElement]);
 
         if (targetElement) {
             this.view.reveal(targetElement, { expand: true, select: false, focus: false });
@@ -186,98 +186,145 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
     }
 
     private async deleteItem(element: ITreeElement): Promise<void> {
-        const elementName = element.name;
-        const parentPath = getElementFullPath(element);
-
-        const confirmation = await showMessageBox('info',
-            `Delete ${element.elementType} "${elementName}" ?`,
-            { modal: true, detail: parentPath },
-            'Yes',
-            'No'
-        );
-
-        if (confirmation === 'Yes') {
-            showMessageBox('info', `Item "${elementName}" deleted.`);
-            // Add deletion logic here
-        } else {
-            showMessageBox('info', `Deletion of item "${elementName}" canceled.`);
-        }
-    }
-
-    private async renameItem(element: ITreeElement): Promise<void> {
         if (!this.currentDocument) {
             showMessageBox('info', 'No active document to rename item in.');
             return;
         }
 
         element = element || this.selectedElement;
-        if (!element) {
+
+        const elementName = element.name;
+        const elemPath = getElementFullPath(element);
+
+        const confirmation = await showMessageBox('info',
+            `Delete ${element.elementType} "${elementName}" ?`,
+            { modal: true, detail: elemPath },
+            'Yes',
+            'No'
+        );
+
+        if (confirmation !== 'Yes') {
+            return;
+        }
+
+        // const documentText = this.currentDocument.getText();
+        // let edits: EditResult | undefined;
+        // try {
+        //     edits = moveOrDeleteJsonProperty('delete', element, undefined, documentText, this.currentIndentation);
+        //     if (!edits) {
+        //         //logger().log('debug', `DeleteItem: jsonc-parser 'modify' produced no edits for path '${elemPath}' and new name '${newName}'. This might happen if the path is incorrect or value is already set.`);
+        //         showMessageBox('info', 'No changes were applied. The name might already be set or the item structure is unexpected.');
+        //         return;
+        //     }
+        // } catch (error) {
+        //     logger().log('error', `DeleteItem: Error while deleting item ${elemPath}`, error as Error);
+        //     showMessageBox('err', `Error while deleting item ${elemPath}: ${(error as Error).message}`);
+        //     return;
+        // }
+
+        // const workspaceEdits: vscode.TextEdit[] = edits.map(edit =>
+        //     new vscode.TextEdit(
+        //         new vscode.Range(
+        //             this.currentDocument!.positionAt(edit.offset),
+        //             this.currentDocument!.positionAt(edit.offset + edit.length)
+        //         ),
+        //         edit.content
+        //     )
+        // );
+
+        // const workspaceEdit = new vscode.WorkspaceEdit();
+        // workspaceEdit.set(this.currentDocument.uri, workspaceEdits);
+
+        // const success = await vscode.workspace.applyEdit(workspaceEdit);
+
+        const parent = element.parent ?? element.root;
+        parent.removeElement(element);
+        const success = await this.updateTextDocument();
+
+        if (!success) {
+            logger().log('error', `DeleteItem: vscode.workspace.applyEdit failed for ${elemPath}`);
+            showMessageBox('err', `Failed to delete item ${elemPath}.`);
+        }
+    }
+
+    private validateElementName(element: ITreeElement, name: string): string | null {
+        const valRes = validateName(name);
+        if (valRes === 'valid') {
+            if (this.selectedCategoryLike && !isNullOrEmpty(name)) {
+                if (this.selectedCategoryLike.contains(name, element.elementType as Exclude<TreeElementType, 'model'>)) {
+                    const root = this.selectedCategoryLike.elementType === 'model' ? 'root' : 'parent category';
+                    return `Name '${name}' already exists in ${root}.`;
+                }
+            }
+        } else {
+            switch (valRes) {
+                case 'nameIsEmpty':
+                    return 'Name cannot be empty.';
+                case 'nameCannotBeginWithNumber':
+                    return 'Name cannot start with a number.';
+                case 'nameCanContainOnlyAlphaNumeric':
+                    return 'Name can only contain alphanumeric characters and underscores.';
+            }
+        }
+
+        return null;
+    }
+
+    private async renameItem(element: ITreeElement): Promise<void> {
+        element = element || this.selectedElement;
+        if (!this.currentDocument || !element) {
             return;
         }
 
         const originalName = element.name;
-        const elemPath = element.paths.getParentPath('/', true);
+        const elemPath = getElementFullPath(element);
 
         const newName = await vscode.window.showInputBox({
             prompt: `Enter new name for ${element.elementType} '${originalName}' (${elemPath})`,
             value: originalName,
-            validateInput: value => {
-                const valRes = validateName(value);
-                if (valRes === 'valid') {
-                    if (value === originalName) {
-                        return 'New name is the same as the old name.';
-                    }
-                } else {
-                    switch (valRes) {
-                        case 'nameIsEmpty':
-                            return 'Name cannot be empty.';
-                        case 'nameCannotBeginWithNumber':
-                            return 'Name cannot start with a number.';
-                        case 'nameCanContainOnlyAlphaNumeric':
-                            return 'Name can only contain alphanumeric characters and underscores.';
-                    }
-                }
-
-                return null;
-            }
+            validateInput: value => this.validateElementName(element, value)
         });
 
         if (!newName || newName === originalName) {
             return;
         }
 
-        const documentText = this.currentDocument.getText();
-        let edits: EditResult | undefined;
-        try {
-            edits = renameJsonProperty(element, newName, documentText, this.documentIndent);
-            if (!edits) {
-                logger().log('debug', `RenameItem: jsonc-parser 'modify' produced no edits for path '${elemPath}' and new name '${newName}'. This might happen if the path is incorrect or value is already set.`);
-                showMessageBox('info', 'No changes were applied. The name might already be set or the item structure is unexpected.');
-                return;
-            }
-        } catch (error) {
-            logger().log('error', `RenameItem: Error while renaming item '${originalName}' to '${newName}' (${elemPath})`, error as Error);
-            showMessageBox('err', `Error while renaming item '${originalName}' to '${newName}': ${(error as Error).message}`);
-            return;
-        }
+        // const documentText = this.currentDocument.getText();
+        // let edits: EditResult | undefined;
+        // try {
+        //     edits = renameJsonProperty(element, newName, documentText, this.documentIndent);
+        //     if (!edits) {
+        //         logger().log('debug', `RenameItem: jsonc-parser 'modify' produced no edits for path '${elemPath}' and new name '${newName}'. This might happen if the path is incorrect or value is already set.`);
+        //         showMessageBox('info', 'No changes were applied. The name might already be set or the item structure is unexpected.');
+        //         return;
+        //     }
+        // } catch (error) {
+        //     logger().log('error', `RenameItem: Error while renaming item '${originalName}' to '${newName}' (${elemPath})`, error as Error);
+        //     showMessageBox('err', `Error while renaming item '${originalName}' to '${newName}': ${(error as Error).message}`);
+        //     return;
+        // }
 
-        const workspaceEdits: vscode.TextEdit[] = edits.map(edit =>
-            new vscode.TextEdit(
-                new vscode.Range(
-                    this.currentDocument!.positionAt(edit.offset),
-                    this.currentDocument!.positionAt(edit.offset + edit.length)
-                ),
-                edit.content
-            )
-        );
+        // const workspaceEdits: vscode.TextEdit[] = edits.map(edit =>
+        //     new vscode.TextEdit(
+        //         new vscode.Range(
+        //             this.currentDocument!.positionAt(edit.offset),
+        //             this.currentDocument!.positionAt(edit.offset + edit.length)
+        //         ),
+        //         edit.content
+        //     )
+        // );
 
-        const workspaceEdit = new vscode.WorkspaceEdit();
-        workspaceEdit.set(this.currentDocument.uri, workspaceEdits);
+        element.name = newName;
+        const success = await this.updateTextDocument();
 
-        const success = await vscode.workspace.applyEdit(workspaceEdit);
-        if (success) {
-            element.name = newName;
-        }
+
+        // const workspaceEdit = new vscode.WorkspaceEdit();
+        // workspaceEdit.set(this.currentDocument.uri, workspaceEdits);
+
+        // const success = await vscode.workspace.applyEdit(workspaceEdit);
+        // if (success) {
+        //     element.name = newName;
+        // }
 
         //this._onDidChangeTreeData.fire([element]);
 
@@ -287,8 +334,77 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
         }
     }
 
-    private addItem(element: ITreeElement): any {
-        showMessageBox('info', `Add item '${element.name}' clicked`);
+    private updateTextDocument(): Thenable<boolean> {
+        const serializedRoot = ModelSerializer.serializeTreeElement(this.currentRootModel!, this.currentFormatting);
+        const edit = new vscode.WorkspaceEdit();
+        const doc = this.currentDocument!;
+        edit.replace(
+            doc.uri,
+            new vscode.Range(0, 0, doc.lineCount, 0),
+            serializedRoot);
+
+        return vscode.workspace.applyEdit(edit);
+    }
+
+    private async addItem(element: ITreeElement): Promise<any> {
+        element = element || this.selectedElement || this.currentRootModel;
+        if (!this.currentDocument || !element) {
+            return;
+        }
+
+        if (element.elementType === 'resource') {
+            element = element.parent || element.root;
+        }
+
+        const elemPath = getElementFullPath(element);
+
+        //'Category', 'Resource'
+        const itemType = await vscode.window.showQuickPick([
+            {
+                label: 'Category',
+                elementType: 'category' as TreeElementType
+            },
+            {
+                label: 'Resource',
+                elementType: 'resource' as TreeElementType
+            }
+        ], { placeHolder: `Select element type to add under ${elemPath}` });
+        await delay(300);
+
+        if (!itemType) {
+            return;
+        }
+
+        const elementType = itemType?.elementType;
+        
+
+        const getName = vscode.window.showInputBox({
+            prompt: `Enter new ${elementType} name:`,
+            ignoreFocusOut: true,
+            validateInput: value => this.validateElementName(element, value)
+        });
+        await delay(300);
+
+        const itemName = await getName;
+        if (!itemName) {
+            return;
+        }
+
+        const isResource = elementType === 'resource';
+        const parentCategory = element as ICategoryLikeTreeElement;
+        let newElement: ITreeElement;
+        if (isResource) {
+            newElement = parentCategory.addResource(itemName);
+        } else {
+            newElement = parentCategory.addCategory(itemName);
+        }
+
+        await this.updateTextDocument();
+        this._onDidChangeTreeData.fire([element]);
+        //await this.view.reveal(element, { expand: true, select: false, focus: false });
+        await this.view.reveal(newElement, { expand: true, select: true, focus: true });
+
+        showMessageBox('info', `Add ${itemType} '${itemName}' to '${element.name}'.`);
     }
 
     private onDidChangeVisibleTextEditors(e: readonly vscode.TextEditor[]): any {
@@ -359,12 +475,16 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
         if (this.currentDocument) {
             this.currentJsonModel = null;
 
+            // setTimeout(() => {
+            //     test1();
+            // }, 10);
+
             this.currentRootModel = null;
             try {
                 const docText = this.currentDocument.getText();
                 this.currentJsonModel = docText?.length > 0 ? JSON.parse(docText) as LhqModel : null;
-
-                this.documentIndent = docText?.length > 0 ? Object.assign({}, defaultIdent, detectIndent(docText)) : defaultIdent;
+                //this.currentIndentation = docText?.length > 0 ? Object.assign({}, defaultIdent, detectIndent(docText)) : defaultIdent;
+                this.currentFormatting = detectFormatting(docText);
 
             } catch (ex) {
                 const error = `Error parsing LHQ file '${this.documentPath}'`;

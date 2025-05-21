@@ -14,8 +14,8 @@ importers:
   .:
     dependencies:
       '@lhq/lhq-generators':
-        specifier: 1.0.0-rc.28
-        version: 1.0.0-rc.28(typescript@5.8.3)
+        specifier: 1.0.0-rc.32
+        version: 1.0.0-rc.32(typescript@5.8.3)
       detect-indent:
         specifier: ^7.0.1
         version: 7.0.1
@@ -299,8 +299,8 @@ packages:
   '@jridgewell/trace-mapping@0.3.25':
     resolution: {integrity: sha512-vNk6aEwybGtawWmy/PzwnGDOjCkLWSD2wqvjGGAgOAwCGWySYXfYoxt00IJkTF+8Lb57DwOb3Aa0o9CApepiYQ==}
 
-  '@lhq/lhq-generators@1.0.0-rc.28':
-    resolution: {integrity: sha512-7hCzmCp9jFg+BVeLsUC4fl7p+OhQc7gGt2OhUnwt5qnDH6O/xj1qBif6PZOxLBe8dpnvs19pyBGEw2B0B4bQgA==}
+  '@lhq/lhq-generators@1.0.0-rc.32':
+    resolution: {integrity: sha512-djXvJIL7OC4I3gCOzQ0FUEX6F9XkFtC06rBHYZx+ugcpw+RCBx6QWCA31MBBF1GkxnBiRSTDLUoyLgBvwE2LrA==}
     hasBin: true
     peerDependencies:
       typescript: ^5.0.2
@@ -2090,11 +2090,12 @@ snapshots:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.5.0
 
-  '@lhq/lhq-generators@1.0.0-rc.28(typescript@5.8.3)':
+  '@lhq/lhq-generators@1.0.0-rc.32(typescript@5.8.3)':
     dependencies:
       '@commander-js/extra-typings': 13.1.0(commander@13.1.0)
       '@xmldom/xmldom': 0.9.8
       commander: 13.1.0
+      detect-indent: 7.0.1
       fs-extra: 11.3.0
       glob: 11.0.2
       handlebars: 4.7.8

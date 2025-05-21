@@ -1,0 +1,24 @@
+{
+    "model": {
+        "uid": "123"
+    },
+    "categories": {
+        "Category1": {
+            "description": "This is the first category.",
+            "resources": {
+                "Resource1": {
+                    "state": "Edited",
+                    "description": "This is the first resource in Category1."
+                },
+                "Resource2": {
+                    "description": "This is the second resource in Category1."
+                }
+            }
+        }
+    },
+    "resources": {
+        "RootResource1": {
+            "description": "This is the first resource in Root."
+        }
+    }
+}
