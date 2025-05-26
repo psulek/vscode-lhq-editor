@@ -1,18 +1,9 @@
 import * as vscode from 'vscode';
 import type { FormattingOptions, ICategoryLikeTreeElement, IRootModelElement, ITreeElement, LhqModel, LhqValidationResult, TreeElementType } from '@lhq/lhq-generators';
 import { detectFormatting, generatorUtils, isNullOrEmpty, ModelSerializer } from '@lhq/lhq-generators';
-import type { Edit, EditResult } from 'jsonc-parser';
-import { createTreeElementPaths, delay, getElementFullPath, IndentationType, isEditorActive, isValidDocument, logger, moveOrDeleteJsonProperty, renameJsonProperty, setEditorActive, showMessageBox } from './utils';
+import { createTreeElementPaths, delay, getElementFullPath, isEditorActive, isValidDocument, logger, setEditorActive, showMessageBox } from './utils';
 import { LhqTreeItem } from './treeItem';
-
 import { validateName } from './validator';
-import { test1 } from './test1';
-
-const defaultIdent: IndentationType = {
-    amount: 2,
-    type: 'space',
-    indent: '  '
-};
 
 const actions = {
     refresh: 'lhqTreeView.refresh',
@@ -77,11 +68,16 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
     }
 
     private get selectedCategoryLike(): ICategoryLikeTreeElement | undefined {
-        const element = this.selectedElement || this.currentRootModel;
+        let element = this.selectedElement ?? this.currentRootModel;
+        if (!element) {
+            return undefined;
+        }
 
-        return element && (element.elementType === 'category' || element.elementType === 'model')
-            ? element as ICategoryLikeTreeElement
-            : undefined;
+        if (element.elementType === 'resource') {
+            element = element.parent ?? this.currentRootModel;
+        }
+
+        return element as ICategoryLikeTreeElement;
     }
 
     public async handleDrag(source: ITreeElement[], treeDataTransfer: vscode.DataTransfer, _token: vscode.CancellationToken): Promise<void> {
@@ -247,13 +243,13 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
         }
     }
 
-    private validateElementName(element: ITreeElement, name: string): string | null {
+    private validateElementName(elementType: TreeElementType, name: string): string | null {
         const valRes = validateName(name);
         if (valRes === 'valid') {
             if (this.selectedCategoryLike && !isNullOrEmpty(name)) {
-                if (this.selectedCategoryLike.contains(name, element.elementType as Exclude<TreeElementType, 'model'>)) {
-                    const root = this.selectedCategoryLike.elementType === 'model' ? 'root' : 'parent category';
-                    return `Name '${name}' already exists in ${root}.`;
+                if (this.selectedCategoryLike.contains(name, elementType as Exclude<TreeElementType, 'model'>)) {
+                    const root = this.selectedCategoryLike.elementType === 'model' ? '/' : getElementFullPath(this.selectedCategoryLike);
+                    return `${elementType} '${name}' already exists in ${root}`;
                 }
             }
         } else {
@@ -271,7 +267,8 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
     }
 
     private async renameItem(element: ITreeElement): Promise<void> {
-        element = element || this.selectedElement;
+        //element = element || this.selectedElement;
+        element = this.selectedElement || element;
         if (!this.currentDocument || !element) {
             return;
         }
@@ -279,14 +276,22 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
         const originalName = element.name;
         const elemPath = getElementFullPath(element);
 
+        const elementType = element.elementType;
         const newName = await vscode.window.showInputBox({
-            prompt: `Enter new name for ${element.elementType} '${originalName}' (${elemPath})`,
+            prompt: `Enter new name for ${elementType} '${originalName}' (${elemPath})`,
             value: originalName,
-            validateInput: value => this.validateElementName(element, value)
+            validateInput: value => this.validateElementName(elementType, value)
         });
 
         if (!newName || newName === originalName) {
             return;
+        }
+
+        const validationError = this.validateElementName(elementType, newName);
+        if (validationError) {
+            showMessageBox('warn', validationError);
+            return;
+
         }
 
         // const documentText = this.currentDocument.getText();
@@ -346,8 +351,8 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
         return vscode.workspace.applyEdit(edit);
     }
 
-    private async addItem(element: ITreeElement): Promise<any> {
-        element = element || this.selectedElement || this.currentRootModel;
+    private async addItem(): Promise<any> {
+        let element = this.selectedElement ?? this.currentRootModel!;
         if (!this.currentDocument || !element) {
             return;
         }
@@ -358,7 +363,6 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
 
         const elemPath = getElementFullPath(element);
 
-        //'Category', 'Resource'
         const itemType = await vscode.window.showQuickPick([
             {
                 label: 'Category',
@@ -369,29 +373,37 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
                 elementType: 'resource' as TreeElementType
             }
         ], { placeHolder: `Select element type to add under ${elemPath}` });
-        await delay(300);
 
         if (!itemType) {
             return;
         }
 
-        const elementType = itemType?.elementType;
-        
+        setTimeout(() => {
+            void this.addItemComplete(element, itemType.elementType);
+        }, 100);
+    }
 
-        const getName = vscode.window.showInputBox({
-            prompt: `Enter new ${elementType} name:`,
+    async addItemComplete(parent: ITreeElement, elementType: TreeElementType) {
+        const elemPath = getElementFullPath(parent);
+        const itemName = await vscode.window.showInputBox({
+            prompt: `Enter new ${elementType} name (${elemPath})`,
             ignoreFocusOut: true,
-            validateInput: value => this.validateElementName(element, value)
+            validateInput: value => this.validateElementName(elementType, value)
         });
-        await delay(300);
-
-        const itemName = await getName;
+        
         if (!itemName) {
             return;
         }
 
+        const validationError = this.validateElementName(elementType, itemName);
+        if (validationError) {
+            showMessageBox('warn', validationError);
+            return;
+
+        }
+
         const isResource = elementType === 'resource';
-        const parentCategory = element as ICategoryLikeTreeElement;
+        const parentCategory = parent as ICategoryLikeTreeElement;
         let newElement: ITreeElement;
         if (isResource) {
             newElement = parentCategory.addResource(itemName);
@@ -400,11 +412,11 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
         }
 
         await this.updateTextDocument();
-        this._onDidChangeTreeData.fire([element]);
+        this._onDidChangeTreeData.fire([parent]);
         //await this.view.reveal(element, { expand: true, select: false, focus: false });
         await this.view.reveal(newElement, { expand: true, select: true, focus: true });
 
-        showMessageBox('info', `Add ${itemType} '${itemName}' to '${element.name}'.`);
+        showMessageBox('info', `Added new ${elementType} '${itemName}' under '${getElementFullPath(parent)}'`);
     }
 
     private onDidChangeVisibleTextEditors(e: readonly vscode.TextEditor[]): any {
