@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { LhqEditorProvider } from './editorProvider';
 import { LhqTreeDataProvider } from './treeDataProvider';
-import { initializeDebugMode } from './utils';
+import { initializeDebugMode, logger } from './utils';
 //import { test1 } from './test1';
 
 export function activate(context: vscode.ExtensionContext) {
@@ -29,8 +29,6 @@ export function activate(context: vscode.ExtensionContext) {
     // });
 
     initializeDebugMode(context.extensionMode);
-
-    console.log('Congratulations, your extension "lhq-editor-extension" is now active!');
 
     const lhqTreeDataProvider = new LhqTreeDataProvider(context);
 

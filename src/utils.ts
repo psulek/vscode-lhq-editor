@@ -1,12 +1,13 @@
 import * as vscode from 'vscode';
 import path from 'path';
 import fse from 'fs-extra';
-import type { FileInfo, ReadFileInfoOptions, ITreeElementPaths, ITreeElement } from '@lhq/lhq-generators';
-import { fileUtils, ModelSerializer } from '@lhq/lhq-generators';
+import type { FileInfo, ReadFileInfoOptions, ITreeElementPaths, ITreeElement, IRootModelElement, ICategoryLikeTreeElement } from '@lhq/lhq-generators';
+import { fileUtils, isNullOrEmpty, ModelUtils, strCompare } from '@lhq/lhq-generators';
 
 import { ILogger, VsCodeLogger } from './logger';
 
 const isEditorActiveContextKey = 'lhqEditorIsActive';
+const hasTreeViewSelectedItemContextKey = 'lhqTreeViewHasSelectedItem';
 const messageBoxPrefix = '[LHQ Editor]';
 
 let _isEditorActive = false;
@@ -18,8 +19,14 @@ export function initializeDebugMode(mode: vscode.ExtensionMode) {
     _isDebugMode = mode === vscode.ExtensionMode.Development;
     _logger.updateDebugMode(_isDebugMode);
     if (_isDebugMode) {
-        _logger.log('debug', 'Extension is running in Development mode.');
+        _logger.log('debug', 'LHQ Editor extension activated in Development mode.');
+    } else {
+        _logger.log('info', 'LHQ Editor extension activated');
     }
+}
+
+export function getMessageBoxText(msg: string): string {
+    return `${messageBoxPrefix} ${msg}`;
 }
 
 export function logger(): ILogger {
@@ -33,9 +40,14 @@ export function isEditorActive(): boolean {
 export function setEditorActive(active: boolean) {
     if (_isEditorActive !== active) {
         _isEditorActive = active;
-        _logger.log('debug', `called setEditorActive(${active})`);
         vscode.commands.executeCommand('setContext', isEditorActiveContextKey, active);
+        _logger.log('debug', `updated context data '${isEditorActiveContextKey}' to: ${active}`);
     }
+}
+
+export function setTreeViewHasSelectedItem(hasSelectedItem: boolean) {
+    vscode.commands.executeCommand('setContext', hasTreeViewSelectedItemContextKey, hasSelectedItem);
+    _logger.log('debug', `updated context data '${hasTreeViewSelectedItemContextKey}' to: ${hasSelectedItem}`);
 }
 
 export function isValidDocument(document: vscode.TextDocument | null | undefined): document is vscode.TextDocument {
@@ -54,13 +66,17 @@ export function getElementFullPath(element: ITreeElement): string {
     return element.paths.getParentPath('/', true);
 }
 
-export function createTreeElementPaths(parentPath: string): ITreeElementPaths {
-    return ModelSerializer.createTreePaths(parentPath, '/');
+export function createTreeElementPaths(parentPath: string, anySlash: boolean = false): ITreeElementPaths {
+    if (anySlash) {
+        parentPath = parentPath.replace(/\\/g, '/');
+    }
+
+    return ModelUtils.createTreePaths(parentPath, '/');
 }
 
 export function showMessageBox<T extends string>(type: 'warn' | 'info' | 'err', message: string,
     options?: vscode.MessageOptions, ...items: T[]): Thenable<T | undefined> {
-    const msg = `${messageBoxPrefix} ${message}`;
+    const msg = getMessageBoxText(message);
 
     options = options ?? {};
 
@@ -79,4 +95,132 @@ export function toPascalCasing(str: string): string {
 
 export function delay(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+export function isSubsetOfArray(sourceArr: string[], subsetArr: string[], ignoreCase: boolean = false): boolean {
+    if (subsetArr.length === 0) {
+        return false;
+    }
+
+    const maxLength = Math.min(sourceArr.length, subsetArr.length);
+
+    for (let i = 0; i < maxLength; i++) {
+        if (!strCompare(sourceArr[i], subsetArr[i], ignoreCase)) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+// export function sequentialEquals(arr1: string[], arr2: string[], ignoreCase: boolean = false, maxLength?: number): boolean {
+//     const arr1Length = Math.max(0, Math.min(maxLength ?? 0, arr1.length));
+//     const arr2Length = Math.max(0, Math.min(maxLength ?? 0, arr2.length));
+
+//     if (arr1Length !== arr2Length) {
+//         return false;
+//     }
+
+//     for (let i = 0; i < arr1Length; i++) {
+//         if (!strCompare(arr1[i], arr2[i], ignoreCase)) {
+//             return false;
+//         }
+//     }
+
+//     return true;
+// }
+
+export function isCategoryLikeTreeElement(element: ITreeElement | undefined): element is ICategoryLikeTreeElement {
+    if (!element) {
+        return false;
+    }
+    return element.elementType === 'category' || element.elementType === 'model';
+}
+
+export function findChildsByPaths(root: IRootModelElement, elementPaths: ITreeElementPaths): Array<{
+    element: ITreeElement, match: MatchForSubstringResult, leaf: boolean
+}> {
+    const paths = elementPaths.getPaths(true);
+    if (paths.length === 0) {
+        return [];
+    }
+
+    const result: Array<{ element: ITreeElement, match: MatchForSubstringResult, leaf: boolean }> = [];
+    let currentElement: ITreeElement | undefined = root;
+    let path = paths.shift() ?? '';
+    let isLast = paths.length === 0;
+
+    while (!isNullOrEmpty(path)) {
+        if (!isCategoryLikeTreeElement(currentElement)) {
+            break;
+        }
+
+        if (isLast) {
+            const categs = currentElement.categories.map(x => ({ element: x, match: matchForSubstring(x.name, path, true), leaf: true }))
+                .filter(x => x.match.match !== 'none');
+            result.push(...categs);
+
+            const res = currentElement.resources.map(x => ({ element: x, match: matchForSubstring(x.name, path, true), leaf: true }))
+                .filter(x => x.match.match !== 'none');
+            result.push(...res);
+        } else {
+            currentElement = currentElement.getCategory(path);
+            // if (currentElement) {
+            //     result.push({
+            //         element: currentElement, match: { match: 'equal' }, leaf: false
+            //     });
+            // }
+        }
+
+        path = paths.shift() ?? '';
+        isLast = paths.length === 0;
+    }
+
+    return result;
+}
+
+export type MatchForSubstringResult = {
+    match: 'equal' | 'contains' | 'none';
+    highlights?: [number, number][];
+}
+
+export function matchForSubstring(value: string, searchString: string, ignoreCase: boolean = false): MatchForSubstringResult {
+    if (isNullOrEmpty(value) || isNullOrEmpty(searchString)) {
+        return { match: 'none' };
+    }
+
+    const result: MatchForSubstringResult = {
+        match: strCompare(value, searchString, ignoreCase) ? 'equal' : 'none',
+    };
+
+    if (result.match === 'none') {
+        if (ignoreCase) {
+            value = value.toLowerCase();
+            searchString = searchString.toLowerCase();
+        }
+
+        result.match = value.includes(searchString) ? 'contains' : 'none';
+        // if (result.match !== 'none') {
+        //     const startIndex = value.indexOf(searchString);
+        //     if (startIndex > -1) {
+        //         result.highlights ??= [];
+        //         result.highlights.push([startIndex, startIndex + searchString.length]);
+        //     }
+        // }
+    }
+
+    if (result.match !== 'none') {
+        if (result.match === 'equal' && ignoreCase) {
+            value = value.toLowerCase();
+            searchString = searchString.toLowerCase();
+        }
+
+        const startIndex = value.indexOf(searchString);
+        if (startIndex > -1) {
+            result.highlights ??= [];
+            result.highlights.push([startIndex, startIndex + searchString.length]);
+        }
+    }
+
+    return result;
 }
