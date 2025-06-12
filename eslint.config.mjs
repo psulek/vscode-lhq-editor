@@ -12,6 +12,11 @@ export default [{
         parser: tsParser,
         ecmaVersion: 2022,
         sourceType: "module",
+         parserOptions: { // Add this section
+            project: true, // This tells ESLint to find your tsconfig.json
+            // If your tsconfig.json is not in the root, you might need:
+            // tsconfigRootDir: import.meta.dirname, // Or the relative path to your tsconfig.json
+        }
     },
 
     rules: {
@@ -19,6 +24,13 @@ export default [{
             selector: "import",
             format: ["camelCase", "PascalCase"],
         }],
+
+        "@typescript-eslint/no-floating-promises": [
+            "error",
+            {
+                "ignoreIIFE": true
+            }
+        ],
 
         curly: "warn",
         eqeqeq: "warn",

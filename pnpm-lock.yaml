@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       '@lhq/lhq-generators':
-        specifier: 1.0.0-rc.40
-        version: 1.0.0-rc.40(typescript@5.8.3)
+        specifier: 1.0.0-rc.41
+        version: 1.0.0-rc.41(typescript@5.8.3)
       fs-extra:
         specifier: 11.3.0
         version: 11.3.0
@@ -288,8 +288,8 @@ packages:
   '@jridgewell/trace-mapping@0.3.25':
     resolution: {integrity: sha512-vNk6aEwybGtawWmy/PzwnGDOjCkLWSD2wqvjGGAgOAwCGWySYXfYoxt00IJkTF+8Lb57DwOb3Aa0o9CApepiYQ==}
 
-  '@lhq/lhq-generators@1.0.0-rc.40':
-    resolution: {integrity: sha512-ma8WEfXNWyJ6RzfJjvQy36SWi+5qd++CP07+wBAMZkelmXXgg49GdjBrPaWd3kgfpenjYNgwyY7qO4gsDBsiZg==}
+  '@lhq/lhq-generators@1.0.0-rc.41':
+    resolution: {integrity: sha512-xPiYewnjnM0VuTiA57KRjarYH4yN4bqLdUMYh4l+5E0W1rpAY0GTITp6r8fkITUWnL8y5L6H77iF/meBaag4hg==}
     hasBin: true
     peerDependencies:
       typescript: ^5.0.2
@@ -1887,7 +1887,7 @@ snapshots:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.5.0
 
-  '@lhq/lhq-generators@1.0.0-rc.40(typescript@5.8.3)':
+  '@lhq/lhq-generators@1.0.0-rc.41(typescript@5.8.3)':
     dependencies:
       '@commander-js/extra-typings': 13.1.0(commander@13.1.0)
       '@xmldom/xmldom': 0.9.8

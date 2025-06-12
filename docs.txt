@@ -3,3 +3,12 @@ https://code.visualstudio.com/api/references/icons-in-labels#icon-listing
 
 tree view:
 https://code.visualstudio.com/api/extension-guides/tree-view
+
+
+------------
+"keybindings": [
+      {
+        "command": "lhqTreeView.renameItem",
+        "key": "F2",
+        "when": "focusedView == lhqTreeView && lhqEditorIsActive && lhqTreeHasSelectedItem"
+      }

@@ -6,22 +6,20 @@ export type SearchTreeKind = 'path' | 'name' | 'translation' | 'language';
 export type SearchTreeOptionsBase = {
     uid: string;
     searchText: string;
+    filter?: string;
+    elems: Array<MatchingElement>;
+    elemIdx?: number;
+};
+
+export type MatchingElement = {
+    element: ITreeElement; match: MatchForSubstringResult; leaf: boolean;
 };
 
 export type SearchTreeOptions =
-    SearchTreeOptionsBase & { type: Exclude<SearchTreeKind, 'path' | 'name'>; filter?: string } |
-    SearchTreeOptionsBase & {
-        type: 'name';
-        filter?: string;
-        last?: { element: ITreeElement; match: MatchForSubstringResult; }
-    } |
+    SearchTreeOptionsBase & { type: Exclude<SearchTreeKind, 'path'> } |
     SearchTreeOptionsBase & {
         type: 'path';
         paths: string[];
-        elems: Array<{
-            element: ITreeElement; match: MatchForSubstringResult; leaf: boolean;
-        }>;
-        elemIdx?: number;
     };
 
 

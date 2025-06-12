@@ -6,8 +6,14 @@ import { fileUtils, isNullOrEmpty, ModelUtils, strCompare } from '@lhq/lhq-gener
 
 import { ILogger, VsCodeLogger } from './logger';
 
-const isEditorActiveContextKey = 'lhqEditorIsActive';
-const hasTreeViewSelectedItemContextKey = 'lhqTreeViewHasSelectedItem';
+const contextKeys = {
+    isEditorActive: 'lhqEditorIsActive',
+    hasSelectedItem: 'lhqTreeHasSelectedItem',
+    hasMultiSelection: 'lhqTreeHasMultiSelection',
+    hasSelectedDiffParents: 'lhqTreeHasSelectedDiffParents',
+};
+
+
 const messageBoxPrefix = '[LHQ Editor]';
 
 let _isEditorActive = false;
@@ -40,14 +46,27 @@ export function isEditorActive(): boolean {
 export function setEditorActive(active: boolean) {
     if (_isEditorActive !== active) {
         _isEditorActive = active;
-        vscode.commands.executeCommand('setContext', isEditorActiveContextKey, active);
-        _logger.log('debug', `updated context data '${isEditorActiveContextKey}' to: ${active}`);
+        vscode.commands.executeCommand('setContext', contextKeys.isEditorActive, active);
+        // _logger.log('debug', `updated context data '${isEditorActiveContextKey}' to: ${active}`);
     }
 }
 
-export function setTreeViewHasSelectedItem(hasSelectedItem: boolean) {
-    vscode.commands.executeCommand('setContext', hasTreeViewSelectedItemContextKey, hasSelectedItem);
-    _logger.log('debug', `updated context data '${hasTreeViewSelectedItemContextKey}' to: ${hasSelectedItem}`);
+export function setTreeViewHasSelectedItem(selectedElements: ITreeElement[]): void {
+    const hasSelectedItem = selectedElements.length === 1;
+    const hasMultiSelection = selectedElements.length > 1;
+    let hasSelectedDiffParents = false;
+
+    if (selectedElements.length > 1) {
+        const firstParent = selectedElements[0].parent;
+        hasSelectedDiffParents = selectedElements.some(x => x.parent !== firstParent);
+    }
+
+    vscode.commands.executeCommand('setContext', contextKeys.hasSelectedItem, hasSelectedItem);
+    vscode.commands.executeCommand('setContext', contextKeys.hasMultiSelection, hasMultiSelection);
+    vscode.commands.executeCommand('setContext', contextKeys.hasSelectedDiffParents, hasSelectedDiffParents);
+
+    // _logger.log('debug', `updated context data '${hasTreeViewSelectedItemContextKey}' -> ${hasSelectedItem} , `+
+    //     `${hasTreeViewMultiSelectionItemContextKey} -> ${hasMultiSelection}`);
 }
 
 export function isValidDocument(document: vscode.TextDocument | null | undefined): document is vscode.TextDocument {
@@ -74,18 +93,27 @@ export function createTreeElementPaths(parentPath: string, anySlash: boolean = f
     return ModelUtils.createTreePaths(parentPath, '/');
 }
 
-export function showMessageBox<T extends string>(type: 'warn' | 'info' | 'err', message: string,
-    options?: vscode.MessageOptions, ...items: T[]): Thenable<T | undefined> {
+export async function showConfirmBox(message: string, detail?: string): Promise<boolean> {
     const msg = getMessageBoxText(message);
+    return (await vscode.window.showInformationMessage(msg, { modal: true, detail }, 'Yes', 'No')) === 'Yes';
+}
+
+
+export async function showMessageBox(type: 'warn' | 'info' | 'err', message: string, options?: vscode.MessageOptions): Promise<void> {
+    const msg = getMessageBoxText(message);
+
+    if (type === 'err' && isNullOrEmpty(options)) {
+        options = { modal: true };
+    }
 
     options = options ?? {};
 
     if (type === 'warn') {
-        return vscode.window.showWarningMessage(msg, options, ...items);
+        await vscode.window.showWarningMessage(msg, options);
     } else if (type === 'err') {
-        return vscode.window.showErrorMessage(msg, options, ...items);
+        await vscode.window.showErrorMessage(msg, options);
     } else {
-        return vscode.window.showInformationMessage(msg, options, ...items);
+        await vscode.window.showInformationMessage(msg, options);
     }
 }
 
@@ -129,6 +157,7 @@ export function isSubsetOfArray(sourceArr: string[], subsetArr: string[], ignore
 
 //     return true;
 // }
+
 
 export function isCategoryLikeTreeElement(element: ITreeElement | undefined): element is ICategoryLikeTreeElement {
     if (!element) {

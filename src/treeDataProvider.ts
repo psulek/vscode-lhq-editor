@@ -1,10 +1,16 @@
 import * as vscode from 'vscode';
-import type { CategoryOrResourceType, FormattingOptions, ICategoryLikeTreeElement, IRootModelElement, ITreeElement, ITreeElementPaths, LhqModel, LhqValidationResult, TreeElementType } from '@lhq/lhq-generators';
-import { arraySortBy, detectFormatting, generatorUtils, isNullOrEmpty, ModelUtils } from '@lhq/lhq-generators';
-import { createTreeElementPaths, delay, findChildsByPaths, getElementFullPath, getMessageBoxText, isEditorActive, isValidDocument, logger, matchForSubstring, setEditorActive, setTreeViewHasSelectedItem, showMessageBox } from './utils';
+import type {
+    CategoryOrResourceType, FormattingOptions, ICategoryLikeTreeElement, IRootModelElement,
+    ITreeElement, LhqModel, LhqValidationResult, TreeElementType
+} from '@lhq/lhq-generators';
+import { detectFormatting, generatorUtils, isNullOrEmpty, ModelUtils } from '@lhq/lhq-generators';
+import {
+    createTreeElementPaths, findChildsByPaths, getElementFullPath, getMessageBoxText, isEditorActive, isValidDocument,
+    logger, matchForSubstring, setEditorActive, setTreeViewHasSelectedItem, showConfirmBox, showMessageBox
+} from './utils';
 import { LhqTreeItem } from './treeItem';
 import { validateName } from './validator';
-import { isVirtualTreeElement, SearchTreeKind, SearchTreeOptions, VirtualRootElement } from './elements';
+import { isVirtualTreeElement, MatchingElement, SearchTreeOptions, VirtualRootElement } from './elements';
 
 const actions = {
     refresh: 'lhqTreeView.refresh',
@@ -12,7 +18,11 @@ const actions = {
     renameItem: 'lhqTreeView.renameItem',
     deleteItem: 'lhqTreeView.deleteItem',
     findInTreeView: 'lhqTreeView.findInTreeView',
-    advancedFind: 'lhqTreeView.advancedFind'
+    advancedFind: 'lhqTreeView.advancedFind',
+    addCategory: 'lhqTreeView.addCategory',
+    addResource: 'lhqTreeView.addResource',
+    addLanguage: 'lhqTreeView.addLanguage',
+    deleteLanguage: 'lhqTreeView.deleteLanguage',
 };
 
 type DragTreeItem = {
@@ -28,9 +38,9 @@ const themeIcons = {
     clearAll: 'clear-all'
 };
 
-interface SearchQuickPickItem extends vscode.QuickPickItem {
-    searchKind?: SearchTreeKind;
-}
+// interface SearchQuickPickItem extends vscode.QuickPickItem {
+//     searchKind?: SearchTreeKind;
+// }
 
 export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement>,
     vscode.TreeDragAndDropController<ITreeElement> {
@@ -38,22 +48,25 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
     dragMimeTypes = ['text/uri-list'];
 
     // flag whenever that last active editor (not null) is other type than LHQ (tasks window, etc...)
-    private _lastActiveEditorNonLhq = false;
+    // private _lastActiveEditorNonLhq = false;
     private _currentSearch: SearchTreeOptions = {
         searchText: '',
         type: 'name',
-        uid: crypto.randomUUID()
+        uid: crypto.randomUUID(),
+        elems: []
     };
 
     private _onDidChangeTreeData: vscode.EventEmitter<(ITreeElement | undefined)[] | undefined> = new vscode.EventEmitter<ITreeElement[] | undefined>();
     readonly onDidChangeTreeData: vscode.Event<any> = this._onDidChangeTreeData.event;
 
-    private currentRootModel: IRootModelElement | null = null;
+    //private currentRootModel: IRootModelElement | null = null;
+    private currentRootModel: IRootModelElement | undefined;
     private currentVirtualRootElement: VirtualRootElement | null = null;
     private currentDocument: vscode.TextDocument | null = null;
     private currentJsonModel: LhqModel | null = null;
     private currentFormatting: FormattingOptions = { indentation: { amount: 2, type: 'space', indent: '  ' }, eol: '\n' };
-    private selectedElement: ITreeElement | undefined = undefined;
+    // private selectedElement: ITreeElement | undefined = undefined;
+    private selectedElements: ITreeElement[] = [];
     private view: vscode.TreeView<any>;
 
     constructor(private context: vscode.ExtensionContext) {
@@ -70,7 +83,9 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
             vscode.commands.registerCommand(actions.renameItem, args => this.renameItem(args)),
             vscode.commands.registerCommand(actions.deleteItem, args => this.deleteItem(args)),
             vscode.commands.registerCommand(actions.findInTreeView, () => this.findInTreeView()),
-            vscode.commands.registerCommand(actions.advancedFind, () => this.advancedFind())
+            vscode.commands.registerCommand(actions.advancedFind, () => this.advancedFind()),
+            vscode.commands.registerCommand(actions.addCategory, args => this.addCategory(args)),
+            vscode.commands.registerCommand(actions.addResource, args => this.addResource(args))
         );
 
 
@@ -86,17 +101,19 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
 
         context.subscriptions.push(
             this.view.onDidChangeSelection(e => {
-                const element = e.selection && e.selection.length > 0 ? e.selection[0] : undefined;
-                this.selectedElement = element;
-                logger().log('debug', `LhqTreeDataProvider.setSelectedElement: ${element ? getElementFullPath(element) : '-'}`);
-                setTreeViewHasSelectedItem(!isNullOrEmpty(element));
+                this.selectedElements = [...(e.selection && e.selection.length > 0 ? e.selection : [])];
+                setTreeViewHasSelectedItem(this.selectedElements);
             })
         );
     }
 
     private async advancedFind(): Promise<any> {
-        const prompt = 'Enter search text (empty to clear search)';
-        const placeHolder = 'Use # to filter by name/description, / for path, @ for language, ! for translations';
+        if (!this.currentDocument) {
+            return;
+        }
+
+        const prompt = 'Enter search text [empty to clear search, enter on same text to advance to next match]';
+        const placeHolder = 'Use # to filter by name, / for path, @ for language, ! for translations';
 
         let searchText = await vscode.window.showInputBox({
             prompt,
@@ -106,7 +123,7 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
             title: getMessageBoxText('Advanced search in LHQ structure')
         });
 
-        if (searchText === undefined) {
+        if (searchText === undefined || !this.currentDocument) {
             return;
         }
 
@@ -128,27 +145,36 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
                 const paths = searchTreePaths.getPaths(true);
                 const elems = findChildsByPaths(this.currentRootModel!, searchTreePaths!);
                 const elemIdx = -1;
-                this._currentSearch = { type: 'path', searchText, paths, elems, uid: searchUid, elemIdx };
+                this._currentSearch = { type: 'path', searchText, filter, paths, elems, uid: searchUid, elemIdx };
             }
         } else if (searchText.startsWith('@')) { // by language
-            this._currentSearch = { type: 'language', searchText, filter: searchText.substring(1), uid: searchUid };
+            this._currentSearch = { type: 'language', searchText, elems: [], filter: searchText.substring(1), uid: searchUid };
         } else if (searchText.startsWith('!')) { // by translation
-            this._currentSearch = { type: 'translation', searchText, filter: searchText.substring(1), uid: searchUid };
-        } else { // by name or description
+            this._currentSearch = { type: 'translation', searchText, elems: [], filter: searchText.substring(1), uid: searchUid };
+        } else { // by name 
             // # or other...
             const filter = searchText.startsWith('#') ? searchText.substring(1) : searchText;
 
             if (sameSearch) {
+                const elemIdx = this._currentSearch.type === 'name' ? this._currentSearch.elemIdx : -1;
+                if (this._currentSearch.type === 'name') {
+                    this._currentSearch.elemIdx = elemIdx;
+                }
             } else {
-                ModelUtils.iterateTree(this.currentRootModel!, (elem) => {
-                    const match = matchForSubstring(elem.name, filter, true);
+                const elems: MatchingElement[] = [];
+
+                ModelUtils.iterateTree(this.currentRootModel!, (elem, leaf) => {
+                    let match = matchForSubstring(elem.name, filter, true);
                     if (match.match !== 'none') {
-                        
+                        elems.push({ element: elem, match, leaf });
                     }
                 });
+
+                const elemIdx = -1;
+                this._currentSearch = { type: 'name', searchText, elems, elemIdx, uid: searchUid };
             }
 
-            this._currentSearch = { type: 'name', searchText, filter, last, uid: searchUid };
+
             // this._currentSearch = { type: 'name', searchText, filter, last, uid: searchUid };
         }
 
@@ -164,23 +190,40 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
                     elemToFocus = this.currentRootModel;
                     this._currentSearch.elemIdx = -1;
                 } else {
-                    const elems = this._currentSearch.elems;
-                    if (elems && elems.length > 0) {
-                        let elemIdx = 0;
-                        if (sameSearch) {
-                            elemIdx = (this._currentSearch.elemIdx ?? -1) + 1;
-                            elemIdx = elemIdx >= elems.length ? 0 : elemIdx;
-                        }
-                        this._currentSearch.elemIdx = elemIdx;
+                    // const elems = this._currentSearch.elems;
+                    // if (elems && elems.length > 0) {
+                    //     let elemIdx = 0;
+                    //     if (sameSearch) {
+                    //         elemIdx = (this._currentSearch.elemIdx ?? -1) + 1;
+                    //         elemIdx = elemIdx >= elems.length ? 0 : elemIdx;
+                    //     }
+                    //     this._currentSearch.elemIdx = elemIdx;
 
-                        const sortedElems = arraySortBy(elems, x => x.leaf ? 0 : 1, 'asc');
-                        elemToFocus = sortedElems.at(elemIdx)?.element;
+                    //     const sortedElems = arraySortBy(elems, x => x.leaf ? 0 : 1, 'asc');
+                    //     elemToFocus = sortedElems.at(elemIdx)?.element;
+                    // }
+                }
+            }
+
+            if (elemToFocus === undefined) {
+                const elems = this._currentSearch.elems;
+                if (elems && elems.length > 0) {
+                    let elemIdx = 0;
+                    if (sameSearch) {
+                        elemIdx = (this._currentSearch.elemIdx ?? -1) + 1;
+                        elemIdx = elemIdx >= elems.length ? 0 : elemIdx;
                     }
+                    this._currentSearch.elemIdx = elemIdx;
+
+                    // const sortedElems = arraySortBy(elems, x => x.leaf ? 0 : 1, 'asc');
+                    // elemToFocus = sortedElems.at(elemIdx)?.element;
+                    elemToFocus = elems.at(elemIdx)?.element;
                 }
             }
 
             if (elemToFocus) {
-                await this.view.reveal(elemToFocus, { expand: true, select: false, focus: true });
+                //await this.clearSelection();
+                await this.view.reveal(elemToFocus, { expand: true, select: true, focus: true });
             }
         }
     }
@@ -188,6 +231,28 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
     async findInTreeView(): Promise<any> {
         await vscode.commands.executeCommand('lhqTreeView.focus'); // Focus the tree view itself
         await vscode.commands.executeCommand('list.find', 'lhqTreeView');
+    }
+
+    public async clearSelection(): Promise<void> {
+        if (!this.view || this.view.selection.length === 0) {
+            return;
+        }
+
+        let itemToUse: ITreeElement | undefined = this.view.selection[0];
+
+        if (!itemToUse) {
+            itemToUse = this.currentRootModel;
+        }
+
+        if (itemToUse) {
+            try {
+                // select/deselect trick
+                await this.view.reveal(itemToUse, { select: true, focus: false, expand: false });
+                await this.view.reveal(itemToUse, { select: false, focus: false, expand: false });
+            } catch (error) {
+                console.error("Failed to clear selection using two-step reveal:", error);
+            }
+        }
     }
 
     private async setSelectedItems(itemsToSelect: ITreeElement[], options?: { focus?: boolean; expand?: boolean | number }): Promise<void> {
@@ -222,24 +287,30 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
         }
     }
 
-    // private setSelectedElement(element: ITreeElement | undefined): void {
-    //     this.selectedElement = element;
-    //     logger().log('debug', `LhqTreeDataProvider.setSelectedElement: ${element ? getElementFullPath(element) : '-'}`);
-    //     setTreeViewHasSelectedItem(!isNullOrEmpty(element));
-    // }
-
-    private get selectedCategoryLike(): ICategoryLikeTreeElement | undefined {
-        let element = this.selectedElement ?? this.currentRootModel;
+    private getCategoryLikeParent(element: ITreeElement): ICategoryLikeTreeElement | undefined {
         if (!element) {
             return undefined;
         }
 
         if (element.elementType === 'resource') {
-            element = element.parent ?? this.currentRootModel;
+            return element.parent ?? this.currentRootModel;
         }
 
-        return element as ICategoryLikeTreeElement;
+        return element.parent;
     }
+
+    // private get selectedCategoryLike(): ICategoryLikeTreeElement | undefined {
+    //     let element = this.selectedElement ?? this.currentRootModel;
+    //     if (!element) {
+    //         return undefined;
+    //     }
+
+    //     if (element.elementType === 'resource') {
+    //         element = element.parent ?? this.currentRootModel;
+    //     }
+
+    //     return element as ICategoryLikeTreeElement;
+    // }
 
     public async handleDrag(source: ITreeElement[], treeDataTransfer: vscode.DataTransfer, _token: vscode.CancellationToken): Promise<void> {
         const items = source.filter(x => x.elementType !== 'model').map<DragTreeItem>(x => ({
@@ -255,10 +326,11 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
     }
 
     private getTreeItems(source: DragTreeItem[]): ITreeElement[] {
-        return isNullOrEmpty(this.currentRootModel)
+        const root = this.currentRootModel;
+        return isNullOrEmpty(root)
             ? []
             : source.map(item => {
-                const treeItem = this.currentRootModel!.getElementByPath(createTreeElementPaths(item.path), item.type);
+                const treeItem = root.getElementByPath(createTreeElementPaths(item.path), item.type);
                 return treeItem;
             }).filter(item => item !== undefined && item.elementType !== 'model') as ITreeElement[];
     }
@@ -289,135 +361,104 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
 
         if (sourceItems.length > 1) {
             if (!sourceItems.every(item => item.parent === firstParent)) {
-                showMessageBox('warn', `Cannot move ${elemText} with different parents.`);
-                return;
+                return await showMessageBox('warn', `Cannot move ${elemText} with different parents.`);
             }
         }
 
         if (target === firstParent) {
-            showMessageBox('warn', `Cannot move ${elemText} to the same parent element '${getElementFullPath(target)}'.`);
-            return;
+            return await showMessageBox('warn', `Cannot move ${elemText} to the same parent element '${getElementFullPath(target)}'.`);
         }
 
         const targetElement = target as ICategoryLikeTreeElement;
 
         sourceItems = sourceItems.filter(x => !targetElement.contains(x.name, x.elementType as CategoryOrResourceType));
 
-        // sourceItems.forEach(item => {
-        //     const containsElement = targetElement.hasElement(item.name, item.elementType as CategoryOrResourceType);
-        //     if (!containsElement) {
-        //         const oldPath = getElementFullPath(item);
-        //         const changed = item.changeParent(targetElement);
-        //         logger().log('debug', `LhqTreeDataProvider.handleDrop: ${item.elementType} '${oldPath}' moved to '${getElementFullPath(item)}', successfully: ${changed}`);
-        //     }
-        // });
+        await this.view.reveal(targetElement, { expand: true, select: false, focus: false });
 
-        // // move JSON properties in text document
-        // const documentText = this.currentDocument.getText();
-        // const workspaceEdits: vscode.TextEdit[] = [];
+        if (sourceItems.length === 0) {
+            return;
+        }
 
-        // sourceItems.forEach(sourceItem => {
-        //     try {
-        //         const edits = moveOrDeleteJsonProperty('move', sourceItem, targetElement, documentText, this.currentIndentation);
-        //         if (edits) {
-        //             edits.forEach(edit => {
-        //                 workspaceEdits.push(new vscode.TextEdit(
-        //                     new vscode.Range(
-        //                         this.currentDocument!.positionAt(edit.offset),
-        //                         this.currentDocument!.positionAt(edit.offset + edit.length)
-        //                     ),
-        //                     edit.content
-        //                 ));
-        //             });
-        //         }
+        let changedCount = 0;
+        sourceItems.forEach(item => {
+            const containsElement = targetElement.contains(item.name, item.elementType as CategoryOrResourceType);
+            if (!containsElement) {
+                const oldPath = getElementFullPath(item);
+                const changed = item.changeParent(targetElement);
+                if (changed) {
+                    changedCount++;
+                }
+                logger().log('debug', `LhqTreeDataProvider.handleDrop: ${item.elementType} '${oldPath}' moved to '${getElementFullPath(item)}', successfully: ${changed}`);
+            }
+        });
 
-        //     } catch (error) {
-        //         logger().log('error', 'move json property error', error as Error);
-        //     }
-        // });
+        await this.updateTextDocument();
+        this._onDidChangeTreeData.fire([target]);
+        const toFocus = sourceItems.length === 1 ? sourceItems[0] : targetElement;
+        await this.view.reveal(toFocus, { expand: true, select: true, focus: true });
 
+        if (changedCount > 0) {
+            const moved = sourceItems.length === 1
+                ? `${sourceItems[0].elementType} '${getElementFullPath(sourceItems[0])}'`
+                : `${sourceItems.length} element(s)`;
 
-        if (targetElement) {
-            this.view.reveal(targetElement, { expand: true, select: false, focus: false });
+            await showMessageBox('info', `Moved ${moved} under '${getElementFullPath(target)}'`);
         }
     }
 
     private async deleteItem(element: ITreeElement): Promise<void> {
         if (!this.currentDocument) {
-            showMessageBox('info', 'No active document to rename item in.');
+            logger().log('info', 'LhqTreeDataProvider.deleteItem: No active document to delete item in.');
             return;
         }
 
-        element = element || this.selectedElement;
+        const elemsToDelete: ITreeElement[] = element && this.selectedElements.length <= 1 ? [element] : this.selectedElements;
+        const selectedCount = elemsToDelete.length;
+        if (selectedCount === 0) { return; }
 
-        const elementName = element.name;
-        const elemPath = getElementFullPath(element);
+        const firstSelected = elemsToDelete[0];
+        if (firstSelected.isRoot) {
+            return await showMessageBox('warn', `Cannot delete root element '${getElementFullPath(firstSelected)}'.`, { modal: true });
+        }
 
-        const confirmation = await showMessageBox('info',
-            `Delete ${element.elementType} "${elementName}" ?`,
-            { modal: true, detail: elemPath },
-            'Yes',
-            'No'
-        );
+        const elemIdent = selectedCount === 1
+            ? `${firstSelected.elementType} '${getElementFullPath(firstSelected)}'`
+            : `${selectedCount} selected elements`;
 
-        if (confirmation !== 'Yes') {
+        if (selectedCount > 1) {
+            const firstParent = firstSelected.parent;
+            if (!elemsToDelete.every(item => item.parent === firstParent)) {
+                return await showMessageBox('warn', `Cannot delete ${elemIdent} with different parents.`, { modal: true });
+            }
+        }
+
+        if (!(await showConfirmBox('info', `Delete ${elemIdent} ?`))) {
             return;
         }
 
-        // const documentText = this.currentDocument.getText();
-        // let edits: EditResult | undefined;
-        // try {
-        //     edits = moveOrDeleteJsonProperty('delete', element, undefined, documentText, this.currentIndentation);
-        //     if (!edits) {
-        //         //logger().log('debug', `DeleteItem: jsonc-parser 'modify' produced no edits for path '${elemPath}' and new name '${newName}'. This might happen if the path is incorrect or value is already set.`);
-        //         showMessageBox('info', 'No changes were applied. The name might already be set or the item structure is unexpected.');
-        //         return;
-        //     }
-        // } catch (error) {
-        //     logger().log('error', `DeleteItem: Error while deleting item ${elemPath}`, error as Error);
-        //     showMessageBox('err', `Error while deleting item ${elemPath}: ${(error as Error).message}`);
-        //     return;
-        // }
+        elemsToDelete.forEach(elem => {
+            const parent = this.getCategoryLikeParent(elem);
+            if (parent) {
+                parent.removeElement(elem);
+                logger().log('debug', `LhqTreeDataProvider.deleteItem: ${elem.elementType} '${getElementFullPath(elem)}' deleted.`);
+            } else {
+                logger().log('warn', `LhqTreeDataProvider.deleteItem: Cannot delete ${elem.elementType} '${getElementFullPath(elem)}' - no parent found.`);
+            }
+        });
 
-        // const workspaceEdits: vscode.TextEdit[] = edits.map(edit =>
-        //     new vscode.TextEdit(
-        //         new vscode.Range(
-        //             this.currentDocument!.positionAt(edit.offset),
-        //             this.currentDocument!.positionAt(edit.offset + edit.length)
-        //         ),
-        //         edit.content
-        //     )
-        // );
-
-        // const workspaceEdit = new vscode.WorkspaceEdit();
-        // workspaceEdit.set(this.currentDocument.uri, workspaceEdits);
-
-        // const success = await vscode.workspace.applyEdit(workspaceEdit);
-
-        const parent = element.parent ?? element.root;
-        parent.removeElement(element);
         const success = await this.updateTextDocument();
-
-        if (!success) {
-            logger().log('error', `DeleteItem: vscode.workspace.applyEdit failed for ${elemPath}`);
-            showMessageBox('err', `Failed to delete item ${elemPath}.`);
-        }
+        await showMessageBox(success ? 'info' : 'err', success ? `Successfully deleted ${elemIdent}.` : `Failed to delete ${elemIdent}.`, { modal: !success });
     }
 
-    private validateElementName(elementType: TreeElementType, name: string, ignoreElementPath?: string): string | null {
+    private validateElementName(elementType: TreeElementType, name: string, parentElement?: ICategoryLikeTreeElement, ignoreElementPath?: string): string | null {
         const valRes = validateName(name);
         if (valRes === 'valid') {
-            if (this.selectedCategoryLike && !isNullOrEmpty(name)) {
-                const found = this.selectedCategoryLike.find(name, elementType as CategoryOrResourceType);
+            if (parentElement && !isNullOrEmpty(name)) {
+                const found = parentElement.find(name, elementType as CategoryOrResourceType);
                 if (found && (!ignoreElementPath || getElementFullPath(found) !== ignoreElementPath)) {
-                    const root = this.selectedCategoryLike.elementType === 'model' ? '/' : getElementFullPath(this.selectedCategoryLike);
+                    const root = parentElement.elementType === 'model' ? '/' : getElementFullPath(parentElement);
                     return `${elementType} '${name}' already exists in ${root}`;
                 }
-
-                // if (this.selectedCategoryLike.contains(name, elementType as CategoryOrResourceType)) {
-                //     const root = this.selectedCategoryLike.elementType === 'model' ? '/' : getElementFullPath(this.selectedCategoryLike);
-                //     return `${elementType} '${name}' already exists in ${root}`;
-                // }
             }
         } else {
             switch (valRes) {
@@ -434,11 +475,17 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
     }
 
     private async renameItem(element: ITreeElement): Promise<void> {
-        if (element && element !== this.selectedElement) {
+        const selectedCount = this.selectedElements.length;
+        if (selectedCount > 1) {
+            return;
+        }
+
+        if (element && selectedCount === 1 && element !== this.selectedElements[0]) {
             await this.setSelectedItems([element], { focus: true, expand: false });
         }
 
-        //element = this.selectedElement || element;
+        //element = element || this.selectedElement;
+        element = element || (this.selectedElements.length > 0 ? this.selectedElements[0] : undefined);
         if (!this.currentDocument || !element) {
             return;
         }
@@ -447,69 +494,39 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
         const elemPath = getElementFullPath(element);
 
         const elementType = element.elementType;
+        const parentElement = this.getCategoryLikeParent(element);
         const newName = await vscode.window.showInputBox({
             prompt: `Enter new name for ${elementType} '${originalName}' (${elemPath})`,
             value: originalName,
-            validateInput: value => this.validateElementName(elementType, value, elemPath)
+            ignoreFocusOut: true,
+            validateInput: value => this.validateElementName(elementType, value, parentElement, elemPath)
         });
 
         if (!newName || newName === originalName) {
             return;
         }
 
-        const validationError = this.validateElementName(elementType, newName);
+        const validationError = this.validateElementName(elementType, newName, parentElement, elemPath);
         if (validationError) {
-            showMessageBox('warn', validationError);
-            return;
-
+            return showMessageBox('warn', validationError);
         }
-
-        // const documentText = this.currentDocument.getText();
-        // let edits: EditResult | undefined;
-        // try {
-        //     edits = renameJsonProperty(element, newName, documentText, this.documentIndent);
-        //     if (!edits) {
-        //         logger().log('debug', `RenameItem: jsonc-parser 'modify' produced no edits for path '${elemPath}' and new name '${newName}'. This might happen if the path is incorrect or value is already set.`);
-        //         showMessageBox('info', 'No changes were applied. The name might already be set or the item structure is unexpected.');
-        //         return;
-        //     }
-        // } catch (error) {
-        //     logger().log('error', `RenameItem: Error while renaming item '${originalName}' to '${newName}' (${elemPath})`, error as Error);
-        //     showMessageBox('err', `Error while renaming item '${originalName}' to '${newName}': ${(error as Error).message}`);
-        //     return;
-        // }
-
-        // const workspaceEdits: vscode.TextEdit[] = edits.map(edit =>
-        //     new vscode.TextEdit(
-        //         new vscode.Range(
-        //             this.currentDocument!.positionAt(edit.offset),
-        //             this.currentDocument!.positionAt(edit.offset + edit.length)
-        //         ),
-        //         edit.content
-        //     )
-        // );
 
         element.name = newName;
         const success = await this.updateTextDocument();
 
+        this._onDidChangeTreeData.fire([element]);
+        await this.view.reveal(element, { expand: true, select: true, focus: true });
 
-        // const workspaceEdit = new vscode.WorkspaceEdit();
-        // workspaceEdit.set(this.currentDocument.uri, workspaceEdits);
-
-        // const success = await vscode.workspace.applyEdit(workspaceEdit);
-        // if (success) {
-        //     element.name = newName;
-        // }
-
-        //this._onDidChangeTreeData.fire([element]);
 
         if (!success) {
             logger().log('error', `RenameItem: vscode.workspace.applyEdit failed for '${originalName}' to '${newName}' (${elemPath})`);
-            showMessageBox('err', `Failed to apply rename for item '${originalName}'.`);
+            return await showMessageBox('err', `Failed to apply rename for item '${originalName}'.`);
         }
     }
 
     private updateTextDocument(): Thenable<boolean> {
+        logger().log('debug', `LhqTreeDataProvider.updateTextDocument for: ${this.documentPath}`);
+
         const serializedRoot = ModelUtils.serializeTreeElement(this.currentRootModel!, this.currentFormatting);
         const edit = new vscode.WorkspaceEdit();
         const doc = this.currentDocument!;
@@ -521,12 +538,19 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
         return vscode.workspace.applyEdit(edit);
     }
 
-    private async addItem(element: ITreeElement): Promise<any> {
-        if (element && element !== this.selectedElement) {
+    private async addItem(element: ITreeElement, newItemType?: CategoryOrResourceType): Promise<any> {
+        const selectedCount = this.selectedElements.length;
+        if (selectedCount > 1) {
+            return;
+        }
+
+        if (element && selectedCount === 1 && element !== this.selectedElements[0]) {
             await this.setSelectedItems([element], { focus: true, expand: false });
         }
-        //let element = this.selectedElement ?? this.currentRootModel!;
+
+        element = element || (this.selectedElements.length > 0 ? this.selectedElements[0] : undefined);
         element = element ?? this.currentRootModel!;
+
         if (!this.currentDocument || !element) {
             return;
         }
@@ -537,16 +561,18 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
 
         const elemPath = getElementFullPath(element);
 
-        const itemType = await vscode.window.showQuickPick([
-            {
-                label: 'Category',
-                elementType: 'category' as TreeElementType
-            },
-            {
-                label: 'Resource',
-                elementType: 'resource' as TreeElementType
-            }
-        ], { placeHolder: `Select element type to add under ${elemPath}` });
+        const itemType = isNullOrEmpty(newItemType)
+            ? await vscode.window.showQuickPick([
+                {
+                    label: 'Category',
+                    elementType: 'category' as TreeElementType
+                },
+                {
+                    label: 'Resource',
+                    elementType: 'resource' as TreeElementType
+                }
+            ], { placeHolder: `Select element type to add under ${elemPath}` })
+            : { elementType: newItemType };
 
         if (!itemType) {
             return;
@@ -557,27 +583,33 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
         }, 100);
     }
 
-    async addItemComplete(parent: ITreeElement, elementType: TreeElementType) {
+    private async addCategory(element: ITreeElement): Promise<void> {
+        return await this.addItem(element, 'category');
+    }
+
+    private async addResource(element: ITreeElement): Promise<void> {
+        return await this.addItem(element, 'resource');
+    }
+
+    private async addItemComplete(parent: ITreeElement, elementType: TreeElementType) {
+        const isResource = elementType === 'resource';
+        const parentCategory = parent as ICategoryLikeTreeElement;
         const elemPath = getElementFullPath(parent);
         const itemName = await vscode.window.showInputBox({
             prompt: `Enter new ${elementType} name (${elemPath})`,
             ignoreFocusOut: true,
-            validateInput: value => this.validateElementName(elementType, value)
+            validateInput: value => this.validateElementName(elementType, value, parentCategory)
         });
 
         if (!itemName) {
             return;
         }
 
-        const validationError = this.validateElementName(elementType, itemName);
+        const validationError = this.validateElementName(elementType, itemName, parentCategory);
         if (validationError) {
-            showMessageBox('warn', validationError);
-            return;
-
+            return await showMessageBox('warn', validationError);
         }
 
-        const isResource = elementType === 'resource';
-        const parentCategory = parent as ICategoryLikeTreeElement;
         let newElement: ITreeElement;
         if (isResource) {
             newElement = parentCategory.addResource(itemName);
@@ -587,10 +619,9 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
 
         await this.updateTextDocument();
         this._onDidChangeTreeData.fire([parent]);
-        //await this.view.reveal(element, { expand: true, select: false, focus: false });
         await this.view.reveal(newElement, { expand: true, select: true, focus: true });
 
-        showMessageBox('info', `Added new ${elementType} '${itemName}' under '${getElementFullPath(parent)}'`);
+        return await showMessageBox('info', `Added new ${elementType} '${itemName}' under '${getElementFullPath(parent)}'`);
     }
 
     private onDidChangeVisibleTextEditors(e: readonly vscode.TextEditor[]): any {
@@ -630,30 +661,19 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
     }
 
     public updateDocument(document: vscode.TextDocument | undefined, forceRefresh = false): void {
-        if (document && !isValidDocument(document)) {
-            this._lastActiveEditorNonLhq = true;
-            // logger().log('debug', `LhqTreeDataProvider.updateDocument skipped due to invalid document.`);
-            return;
-        }
-
-        // logger().log('debug', `LhqTreeDataProvider.updateDocument with: ${document?.fileName ?? '-'}`);
         if (isValidDocument(document)) {
+            logger().log('debug', `LhqTreeDataProvider.updateDocument [VALID] with: ${document.uri.fsPath}`);
             setEditorActive(true);
             if (this.currentDocument?.uri.toString() !== document.uri.toString() || !this.currentRootModel || forceRefresh === true) {
                 this.currentDocument = document;
                 this.refresh();
             }
-        } else {
-            if (isEditorActive()) {
-                if (!this._lastActiveEditorNonLhq) {
-                    this._lastActiveEditorNonLhq = false;
-                    setEditorActive(false);
-                    this.currentDocument = null;
-                    this.refresh();
-                } else {
-                    this._lastActiveEditorNonLhq = false;
-                }
-            }
+        } else if (isEditorActive()) {
+            // @ts-ignore
+            logger().log('debug', `LhqTreeDataProvider.updateDocument [INVALID] with: ${document?.uri?.fsPath}`);
+            setEditorActive(false);
+            this.currentDocument = null;
+            this.refresh();
         }
     }
 
@@ -661,11 +681,7 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
         if (this.currentDocument) {
             this.currentJsonModel = null;
 
-            // setTimeout(() => {
-            //     test1();
-            // }, 10);
-
-            this.currentRootModel = null;
+            this.currentRootModel = undefined;
             this.currentVirtualRootElement = null;
             try {
                 const docText = this.currentDocument.getText();
@@ -677,7 +693,8 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
                 const error = `Error parsing LHQ file '${this.documentPath}'`;
                 logger().log('error', error, ex as Error);
                 this.currentJsonModel = null;
-                showMessageBox('err', error);
+                void showMessageBox('err', error);
+                return;
             }
 
             if (this.currentJsonModel) {
@@ -695,20 +712,22 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
                     this.currentJsonModel = null;
                     const error = `Error validating LHQ file '${this.documentPath}': ${ex}`;
                     logger().log('error', error, ex as Error);
-                    showMessageBox('err', error);
+                    void showMessageBox('err', error);
+                    return;
                 }
 
-                if (this.currentRootModel === null || this.currentRootModel === undefined) {
+                if (this.currentRootModel === undefined) {
                     const error = validateResult
                         ? `Validation errors while parsing LHQ file '${this.documentPath}': \n${validateResult.error}`
                         : `Error validating LHQ file '${this.documentPath}'`;
                     logger().log('error', error);
-                    showMessageBox('err', error);
+                    void showMessageBox('err', error);
+                    return;
                 }
             }
 
         } else {
-            this.currentRootModel = null;
+            this.currentRootModel = undefined;
             this.currentVirtualRootElement = null;
         }
 
@@ -738,7 +757,6 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
             }
         } else {
             // If no element is provided, return the root(s)
-            //result.push(this.currentRootModel);
             result.push(this.currentRootModel);
             result.push(this.currentVirtualRootElement!.languagesRoot);
         }
@@ -753,4 +771,4 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
         }
         return element.parent;
     }
-}
+} 

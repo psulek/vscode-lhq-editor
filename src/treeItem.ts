@@ -37,32 +37,40 @@ export class LhqTreeItem extends vscode.TreeItem {
             if (elem && elem.match && elem.match.match !== 'none' && elem.leaf === true) {
                 highlights = elem!.match.highlights;
             }
-        } else {
-            let doHighlight = false;
-            const searchText = searchOptions.filter ?? ''; // ?? searchOptions.text;
-            if (searchText && searchText.length > 0 && elementType !== 'languages' && elementType !== 'treeRoot') {
-                switch (searchOptions.type) {
-                    case 'name':
-                        //doHighlight = elementType !== 'languages' && elementType !== 'treeRoot';
-                        break;
-                    case 'translation':
-                        //doHighlight = searchOptions.filter === 'translation' || searchOptions.text.length > 0;
-                        break;
-                    case 'language':
-                        doHighlight = isVirtualTreeElement(element, 'language');
-                        break;
-                }
-            }
-
-            if (doHighlight) {
-                const searchLower = searchText.toLowerCase();
-                const nameLower = elementName.toLowerCase();
-                const startIndex = nameLower.indexOf(searchLower);
-                if (startIndex !== -1) {
-                    highlights = [[startIndex, startIndex + searchText.length]];
-                }
+        }
+        else if (highlights === undefined && searchOptions.elems?.length > 0) {
+            const elem = searchOptions.elems.find(x => x.element === element);
+            if (elem && elem.match && elem.match.match !== 'none') {
+                highlights = elem.match.highlights;
             }
         }
+        
+        // else {
+        //     let doHighlight = false;
+        //     const searchText = searchOptions.filter ?? ''; // ?? searchOptions.text;
+        //     if (searchText && searchText.length > 0 && elementType !== 'languages' && elementType !== 'treeRoot') {
+        //         switch (searchOptions.type) {
+        //             case 'name':
+        //                 //doHighlight = elementType !== 'languages' && elementType !== 'treeRoot';
+        //                 break;
+        //             case 'translation':
+        //                 //doHighlight = searchOptions.filter === 'translation' || searchOptions.text.length > 0;
+        //                 break;
+        //             case 'language':
+        //                 doHighlight = isVirtualTreeElement(element, 'language');
+        //                 break;
+        //         }
+        //     }
+
+        //     if (doHighlight) {
+        //         const searchLower = searchText.toLowerCase();
+        //         const nameLower = elementName.toLowerCase();
+        //         const startIndex = nameLower.indexOf(searchLower);
+        //         if (startIndex !== -1) {
+        //             highlights = [[startIndex, startIndex + searchText.length]];
+        //         }
+        //     }
+        // }
 
         const label = { label: elementName, highlights };
         super(label, collapsibleState);
