@@ -54,7 +54,8 @@ export const ContextKeys = {
     hasMultiSelection: 'lhqTreeHasMultiSelection',
     hasSelectedDiffParents: 'lhqTreeHasSelectedDiffParents',
     hasLanguageSelection: 'lhqTreeHasLanguageSelection',
-    hasPrimaryLanguageSelected: 'lhqTreeHasPrimaryLanguageSelected'
+    hasPrimaryLanguageSelected: 'lhqTreeHasPrimaryLanguageSelected',
+    hasLanguagesVisible: 'lhqTreeHasLanguagesVisible',
 };
 
 //export type CulturesMap = Map<string, CultureInfo>;

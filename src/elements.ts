@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
-import { arraySortBy, ICategoryLikeTreeElement, IRootModelElement, isNullOrEmpty, ITreeElement, ITreeElementPaths, ModelUtils, Mutable, TreeElementType } from '@lhq/lhq-generators';
-import { createTreeElementPaths } from './utils';
-import { ContextKeys, CultureInfo, CulturesMap, IVirtualLanguageElement, IVirtualTreeElement, VirtualElementType } from './types';
+import { ICategoryLikeTreeElement, IRootModelElement, isNullOrEmpty, ITreeElement, ITreeElementPaths, ModelUtils, TreeElementType } from '@lhq/lhq-generators';
+import { createTreeElementPaths, getCultureDesc } from './utils';
+import { ContextKeys, IVirtualLanguageElement, IVirtualTreeElement, VirtualElementType } from './types';
 
 export function isVirtualTreeElement(element: ITreeElement | undefined, elementType?: VirtualElementType): boolean {
     return element !== undefined && element instanceof VirtualTreeElement && (!elementType || element.virtualElementType === elementType);
@@ -14,6 +14,18 @@ export function filterTreeElements(elements: ITreeElement[]): ITreeElement[] {
 export function filterVirtualTreeElements<T extends IVirtualTreeElement = IVirtualTreeElement>(elements: ITreeElement[],
     elementType?: VirtualElementType): T[] {
     return elements.filter(x => isVirtualTreeElement(x, elementType)) as T[];
+}
+
+let _languagesVisible = false;
+
+export function languagesVisible(): boolean {
+    return _languagesVisible;
+}
+
+
+export function updateLanguageVisibility(visible: boolean): void {
+    _languagesVisible = visible;
+    vscode.commands.executeCommand('setContext', ContextKeys.hasLanguagesVisible, visible);
 }
 
 export function setTreeViewHasSelectedItem(selectedElements: ITreeElement[]): void {
@@ -116,13 +128,14 @@ export class VirtualTreeElement implements IVirtualTreeElement {
 export class VirtualRootElement extends VirtualTreeElement {
     private _languagesRoot: LanguagesElement;
 
-    // constructor(root: IRootModelElement, cultures: CulturesMap) {
-    //     super(root, root.name, 'treeRoot');
-    //     this._languagesRoot = new LanguagesElement(root, 'Languages', cultures);
-    // }
     constructor(root: IRootModelElement) {
         super(root, root.name, 'treeRoot');
-        this._languagesRoot = new LanguagesElement(root, 'Languages');
+        let label = 'Languages';
+        if (!languagesVisible()) {
+            const primary = root.primaryLanguage ?? '';
+            label += `: ${root.languages?.length ?? 0} (primary: ${primary})`;
+        }
+        this._languagesRoot = new LanguagesElement(root, label);
     }
 
     get languagesRoot(): LanguagesElement {
@@ -140,7 +153,6 @@ export class LanguagesElement extends VirtualTreeElement {
     constructor(root: IRootModelElement, name: string) {
         super(root, name, 'languages');
 
-        //this._virtualLangs = root.languages.map(lang => new LanguageElement(root, lang));
         this._virtualLangs = [];
         const primary = root.languages.find(lang => this.root.primaryLanguage === lang);
         if (!isNullOrEmpty(primary)) {
@@ -152,7 +164,7 @@ export class LanguagesElement extends VirtualTreeElement {
             }
         });
     }
- 
+
     get virtualLanguages(): ReadonlyArray<VirtualTreeElement> {
         return this._virtualLangs;
     }

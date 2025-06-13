@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { ICategoryLikeTreeElement, ITreeElement } from '@lhq/lhq-generators';
 import { getElementFullPath, toPascalCasing } from './utils';
-import { isVirtualTreeElement, VirtualTreeElement } from './elements';
+import { isVirtualTreeElement, languagesVisible, VirtualTreeElement } from './elements';
 import { SearchTreeOptions, AppTreeElementType, IVirtualLanguageElement } from './types';
 
 // https://code.visualstudio.com/api/references/icons-in-labels#icon-listing
@@ -23,6 +23,12 @@ export class LhqTreeItem extends vscode.TreeItem {
         public readonly searchOptions: SearchTreeOptions
     ) {
         const elementType = element.elementType as AppTreeElementType;
+
+        let virtualElement: VirtualTreeElement | undefined;
+        if (isVirtualTreeElement(element)) {
+            virtualElement = element as VirtualTreeElement;
+        }
+
         const hasNoChilds = elementType === 'resource' || elementType === 'language';
         let collapsibleState = hasNoChilds
             ? vscode.TreeItemCollapsibleState.None
@@ -32,6 +38,13 @@ export class LhqTreeItem extends vscode.TreeItem {
             const categLike = element as ICategoryLikeTreeElement;
             collapsibleState = categLike.hasCategories || categLike.hasResources ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None;
         }
+
+        if (virtualElement?.virtualElementType === 'languages') {
+            if (!languagesVisible()) {
+                collapsibleState = vscode.TreeItemCollapsibleState.None;
+            }
+        }
+
 
         const elementName = element.name;
         let highlights: [number, number][] | undefined;
@@ -54,13 +67,13 @@ export class LhqTreeItem extends vscode.TreeItem {
         this.contextValue = elementType;
         let icon = icons[elementType];
 
-        if (isVirtualTreeElement(element)) {
-            const virtElement = element as VirtualTreeElement;
+        if (virtualElement) {
+            //const virtualElement = element as VirtualTreeElement;
             this.parentPath = '';
-            if (virtElement.virtualElementType === 'languages') {
+            if (virtualElement.virtualElementType === 'languages') {
                 this.tooltip = new vscode.MarkdownString(`**Languages**`, true);
-            } else if (virtElement.virtualElementType === 'language') {
-                const isPrimary = (virtElement as unknown as IVirtualLanguageElement).isPrimary;
+            } else if (virtualElement.virtualElementType === 'language') {
+                const isPrimary = (virtualElement as unknown as IVirtualLanguageElement).isPrimary;
                 const tpName = isPrimary ? 'Primary Language' : 'Language';
                 this.tooltip = new vscode.MarkdownString(`**${tpName}**: ${elementName}`, true);
                 if (isPrimary) {
