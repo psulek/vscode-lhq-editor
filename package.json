@@ -52,36 +52,47 @@
         "icon": "$(refresh)"
       },
       {
-        "command": "lhqTreeView.addItem",
-        "title": "Add Item",
+        "command": "lhqTreeView.addElement",
+        "title": "Add element",
+        "icon": "$(new-file)"
+      },
+      {
+        "command": "lhqTreeView.addLanguage",
+        "title": "Add language",
         "icon": "$(new-file)"
       },
       {
         "command": "lhqTreeView.addCategory",
-        "title": "Add Category"
+        "title": "Add category"
       },
       {
         "command": "lhqTreeView.addResource",
-        "title": "Add Resource"
+        "title": "Add resource"
       },
       {
-        "command": "lhqTreeView.renameItem",
-        "title": "Rename Item",
+        "command": "lhqTreeView.renameElement",
+        "title": "Rename element",
         "icon": "$(edit)"
       },
       {
-        "command": "lhqTreeView.deleteItem",
-        "title": "Delete Item",
+        "command": "lhqTreeView.deleteElement",
+        "title": "Delete element",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "lhqTreeView.deleteLanguage",
+        "title": "Delete language",
         "icon": "$(trash)"
       },
       {
         "command": "lhqTreeView.findInTreeView",
         "title": "Find",
         "icon": "$(search)"
-      },{
-        "command": "lhqTreeView.customFind",
-        "title": "Custom Find",
-        "icon": "$(search)"
+      },
+      {
+        "command": "lhqTreeView.markLanguageAsPrimary",
+        "title": "Mark language as primary",
+        "icon": "$(check)"
       }
     ],
     "menus": {
@@ -96,32 +107,49 @@
           "group": "navigation"
         },
         {
-          "command": "lhqTreeView.addItem",
-          "when": "view == lhqTreeView && !lhqTreeHasMultiSelection",
+          "command": "lhqTreeView.addElement",
+          "when": "view == lhqTreeView && !lhqTreeHasMultiSelection && !lhqTreeHasLanguageSelection",
           "group": "navigation"
         },
         {
-          "command": "lhqTreeView.renameItem",
-          "when": "view == lhqTreeView && lhqTreeHasSelectedItem"
+          "command": "lhqTreeView.addLanguage",
+          "when": "view == lhqTreeView && lhqTreeHasLanguageSelection",
+          "group": "navigation"
+        },
+        {
+          "command": "lhqTreeView.renameElement",
+          "when": "view == lhqTreeView && lhqTreeHasSelectedItem && !lhqTreeHasLanguageSelection"
         }
       ],
       "view/item/context": [
         {
           "command": "lhqTreeView.addCategory",
-          "when": "view == lhqTreeView && (viewItem == category || viewItem == model) && !lhqTreeHasMultiSelection"
+          "when": "view == lhqTreeView && (viewItem == category || viewItem == model) && !lhqTreeHasMultiSelection && !lhqTreeHasLanguageSelection"
         },
         {
           "command": "lhqTreeView.addResource",
-          "when": "view == lhqTreeView && (viewItem == category || viewItem == model) && !lhqTreeHasMultiSelection"
+          "when": "view == lhqTreeView && (viewItem == category || viewItem == model) && !lhqTreeHasMultiSelection && !lhqTreeHasLanguageSelection"
         },
         {
-          "command": "lhqTreeView.renameItem",
-          "when": "view == lhqTreeView && lhqTreeHasSelectedItem",
+          "command": "lhqTreeView.addLanguage",
+          "when": "view == lhqTreeView && (viewItem == languages || viewItem == language) && !lhqTreeHasMultiSelection"
+        },
+        {
+          "command": "lhqTreeView.renameElement",
+          "when": "view == lhqTreeView && lhqTreeHasSelectedItem && !lhqTreeHasLanguageSelection",
           "group": "inline@1"
         },
         {
-          "command": "lhqTreeView.deleteItem",
-          "when": "view == lhqTreeView && (viewItem == category || viewItem == resource) && !lhqTreeHasSelectedDiffParents"
+          "command": "lhqTreeView.deleteElement",
+          "when": "view == lhqTreeView && (viewItem == category || viewItem == resource) && !lhqTreeHasSelectedDiffParents && !lhqTreeHasLanguageSelection"
+        },
+        {
+          "command": "lhqTreeView.deleteLanguage",
+          "when": "view == lhqTreeView && viewItem == language"
+        },
+        {
+          "command": "lhqTreeView.markLanguageAsPrimary",
+          "when": "view == lhqTreeView && viewItem == language && !lhqTreeHasPrimaryLanguageSelected && !lhqTreeHasMultiSelection"
         }
       ]
     },
@@ -135,16 +163,16 @@
         "command": "lhqTreeView.advancedFind",
         "key": "ctrl+alt+f",
         "when": "lhqEditorIsActive"
-      }, 
+      },
       {
         "command": "lhqTreeView.addCategory",
         "key": "ctrl+insert",
-        "when": "lhqEditorIsActive"
+        "when": "lhqEditorIsActive && !lhqTreeHasMultiSelection && !lhqTreeHasLanguageSelection"
       },
       {
         "command": "lhqTreeView.addResource",
         "key": "insert",
-        "when": "lhqEditorIsActive"
+        "when": "lhqEditorIsActive && !lhqTreeHasMultiSelection && !lhqTreeHasLanguageSelection"
       }
     ]
   },
@@ -172,12 +200,13 @@
     "@vscode/test-cli": "^0.0.11",
     "@vscode/test-electron": "^2.5.2",
     "esbuild": "^0.25.5",
+    "esbuild-plugin-copy": "^2.1.1",
     "eslint": "^9.28.0",
     "npm-run-all": "^4.1.5",
     "typescript": "^5.8.3"
   },
   "dependencies": {
-    "@lhq/lhq-generators": "1.0.0-rc.41",
+    "@lhq/lhq-generators": "1.0.0-rc.45",
     "fs-extra": "11.3.0"
   }
 }

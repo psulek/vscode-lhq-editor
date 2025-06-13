@@ -1,16 +1,20 @@
 import * as vscode from 'vscode';
-import { ICategoryLikeTreeElement, ITreeElement, TreeElementType } from '@lhq/lhq-generators';
-import { getElementFullPath, isSubsetOfArray, toPascalCasing } from './utils';
-import { isVirtualTreeElement, SearchTreeOptions, VirtualElementType, VirtualTreeElement } from './elements';
+import { ICategoryLikeTreeElement, ITreeElement } from '@lhq/lhq-generators';
+import { getElementFullPath, toPascalCasing } from './utils';
+import { isVirtualTreeElement, VirtualTreeElement } from './elements';
+import { SearchTreeOptions, AppTreeElementType, IVirtualLanguageElement } from './types';
 
-const icons: Record<TreeElementType | VirtualElementType, string> = {
+// https://code.visualstudio.com/api/references/icons-in-labels#icon-listing
+const icons: Record<AppTreeElementType, string> = {
     model: 'symbol-method',
     category: 'symbol-folder',
     resource: 'debug-breakpoint-unverified',
     treeRoot: 'target',
     languages: 'globe', //open-editors-view-icon
-    language: 'debug-breakpoint-log',
+    language: 'debug-breakpoint-log-unverified'
 };
+
+const primaryLangIcon = 'debug-breakpoint-log';
 
 export class LhqTreeItem extends vscode.TreeItem {
 
@@ -18,7 +22,7 @@ export class LhqTreeItem extends vscode.TreeItem {
         public readonly element: ITreeElement,
         public readonly searchOptions: SearchTreeOptions
     ) {
-        const elementType = element.elementType as TreeElementType | VirtualElementType;
+        const elementType = element.elementType as AppTreeElementType;
         const hasNoChilds = elementType === 'resource' || elementType === 'language';
         let collapsibleState = hasNoChilds
             ? vscode.TreeItemCollapsibleState.None
@@ -44,39 +48,11 @@ export class LhqTreeItem extends vscode.TreeItem {
                 highlights = elem.match.highlights;
             }
         }
-        
-        // else {
-        //     let doHighlight = false;
-        //     const searchText = searchOptions.filter ?? ''; // ?? searchOptions.text;
-        //     if (searchText && searchText.length > 0 && elementType !== 'languages' && elementType !== 'treeRoot') {
-        //         switch (searchOptions.type) {
-        //             case 'name':
-        //                 //doHighlight = elementType !== 'languages' && elementType !== 'treeRoot';
-        //                 break;
-        //             case 'translation':
-        //                 //doHighlight = searchOptions.filter === 'translation' || searchOptions.text.length > 0;
-        //                 break;
-        //             case 'language':
-        //                 doHighlight = isVirtualTreeElement(element, 'language');
-        //                 break;
-        //         }
-        //     }
-
-        //     if (doHighlight) {
-        //         const searchLower = searchText.toLowerCase();
-        //         const nameLower = elementName.toLowerCase();
-        //         const startIndex = nameLower.indexOf(searchLower);
-        //         if (startIndex !== -1) {
-        //             highlights = [[startIndex, startIndex + searchText.length]];
-        //         }
-        //     }
-        // }
 
         const label = { label: elementName, highlights };
         super(label, collapsibleState);
         this.contextValue = elementType;
-        const icon = icons[elementType];
-        this.iconPath = new vscode.ThemeIcon(icon);
+        let icon = icons[elementType];
 
         if (isVirtualTreeElement(element)) {
             const virtElement = element as VirtualTreeElement;
@@ -84,13 +60,19 @@ export class LhqTreeItem extends vscode.TreeItem {
             if (virtElement.virtualElementType === 'languages') {
                 this.tooltip = new vscode.MarkdownString(`**Languages**`, true);
             } else if (virtElement.virtualElementType === 'language') {
-                this.tooltip = new vscode.MarkdownString(`**Language**: ${elementName}`, true);
+                const isPrimary = (virtElement as unknown as IVirtualLanguageElement).isPrimary;
+                const tpName = isPrimary ? 'Primary Language' : 'Language';
+                this.tooltip = new vscode.MarkdownString(`**${tpName}**: ${elementName}`, true);
+                if (isPrimary) {
+                    icon = primaryLangIcon;
+                }
             }
         } else {
             const elemTypeStr = toPascalCasing(elementType === 'model' ? 'root' : elementType);
             this.parentPath = getElementFullPath(element);
             this.tooltip = new vscode.MarkdownString(`**${elemTypeStr}**: ${elementName} \`${this.parentPath}\``, true);
         }
+        this.iconPath = new vscode.ThemeIcon(icon);
     }
 
     public readonly parentPath: string;

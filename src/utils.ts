@@ -5,19 +5,14 @@ import type { FileInfo, ReadFileInfoOptions, ITreeElementPaths, ITreeElement, IR
 import { fileUtils, isNullOrEmpty, ModelUtils, strCompare } from '@lhq/lhq-generators';
 
 import { ILogger, VsCodeLogger } from './logger';
-
-const contextKeys = {
-    isEditorActive: 'lhqEditorIsActive',
-    hasSelectedItem: 'lhqTreeHasSelectedItem',
-    hasMultiSelection: 'lhqTreeHasMultiSelection',
-    hasSelectedDiffParents: 'lhqTreeHasSelectedDiffParents',
-};
-
+import { ContextKeys, CultureInfo, CulturesMap, MatchForSubstringResult } from './types';
 
 const messageBoxPrefix = '[LHQ Editor]';
 
 let _isEditorActive = false;
 let _logger: VsCodeLogger = new VsCodeLogger();
+//let _cultures: CulturesMap = new Map<string, CultureInfo>();
+let _cultures: CulturesMap = {};
 
 let _isDebugMode = false; // Default to false
 
@@ -46,28 +41,10 @@ export function isEditorActive(): boolean {
 export function setEditorActive(active: boolean) {
     if (_isEditorActive !== active) {
         _isEditorActive = active;
-        vscode.commands.executeCommand('setContext', contextKeys.isEditorActive, active);
-        // _logger.log('debug', `updated context data '${isEditorActiveContextKey}' to: ${active}`);
+        vscode.commands.executeCommand('setContext', ContextKeys.isEditorActive, active);
     }
 }
 
-export function setTreeViewHasSelectedItem(selectedElements: ITreeElement[]): void {
-    const hasSelectedItem = selectedElements.length === 1;
-    const hasMultiSelection = selectedElements.length > 1;
-    let hasSelectedDiffParents = false;
-
-    if (selectedElements.length > 1) {
-        const firstParent = selectedElements[0].parent;
-        hasSelectedDiffParents = selectedElements.some(x => x.parent !== firstParent);
-    }
-
-    vscode.commands.executeCommand('setContext', contextKeys.hasSelectedItem, hasSelectedItem);
-    vscode.commands.executeCommand('setContext', contextKeys.hasMultiSelection, hasMultiSelection);
-    vscode.commands.executeCommand('setContext', contextKeys.hasSelectedDiffParents, hasSelectedDiffParents);
-
-    // _logger.log('debug', `updated context data '${hasTreeViewSelectedItemContextKey}' -> ${hasSelectedItem} , `+
-    //     `${hasTreeViewMultiSelectionItemContextKey} -> ${hasMultiSelection}`);
-}
 
 export function isValidDocument(document: vscode.TextDocument | null | undefined): document is vscode.TextDocument {
     return !!document && document.uri.scheme === 'file' && document.fileName.endsWith('.lhq');
@@ -93,9 +70,13 @@ export function createTreeElementPaths(parentPath: string, anySlash: boolean = f
     return ModelUtils.createTreePaths(parentPath, '/');
 }
 
-export async function showConfirmBox(message: string, detail?: string): Promise<boolean> {
+export async function showConfirmBox(message: string, detail?: string, warn?: boolean): Promise<boolean> {
     const msg = getMessageBoxText(message);
-    return (await vscode.window.showInformationMessage(msg, { modal: true, detail }, 'Yes', 'No')) === 'Yes';
+    warn = warn ?? false;
+    return (warn ?
+        await vscode.window.showWarningMessage(msg, { modal: true, detail }, 'Yes', 'No') :
+        await vscode.window.showInformationMessage(msg, { modal: true, detail }, 'Yes', 'No')) 
+        === 'Yes';
 }
 
 
@@ -208,10 +189,6 @@ export function findChildsByPaths(root: IRootModelElement, elementPaths: ITreeEl
     return result;
 }
 
-export type MatchForSubstringResult = {
-    match: 'equal' | 'contains' | 'none';
-    highlights?: [number, number][];
-}
 
 export function matchForSubstring(value: string, searchString: string, ignoreCase: boolean = false): MatchForSubstringResult {
     if (isNullOrEmpty(value) || isNullOrEmpty(searchString)) {
@@ -252,4 +229,40 @@ export function matchForSubstring(value: string, searchString: string, ignoreCas
     }
 
     return result;
+}
+
+export async function loadCultures(context?: vscode.ExtensionContext): Promise<CulturesMap> {
+    if (Object.keys(_cultures).length === 0) {
+        if (context === undefined) {
+            await showMessageBox('err', 'Failed to load list of cultures. Context is undefined. Please report this issue.');
+            return {};
+        }
+        const culturesFileUri = vscode.Uri.joinPath(context.extensionUri, 'dist', 'cultures.json');
+        try {
+            const rawContent = await vscode.workspace.fs.readFile(culturesFileUri);
+            const contentString = new TextDecoder().decode(rawContent);
+            const items = JSON.parse(contentString) as CultureInfo[];
+            for (const culture of items) {
+                _cultures[culture.name] = culture;
+            }
+
+        } catch (error) {
+            logger().log('error', 'Failed to read or parse dist/cultures.json');
+            await showMessageBox('err', 'Failed to load list of cultures. Please reinstall the extension or report this issue.');
+        }
+    }
+
+    return _cultures;
+}
+
+export function findCulture(name: string): CultureInfo | undefined {
+    if (isNullOrEmpty(name)) {
+        return undefined;
+    }
+    return _cultures[name];
+}
+
+export function getCultureDesc(name: string): string {
+    const culture = findCulture(name);
+    return culture ? `${culture?.engName ?? ''} (${culture?.name ?? ''})` : name;
 }

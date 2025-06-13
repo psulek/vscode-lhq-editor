@@ -5,24 +5,28 @@ import type {
 } from '@lhq/lhq-generators';
 import { detectFormatting, generatorUtils, isNullOrEmpty, ModelUtils } from '@lhq/lhq-generators';
 import {
-    createTreeElementPaths, findChildsByPaths, getElementFullPath, getMessageBoxText, isEditorActive, isValidDocument,
-    logger, matchForSubstring, setEditorActive, setTreeViewHasSelectedItem, showConfirmBox, showMessageBox
+    createTreeElementPaths, findChildsByPaths, findCulture, getCultureDesc, getElementFullPath, getMessageBoxText, isEditorActive, isValidDocument,
+    loadCultures,
+    logger, matchForSubstring, setEditorActive, showConfirmBox, showMessageBox
 } from './utils';
 import { LhqTreeItem } from './treeItem';
 import { validateName } from './validator';
-import { isVirtualTreeElement, MatchingElement, SearchTreeOptions, VirtualRootElement } from './elements';
+import { filterTreeElements, filterVirtualTreeElements, isVirtualTreeElement, setTreeViewHasSelectedItem, VirtualRootElement } from './elements';
+import { SearchTreeOptions, MatchingElement, CultureInfo, IVirtualTreeElement, IVirtualLanguageElement } from './types';
+import { QuickPickItemKind } from 'vscode';
 
 const actions = {
     refresh: 'lhqTreeView.refresh',
-    addItem: 'lhqTreeView.addItem',
-    renameItem: 'lhqTreeView.renameItem',
-    deleteItem: 'lhqTreeView.deleteItem',
+    addElement: 'lhqTreeView.addElement',
+    renameElement: 'lhqTreeView.renameElement',
+    deleteElement: 'lhqTreeView.deleteElement',
     findInTreeView: 'lhqTreeView.findInTreeView',
     advancedFind: 'lhqTreeView.advancedFind',
     addCategory: 'lhqTreeView.addCategory',
     addResource: 'lhqTreeView.addResource',
     addLanguage: 'lhqTreeView.addLanguage',
     deleteLanguage: 'lhqTreeView.deleteLanguage',
+    markLanguageAsPrimary: 'lhqTreeView.markLanguageAsPrimary'
 };
 
 type DragTreeItem = {
@@ -30,17 +34,40 @@ type DragTreeItem = {
     type: CategoryOrResourceType;
 }
 
-const themeIcons = {
-    structure: 'list-tree',
-    nameAndDesc: 'files',
-    translated: 'globe',
-    language: 'debug-breakpoint-log',
-    clearAll: 'clear-all'
-};
 
-// interface SearchQuickPickItem extends vscode.QuickPickItem {
-//     searchKind?: SearchTreeKind;
-// }
+interface LanguageQuickPickItem extends vscode.QuickPickItem {
+    culture: CultureInfo;
+}
+
+type LangTypeMode = 'all' | 'neutral' | 'country';
+
+// let languagesQuickPickItems: LanguageQuickPickItem[] | undefined;
+// let lastSelectedLangTypeMode: LangTypeMode = 'all';
+
+interface LangTypeQuickPickItem extends vscode.QuickPickItem {
+    mode: LangTypeMode;
+}
+
+const LanguageTypeModes = [
+    {
+        label: 'All languages',
+        description: 'Select from all available languages',
+        mode: 'all',
+    },
+    {
+        kind: QuickPickItemKind.Separator
+    },
+    {
+        label: 'Neutral languages',
+        detail: `Example: en, de, ...`,
+        mode: 'neutral'
+    },
+    {
+        label: 'Country-specific languages',
+        detail: `Example: en-US , de-DE, ...`,
+        mode: 'country'
+    }
+] as LangTypeQuickPickItem[];
 
 export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement>,
     vscode.TreeDragAndDropController<ITreeElement> {
@@ -79,13 +106,16 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
             vscode.workspace.onDidOpenTextDocument(e => this.onDidOpenTextDocument(e)),
 
             vscode.commands.registerCommand(actions.refresh, () => this.refresh()),
-            vscode.commands.registerCommand(actions.addItem, args => this.addItem(args)),
-            vscode.commands.registerCommand(actions.renameItem, args => this.renameItem(args)),
-            vscode.commands.registerCommand(actions.deleteItem, args => this.deleteItem(args)),
+            vscode.commands.registerCommand(actions.addElement, args => this.addItem(args)),
+            vscode.commands.registerCommand(actions.renameElement, args => this.renameItem(args)),
+            vscode.commands.registerCommand(actions.deleteElement, args => this.deleteElement(args)),
             vscode.commands.registerCommand(actions.findInTreeView, () => this.findInTreeView()),
             vscode.commands.registerCommand(actions.advancedFind, () => this.advancedFind()),
             vscode.commands.registerCommand(actions.addCategory, args => this.addCategory(args)),
-            vscode.commands.registerCommand(actions.addResource, args => this.addResource(args))
+            vscode.commands.registerCommand(actions.addResource, args => this.addResource(args)),
+            vscode.commands.registerCommand(actions.addLanguage, args => this.addLanguage(args)),
+            vscode.commands.registerCommand(actions.deleteLanguage, args => this.deleteLanguage(args)),
+            vscode.commands.registerCommand(actions.markLanguageAsPrimary, args => this.markLanguageAsPrimary(args))
         );
 
 
@@ -163,7 +193,7 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
             } else {
                 const elems: MatchingElement[] = [];
 
-                ModelUtils.iterateTree(this.currentRootModel!, (elem, leaf) => {
+                this.currentRootModel!.iterateTree((elem, leaf) => {
                     let match = matchForSubstring(elem.name, filter, true);
                     if (match.match !== 'none') {
                         elems.push({ element: elem, match, leaf });
@@ -313,7 +343,7 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
     // }
 
     public async handleDrag(source: ITreeElement[], treeDataTransfer: vscode.DataTransfer, _token: vscode.CancellationToken): Promise<void> {
-        const items = source.filter(x => x.elementType !== 'model').map<DragTreeItem>(x => ({
+        const items = source.filter(x => x.elementType === 'category' || x.elementType === 'resource').map<DragTreeItem>(x => ({
             path: getElementFullPath(x),
             type: x.elementType as CategoryOrResourceType,
         }));
@@ -336,7 +366,7 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
     }
 
     public async handleDrop(target: ITreeElement | undefined, sources: vscode.DataTransfer, _token: vscode.CancellationToken): Promise<void> {
-        if (!target || target.elementType === 'resource') {
+        if (!target || (target.elementType !== 'model' && target.elementType !== 'category')) {
             return;
         }
 
@@ -406,13 +436,94 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
         }
     }
 
-    private async deleteItem(element: ITreeElement): Promise<void> {
+    private async markLanguageAsPrimary(element: ITreeElement): Promise<void> {
         if (!this.currentDocument) {
-            logger().log('info', 'LhqTreeDataProvider.deleteItem: No active document to delete item in.');
             return;
         }
 
-        const elemsToDelete: ITreeElement[] = element && this.selectedElements.length <= 1 ? [element] : this.selectedElements;
+        const selElems = element && this.selectedElements.length <= 1 ? [element] : this.selectedElements;
+        const selectedElements = filterVirtualTreeElements<IVirtualLanguageElement>(selElems, 'language');
+        const selectedCount = selectedElements.length;
+        if (selectedCount === 0) { return; }
+
+        if (selectedCount > 1) {
+            return await showMessageBox('warn', `Cannot mark multiple languages as primary. Please select only one language.`, { modal: true });
+        }
+
+        const langElement = selectedElements[0];
+
+        if (this.currentRootModel!.primaryLanguage === langElement.name) {
+            return await showMessageBox('info', `Language '${getCultureDesc(langElement.name)}' is already marked as primary.`);
+        }
+
+        this.currentRootModel!.primaryLanguage = langElement.name;
+
+        const success = await this.updateTextDocument();
+        await showMessageBox(success ? 'info' : 'err', success
+            ? `Successfully marked '${getCultureDesc(langElement.name)}' as primary language.`
+            : `Failed to mark '${getCultureDesc(langElement.name)}' as primary language.`, { modal: !success });
+    }
+
+    private async deleteLanguage(element: ITreeElement): Promise<void> {
+        if (!this.currentDocument) {
+            return;
+        }
+
+        const selElems = element && this.selectedElements.length <= 1 ? [element] : this.selectedElements;
+        const elemsToDelete = filterVirtualTreeElements<IVirtualLanguageElement>(selElems, 'language');
+        const selectedCount = elemsToDelete.length;
+        if (selectedCount === 0) { return; }
+
+        const restCount = Math.max(0, this.currentRootModel!.languages.length - selectedCount);
+        if (restCount === 0) {
+            return await showMessageBox('warn', `Cannot delete all languages. At least one language must remain.`, { modal: true });
+        }
+
+        const primaryLang = elemsToDelete.find(x => x.isPrimary);
+        if (primaryLang) {
+            const msg = selectedCount === 1
+                ? `Primary language '${getCultureDesc(primaryLang.name)}' cannot be deleted.`
+                : `Selected languages contain primary language '${getCultureDesc(primaryLang.name)}' which cannot be deleted.`;
+            return await showMessageBox('warn', msg, { modal: true });
+        }
+
+        const maxDisplayCount = 10;
+
+        const elemIdent = selectedCount === 1
+            ? getCultureDesc(elemsToDelete[0].name)
+            : selectedCount <= maxDisplayCount
+                ? elemsToDelete.slice(0, maxDisplayCount).map(x => `'${getCultureDesc(x.name)}'`).join(', ')
+                : '';
+
+
+        const detail = selectedCount > maxDisplayCount ? '' : `Selected languages to delete: \n${elemIdent}\n\n` + 'This will remove all translations for those languages!';
+        if (!(await showConfirmBox(`Delete ${selectedCount} languages ?`, detail, true))) {
+            return;
+        }
+
+        // after previous await, document can be closed now...
+        if (!this.currentDocument) {
+            return;
+        }
+
+        const root = this.currentRootModel!;
+        elemsToDelete.forEach(elem => {
+            if (!root.removeLanguage(elem.name)) {
+                logger().log('warn', `LhqTreeDataProvider.deleteLanguage: Cannot delete language '${elem.name}' - not found in model.`);
+            }
+        });
+
+        const success = await this.updateTextDocument();
+        await showMessageBox(success ? 'info' : 'err',
+            success ? `Successfully deleted ${elemIdent}.` : `Failed to delete ${elemIdent}.`, { modal: !success });
+    }
+
+    private async deleteElement(element: ITreeElement): Promise<void> {
+        if (!this.currentDocument) {
+            return;
+        }
+
+        const elemsToDelete = filterTreeElements(element && this.selectedElements.length <= 1 ? [element] : this.selectedElements);
         const selectedCount = elemsToDelete.length;
         if (selectedCount === 0) { return; }
 
@@ -432,7 +543,7 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
             }
         }
 
-        if (!(await showConfirmBox('info', `Delete ${elemIdent} ?`))) {
+        if (!(await showConfirmBox(`Delete ${elemIdent} ?`))) {
             return;
         }
 
@@ -589,6 +700,85 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
 
     private async addResource(element: ITreeElement): Promise<void> {
         return await this.addItem(element, 'resource');
+    }
+
+    private async addLanguage(element: ITreeElement): Promise<void> {
+        const selected = await vscode.window.showQuickPick(LanguageTypeModes, {
+            placeHolder: `Select type of languages to select from`,
+            ignoreFocusOut: true
+        });
+
+        if (!selected) {
+            return;
+        }
+
+        setTimeout(() => {
+            void this.addLanguageComplete(selected.mode);
+        }, 100);
+    }
+
+    async addLanguageComplete(langTypeMode: LangTypeMode): Promise<void> {
+        const cultures = await loadCultures();
+        const langRoot = this.currentVirtualRootElement!.languagesRoot;
+
+        const languagesQuickPickItems = Object.values(cultures)
+            .filter(culture => {
+                if (langRoot.contains(culture.name)) {
+                    return false;
+                }
+
+                if (langTypeMode === 'all') {
+                    return true;
+                }
+
+                return langTypeMode === 'neutral' ? culture.isNeutral : !culture.isNeutral;
+            })
+            .map(culture => ({
+                label: culture.name + (culture.isNeutral ? ' (neutral)' : ''),
+                description: culture.engName,
+                detail: culture.nativeName,
+                culture
+            }) as LanguageQuickPickItem);
+
+        const result = await vscode.window.showQuickPick(languagesQuickPickItems, {
+            canPickMany: true, ignoreFocusOut: true,
+            matchOnDescription: true, matchOnDetail: true, placeHolder: 'Select languages to add'
+        });
+
+        if (!result || result.length === 0) {
+            return;
+        }
+
+        if (!this.currentDocument) {
+            return;
+        }
+
+        const added: string[] = [];
+        result.map(item => item.culture.name).forEach(cultureName => {
+            if (this.currentRootModel?.addLanguage(cultureName)) {
+                const culture = cultures[cultureName];
+                if (culture) {
+                    added.push(`${culture.engName} (${culture.name})`);
+                }
+            }
+        });
+
+        await this.updateTextDocument();
+
+        this._onDidChangeTreeData.fire([langRoot]);
+        await this.view.reveal(langRoot, { expand: true, select: true, focus: true });
+
+        if (added.length > 0) {
+            const maxDisplayCount = 5;
+            const addedStr = added.length === 1
+                ? `language: ${added[0]}`
+                : added.length <= maxDisplayCount
+                    ? `${added.length} languages: ` + added.slice(0, maxDisplayCount).join(', ')
+                    : `${added.length} languages`;
+            await showMessageBox('info', `Succesfully added ${addedStr} .`);
+        } else {
+            await showMessageBox('warn', `No languages were added as they already exist in the model.`);
+        }
     }
 
     private async addItemComplete(parent: ITreeElement, elementType: TreeElementType) {
@@ -765,10 +955,10 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
     }
 
     getParent(element: ITreeElement): vscode.ProviderResult<ITreeElement> {
-        if (isVirtualTreeElement(element)) {
-            debugger;
-            console.warn('!!!!!');
-        }
+        // if (isVirtualTreeElement(element)) {
+        //     debugger;
+        //     console.warn('!!!!!');
+        // }
         return element.parent;
     }
 } 
