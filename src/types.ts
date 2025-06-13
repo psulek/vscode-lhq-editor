@@ -48,15 +48,15 @@ export type CultureInfo = {
     isNeutral: boolean;
 }
 
-export const ContextKeys = {
-    isEditorActive: 'lhqEditorIsActive',
-    hasSelectedItem: 'lhqTreeHasSelectedItem',
-    hasMultiSelection: 'lhqTreeHasMultiSelection',
-    hasSelectedDiffParents: 'lhqTreeHasSelectedDiffParents',
-    hasLanguageSelection: 'lhqTreeHasLanguageSelection',
-    hasPrimaryLanguageSelected: 'lhqTreeHasPrimaryLanguageSelected',
-    hasLanguagesVisible: 'lhqTreeHasLanguagesVisible',
-};
+// export const ContextKeys = {
+//     isEditorActive: 'lhqEditorIsActive',
+//     hasSelectedItem: 'lhqTreeHasSelectedItem',
+//     hasMultiSelection: 'lhqTreeHasMultiSelection',
+//     hasSelectedDiffParents: 'lhqTreeHasSelectedDiffParents',
+//     hasLanguageSelection: 'lhqTreeHasLanguageSelection',
+//     hasPrimaryLanguageSelected: 'lhqTreeHasPrimaryLanguageSelected',
+//     hasLanguagesVisible: 'lhqTreeHasLanguagesVisible',
+// };
 
 //export type CulturesMap = Map<string, CultureInfo>;
 export type CulturesMap = Record<string, CultureInfo>;

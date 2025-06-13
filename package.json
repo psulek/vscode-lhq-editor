@@ -47,6 +47,11 @@
     },
     "commands": [
       {
+        "command": "lhqTreeView.projectProperties",
+        "title": "Properties",
+        "icon": "$(settings-gear)"
+      },
+      {
         "command": "lhqTreeView.refresh",
         "title": "Refresh",
         "icon": "$(refresh)"
@@ -93,7 +98,7 @@
         "command": "lhqTreeView.markLanguageAsPrimary",
         "title": "Mark language as primary",
         "icon": "$(check)"
-      }, 
+      },
       {
         "command": "lhqTreeView.showLanguages",
         "title": "Toggle languages (show)",
@@ -107,6 +112,11 @@
     ],
     "menus": {
       "view/title": [
+        {
+            "command": "lhqTreeView.projectProperties",
+            "when": "view == lhqTreeView",
+            "group": "navigation"
+        },
         {
           "command": "lhqTreeView.refresh",
           "when": "view == lhqTreeView",
@@ -131,14 +141,14 @@
           "when": "view == lhqTreeView && lhqTreeHasSelectedItem && !lhqTreeHasLanguageSelection"
         },
         {
-            "command": "lhqTreeView.showLanguages",
-            "when": "view == lhqTreeView && !lhqTreeHasLanguagesVisible",
-            "group": "navigation"
+          "command": "lhqTreeView.showLanguages",
+          "when": "view == lhqTreeView && !lhqTreeHasLanguagesVisible",
+          "group": "navigation"
         },
         {
-            "command": "lhqTreeView.hideLanguages",
-            "when": "view == lhqTreeView && lhqTreeHasLanguagesVisible",
-            "group": "navigation"
+          "command": "lhqTreeView.hideLanguages",
+          "when": "view == lhqTreeView && lhqTreeHasLanguagesVisible",
+          "group": "navigation"
         }
       ],
       "view/item/context": [

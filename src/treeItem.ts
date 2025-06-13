@@ -1,8 +1,9 @@
 import * as vscode from 'vscode';
 import { ICategoryLikeTreeElement, ITreeElement } from '@lhq/lhq-generators';
 import { getElementFullPath, toPascalCasing } from './utils';
-import { isVirtualTreeElement, languagesVisible, VirtualTreeElement } from './elements';
+import { isVirtualTreeElement, VirtualTreeElement } from './elements';
 import { SearchTreeOptions, AppTreeElementType, IVirtualLanguageElement } from './types';
+import { appContext } from './context';
 
 // https://code.visualstudio.com/api/references/icons-in-labels#icon-listing
 const icons: Record<AppTreeElementType, string> = {
@@ -40,7 +41,7 @@ export class LhqTreeItem extends vscode.TreeItem {
         }
 
         if (virtualElement?.virtualElementType === 'languages') {
-            if (!languagesVisible()) {
+            if (!appContext.languagesVisible) {
                 collapsibleState = vscode.TreeItemCollapsibleState.None;
             }
         }

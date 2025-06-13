@@ -1,20 +1,20 @@
 import * as vscode from 'vscode';
+import { QuickPickItemKind } from 'vscode';
+import path from 'node:path';
+
 import type {
     CategoryOrResourceType, FormattingOptions, ICategoryLikeTreeElement, IRootModelElement,
     ITreeElement, LhqModel, LhqValidationResult, TreeElementType
 } from '@lhq/lhq-generators';
 import { detectFormatting, generatorUtils, isNullOrEmpty, ModelUtils } from '@lhq/lhq-generators';
-import {
-    createTreeElementPaths, findChildsByPaths, getCultureDesc, getElementFullPath, getMessageBoxText, isEditorActive, isValidDocument,
-    loadCultures,
-    logger, matchForSubstring, setEditorActive, showConfirmBox, showMessageBox
-} from './utils';
+
 import { LhqTreeItem } from './treeItem';
 import { validateName } from './validator';
-import { filterTreeElements, filterVirtualTreeElements, isVirtualTreeElement, languagesVisible, setTreeViewHasSelectedItem, updateLanguageVisibility, VirtualRootElement } from './elements';
-import { SearchTreeOptions, MatchingElement, CultureInfo, IVirtualLanguageElement } from './types';
-import { QuickPickItemKind } from 'vscode';
-import path from 'node:path';
+import { filterTreeElements, filterVirtualTreeElements, isVirtualTreeElement, VirtualRootElement } from './elements';
+import type { SearchTreeOptions, MatchingElement, CultureInfo, IVirtualLanguageElement } from './types';
+import { appContext } from './context';
+import { getMessageBoxText, createTreeElementPaths, findChildsByPaths, matchForSubstring, 
+    logger, getElementFullPath, showMessageBox, getCultureDesc, showConfirmBox, loadCultures, isValidDocument } from './utils';
 
 const actions = {
     refresh: 'lhqTreeView.refresh',
@@ -30,6 +30,7 @@ const actions = {
     markLanguageAsPrimary: 'lhqTreeView.markLanguageAsPrimary',
     showLanguages: 'lhqTreeView.showLanguages',
     hideLanguages: 'lhqTreeView.hideLanguages',
+    projectProperties: 'lhqTreeView.projectProperties'
 };
 
 type DragTreeItem = {
@@ -137,18 +138,17 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
         context.subscriptions.push(
             this.view.onDidChangeSelection(e => {
                 this.selectedElements = [...(e.selection && e.selection.length > 0 ? e.selection : [])];
-                setTreeViewHasSelectedItem(this.selectedElements);
+                appContext.setTreeViewHasSelectedItem(this.selectedElements);
             })
         );
     }
 
     private toggleLanguages(visible: boolean): void {
-        updateLanguageVisibility(visible);
+        appContext.languagesVisible = visible;
+
         if (!this.currentVirtualRootElement) {
             return;
         }
-        //this._onDidChangeTreeData.fire([this.currentVirtualRootElement!.languagesRoot]);
-        //this._onDidChangeTreeData.fire([undefined]);
         this.refresh();
     }
 
@@ -854,7 +854,7 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
     }
 
     public hasActiveDocument(): boolean {
-        return this.currentDocument !== null && isEditorActive();
+        return this.currentDocument !== null && appContext.isEditorActive;
     }
 
     private get documentPath(): string {
@@ -868,7 +868,7 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
     public updateDocument(document: vscode.TextDocument | undefined, forceRefresh = false): void {
         if (isValidDocument(document)) {
             logger().log('debug', `LhqTreeDataProvider.updateDocument [VALID] with: ${document.uri.fsPath}`);
-            setEditorActive(true);
+            appContext.isEditorActive = true;
 
             const baseName = path.basename(document.uri.fsPath);
             this.view.title = `${baseName} [LHQ Structure]`;
@@ -877,11 +877,11 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
                 this.currentDocument = document;
                 this.refresh();
             }
-        } else if (isEditorActive()) {
+        } else if (appContext.isEditorActive) {
             // @ts-ignore
             logger().log('debug', `LhqTreeDataProvider.updateDocument [INVALID] with: ${document?.uri?.fsPath}`);
             this.view.title = `LHQ Structure`;
-            setEditorActive(false);
+            appContext.isEditorActive = false;
             this.currentDocument = null;
             this.refresh();
         }
@@ -914,7 +914,7 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
                     validateResult = generatorUtils.validateLhqModel(this.currentJsonModel);
                     if (validateResult.success && validateResult.model) {
                         this.currentRootModel = ModelUtils.createRootElement(validateResult.model);
-                        this.currentVirtualRootElement = new VirtualRootElement(this.currentRootModel);
+                        this.currentVirtualRootElement = new VirtualRootElement(this.currentRootModel, appContext.languagesVisible);
                     } else {
                         this.currentJsonModel = null;
                     }
@@ -957,7 +957,7 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
 
         if (element) {
             if (isVirtualTreeElement(element, 'languages')) {
-                if (languagesVisible()) {
+                if (appContext.languagesVisible) {
                     result.push(...this.currentVirtualRootElement!.languagesRoot.virtualLanguages);
                 }
             } else if (isVirtualTreeElement(element) || element.elementType === 'resource') {

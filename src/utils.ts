@@ -5,11 +5,11 @@ import type { FileInfo, ReadFileInfoOptions, ITreeElementPaths, ITreeElement, IR
 import { fileUtils, isNullOrEmpty, ModelUtils, strCompare } from '@lhq/lhq-generators';
 
 import { ILogger, VsCodeLogger } from './logger';
-import { ContextKeys, CultureInfo, CulturesMap, MatchForSubstringResult } from './types';
+import { CultureInfo, CulturesMap, MatchForSubstringResult } from './types';
 
 const messageBoxPrefix = '[LHQ Editor]';
 
-let _isEditorActive = false;
+//let _isEditorActive = false;
 let _logger: VsCodeLogger = new VsCodeLogger();
 //let _cultures: CulturesMap = new Map<string, CultureInfo>();
 let _cultures: CulturesMap = {};
@@ -34,16 +34,16 @@ export function logger(): ILogger {
     return _logger;
 }
 
-export function isEditorActive(): boolean {
-    return _isEditorActive;
-}
+// export function isEditorActive(): boolean {
+//     return _isEditorActive;
+// }
 
-export function setEditorActive(active: boolean) {
-    if (_isEditorActive !== active) {
-        _isEditorActive = active;
-        vscode.commands.executeCommand('setContext', ContextKeys.isEditorActive, active);
-    }
-}
+// export function setEditorActive(active: boolean) {
+//     if (_isEditorActive !== active) {
+//         _isEditorActive = active;
+//         vscode.commands.executeCommand('setContext', ContextKeys.isEditorActive, active);
+//     }
+// }
 
 
 export function isValidDocument(document: vscode.TextDocument | null | undefined): document is vscode.TextDocument {

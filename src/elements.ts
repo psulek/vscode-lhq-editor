@@ -1,7 +1,6 @@
-import * as vscode from 'vscode';
 import { ICategoryLikeTreeElement, IRootModelElement, isNullOrEmpty, ITreeElement, ITreeElementPaths, ModelUtils, TreeElementType } from '@lhq/lhq-generators';
-import { createTreeElementPaths, getCultureDesc } from './utils';
-import { ContextKeys, IVirtualLanguageElement, IVirtualTreeElement, VirtualElementType } from './types';
+import { createTreeElementPaths } from './utils';
+import type { IVirtualLanguageElement, IVirtualTreeElement, VirtualElementType } from './types';
 
 export function isVirtualTreeElement(element: ITreeElement | undefined, elementType?: VirtualElementType): boolean {
     return element !== undefined && element instanceof VirtualTreeElement && (!elementType || element.virtualElementType === elementType);
@@ -16,42 +15,6 @@ export function filterVirtualTreeElements<T extends IVirtualTreeElement = IVirtu
     return elements.filter(x => isVirtualTreeElement(x, elementType)) as T[];
 }
 
-let _languagesVisible = false;
-
-export function languagesVisible(): boolean {
-    return _languagesVisible;
-}
-
-
-export function updateLanguageVisibility(visible: boolean): void {
-    _languagesVisible = visible;
-    vscode.commands.executeCommand('setContext', ContextKeys.hasLanguagesVisible, visible);
-}
-
-export function setTreeViewHasSelectedItem(selectedElements: ITreeElement[]): void {
-    const hasSelectedItem = selectedElements.length === 1;
-    const hasMultiSelection = selectedElements.length > 1;
-    let hasSelectedDiffParents = false;
-    let hasLanguageSelection = false;
-    let hasPrimaryLanguageSelected = false;
-
-    if (selectedElements.length > 1) {
-        const firstParent = selectedElements[0].parent;
-        hasSelectedDiffParents = selectedElements.some(x => x.parent !== firstParent);
-    }
-
-    const virtualElements = selectedElements.filter(x => x instanceof VirtualTreeElement);
-    if (virtualElements.length > 0) {
-        hasLanguageSelection = virtualElements.some(x => x.virtualElementType === 'language' || x.virtualElementType === 'languages');
-        hasPrimaryLanguageSelected = virtualElements.some(x => x.virtualElementType === 'language' && (x as unknown as IVirtualLanguageElement).isPrimary);
-    }
-
-    vscode.commands.executeCommand('setContext', ContextKeys.hasSelectedItem, hasSelectedItem);
-    vscode.commands.executeCommand('setContext', ContextKeys.hasMultiSelection, hasMultiSelection);
-    vscode.commands.executeCommand('setContext', ContextKeys.hasSelectedDiffParents, hasSelectedDiffParents);
-    vscode.commands.executeCommand('setContext', ContextKeys.hasLanguageSelection, hasLanguageSelection);
-    vscode.commands.executeCommand('setContext', ContextKeys.hasPrimaryLanguageSelected, hasPrimaryLanguageSelected);
-}
 
 export class VirtualTreeElement implements IVirtualTreeElement {
     private _root: IRootModelElement;
@@ -128,10 +91,10 @@ export class VirtualTreeElement implements IVirtualTreeElement {
 export class VirtualRootElement extends VirtualTreeElement {
     private _languagesRoot: LanguagesElement;
 
-    constructor(root: IRootModelElement) {
+    constructor(root: IRootModelElement, languagesVisible: boolean) {
         super(root, root.name, 'treeRoot');
         let label = 'Languages';
-        if (!languagesVisible()) {
+        if (!languagesVisible) {
             const primary = root.primaryLanguage ?? '';
             label += `: ${root.languages?.length ?? 0} (primary: ${primary})`;
         }

@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { LhqTreeDataProvider } from './treeDataProvider';
-import { logger, setEditorActive } from './utils';
+import { logger } from './utils';
+import { appContext } from './context';
 
 export class LhqEditorProvider implements vscode.CustomTextEditorProvider {
     public static readonly viewType = 'lhq.customEditor';
@@ -23,7 +24,7 @@ export class LhqEditorProvider implements vscode.CustomTextEditorProvider {
         };
 
         this.updateWebviewContent(webviewPanel, document);
-        setEditorActive(true);
+        appContext.isEditorActive = true;
         this.treeDataProvider.updateDocument(document);
 
         const changeDocumentSubscription = vscode.workspace.onDidChangeTextDocument(e => {
