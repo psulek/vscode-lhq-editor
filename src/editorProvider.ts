@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { LhqTreeDataProvider } from './treeDataProvider';
-import { logger } from './utils';
+import { logger, showMessageBox } from './utils';
 import { appContext } from './context';
 
 export class LhqEditorProvider implements vscode.CustomTextEditorProvider {
@@ -47,10 +47,31 @@ export class LhqEditorProvider implements vscode.CustomTextEditorProvider {
             }
         });
 
+        const willSaveTextSubscription = vscode.workspace.onWillSaveTextDocument(async (event: vscode.TextDocumentWillSaveEvent) => {
+            if (event.document.uri.toString() === document.uri.toString()) {
+                const validationError = this.treeDataProvider.lastValidationError;
+
+                if (validationError) {
+                    await showMessageBox('warn', validationError.message, { detail: validationError.detail, modal: true });
+                    
+                    // event.waitUntil(
+                    //     new Promise<vscode.TextEdit[]>((_resolve, reject) => {
+                    //         throw new Error(validationError.message);
+                    //         //reject(new Error(validationError.message));
+                    //     })
+                    // );
+
+                } else {
+                    //event.waitUntil(Promise.resolve([] as vscode.TextEdit[]));
+                }
+            }
+        });
+
         webviewPanel.onDidDispose(() => {
             logger().log('debug', `LhqEditorProvider.onDidDispose for: ${document?.fileName ?? '-'}`);
             changeDocumentSubscription.dispose();
             viewStateSubscription.dispose();
+            willSaveTextSubscription.dispose();
 
             // delayed a little..
             setTimeout(() => {

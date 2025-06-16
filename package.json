@@ -185,11 +185,6 @@
     },
     "keybindings": [
       {
-        "command": "lhqTreeView.findInTreeView",
-        "key": "ctrl+f",
-        "when": "lhqEditorIsActive"
-      },
-      {
         "command": "lhqTreeView.advancedFind",
         "key": "ctrl+alt+f",
         "when": "lhqEditorIsActive"
@@ -236,7 +231,7 @@
     "typescript": "^5.8.3"
   },
   "dependencies": {
-    "@lhq/lhq-generators": "1.0.0-rc.45",
+    "@lhq/lhq-generators": "1.0.0-rc.46",
     "fs-extra": "11.3.0"
   }
 }

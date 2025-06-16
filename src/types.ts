@@ -60,3 +60,5 @@ export type CultureInfo = {
 
 //export type CulturesMap = Map<string, CultureInfo>;
 export type CulturesMap = Record<string, CultureInfo>;
+
+export type ValidationError = { message: string, detail?: string };

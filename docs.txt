@@ -12,3 +12,10 @@ https://code.visualstudio.com/api/extension-guides/tree-view
         "key": "F2",
         "when": "focusedView == lhqTreeView && lhqEditorIsActive && lhqTreeHasSelectedItem"
       }
+
+
+      {
+        "command": "lhqTreeView.findInTreeView",
+        "key": "ctrl+f",
+        "when": "lhqEditorIsActive"
+      },
