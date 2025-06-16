@@ -14,6 +14,7 @@ const contextKeys = {
     hasSelectedDiffParents: 'lhqTreeHasSelectedDiffParents',
     hasLanguageSelection: 'lhqTreeHasLanguageSelection',
     hasPrimaryLanguageSelected: 'lhqTreeHasPrimaryLanguageSelected',
+    hasSelectedResource: 'lhqTreeHasSelectedResource',
     hasLanguagesVisible: 'lhqTreeHasLanguagesVisible',
 };
 
@@ -56,6 +57,7 @@ export class AppContext {
         let hasSelectedDiffParents = false;
         let hasLanguageSelection = false;
         let hasPrimaryLanguageSelected = false;
+        let hasSelectedResource = hasSelectedItem && selectedElements[0].elementType === 'resource';
 
         if (selectedElements.length > 1) {
             const firstParent = selectedElements[0].parent;
@@ -73,6 +75,7 @@ export class AppContext {
         vscode.commands.executeCommand('setContext', contextKeys.hasSelectedDiffParents, hasSelectedDiffParents);
         vscode.commands.executeCommand('setContext', contextKeys.hasLanguageSelection, hasLanguageSelection);
         vscode.commands.executeCommand('setContext', contextKeys.hasPrimaryLanguageSelected, hasPrimaryLanguageSelected);
+        vscode.commands.executeCommand('setContext', contextKeys.hasSelectedResource, hasSelectedResource);
     }
 }
 

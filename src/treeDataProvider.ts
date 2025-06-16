@@ -32,7 +32,8 @@ const actions = {
     markLanguageAsPrimary: 'lhqTreeView.markLanguageAsPrimary',
     showLanguages: 'lhqTreeView.showLanguages',
     hideLanguages: 'lhqTreeView.hideLanguages',
-    projectProperties: 'lhqTreeView.projectProperties'
+    projectProperties: 'lhqTreeView.projectProperties',
+    editTranslations: 'lhqTreeView.editTranslations',
 };
 
 type DragTreeItem = {
@@ -123,7 +124,8 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
             vscode.commands.registerCommand(actions.markLanguageAsPrimary, args => this.markLanguageAsPrimary(args)),
             vscode.commands.registerCommand(actions.showLanguages, () => this.toggleLanguages(true)),
             vscode.commands.registerCommand(actions.hideLanguages, () => this.toggleLanguages(false)),
-            vscode.commands.registerCommand(actions.projectProperties, () => this.projectProperties())
+            vscode.commands.registerCommand(actions.projectProperties, () => this.projectProperties()),
+            vscode.commands.registerCommand(actions.editTranslations, args => this.editTranslations(args))
         );
 
 
@@ -811,6 +813,64 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
         return null;
     }
 
+    private async editTranslations(element: ITreeElement): Promise<void> {
+        const selectedCount = this.selectedElements.length;
+        if (selectedCount > 1) {
+            return;
+        }
+
+        if (element && selectedCount === 1 && element !== this.selectedElements[0]) {
+            await this.setSelectedItems([element], { focus: true, expand: false });
+        }
+
+        element = element || (this.selectedElements.length > 0 ? this.selectedElements[0] : undefined);
+        if (!this.currentDocument || !element) {
+            return;
+        }
+
+        if (element.elementType !== 'resource') {
+            return;
+        }
+
+        const resource = element as IResourceElement;
+        const lang = await this.selectTranslationText(resource);
+
+        if (!lang || !this.currentDocument) {
+            return;
+        }
+
+        const fullpath = getElementFullPath(element);
+        const culture = getCultureDesc(lang);
+        const originalVal = resource.getValue(lang, false) ?? '';
+        const edited = await vscode.window.showInputBox({
+            title: `Edit translation for resource '${fullpath}'`,
+            prompt: `Enter translation text for '${culture}'`,
+            // placeHolder: `Translation for '${culture}'`,
+            value: originalVal,
+            ignoreFocusOut: true
+        });
+
+        if (!edited || edited === originalVal) {
+            return;
+        }
+
+        if (!this.currentDocument) {
+            return;
+        }
+
+        resource.setValue(lang, edited);
+
+        const success = await this.applyChangesToTextDocument();
+
+        this._onDidChangeTreeData.fire([element]);
+        await this.view.reveal(element, { expand: true, select: true, focus: true });
+
+        if (!success) {
+            logger().log('error', `editTranslations: vscode.workspace.applyEdit failed for '${fullpath}' (${lang})`);
+            return await showMessageBox('err', `Failed to edit translations for '${fullpath}' and language '${lang}'.`);
+        }
+    }
+
     private async renameItem(element: ITreeElement): Promise<void> {
         const selectedCount = this.selectedElements.length;
         if (selectedCount > 1) {
@@ -821,15 +881,9 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
             await this.setSelectedItems([element], { focus: true, expand: false });
         }
 
-        //element = element || this.selectedElement;
         element = element || (this.selectedElements.length > 0 ? this.selectedElements[0] : undefined);
         if (!this.currentDocument || !element) {
             return;
-        }
-
-        if (element.elementType === 'resource') {
-            const lang = await this.selectTranslationText(element as IResourceElement);
-            console.log(`Selected language for renaming: ${lang}`);
         }
 
         const originalName = element.name;
@@ -910,10 +964,12 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
 
         return await new Promise<string | undefined>((resolve) => {
 
+            const fullpath = getElementFullPath(resource);
+
             const quickPick = vscode.window.createQuickPick<TranslationQuickPickItem>();
-            quickPick.title = 'Select localized text to edit';
-            quickPick.placeholder = 'Select translation text';
-            quickPick.matchOnDescription = true;
+            quickPick.title = `Manage translations for resource ${fullpath}`;
+            quickPick.placeholder = 'Select translation to edit';
+            quickPick.matchOnDescription = false;
             quickPick.matchOnDetail = true;
             quickPick.ignoreFocusOut = true;
             quickPick.buttons = [{
@@ -923,11 +979,26 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
 
             const items = [] as TranslationQuickPickItem[];
 
-            resource.values.forEach(value => {
+            if (!this.currentRootModel) {
+                return resolve(undefined);
+            }
+
+            const root = this.currentRootModel;
+
+            const langs: string[] = [root.primaryLanguage];
+            if (root.languages?.length > 0) {
+                langs.push(...root.languages.filter(x => x !== root.primaryLanguage));
+            }
+
+            langs.forEach(lang => {
+                const hasLang = resource.hasValue(lang);
+                const translation = hasLang ? resource.getValue(lang, false) : ' ';
+
                 items.push({
-                    label: getCultureDesc(value.languageName),
-                    lang: value.languageName,
-                    detail: value.value ?? '',
+                    label: getCultureDesc(lang),
+                    lang: lang,
+                    detail: translation,
+                    description: hasLang ? '' : ' /empty/ ',
                     buttons: [
                         { iconPath: new vscode.ThemeIcon('trash'), tooltip: 'Delete translation text' }
                     ]

@@ -108,6 +108,11 @@
         "command": "lhqTreeView.hideLanguages",
         "title": "Toggle languages (hide)",
         "icon": "$(layers-active)"
+      },
+      {
+        "command": "lhqTreeView.editTranslations",
+        "title": "Edit Translations",
+        "icon": "$(pencil)"
       }
     ],
     "menus": {
@@ -137,10 +142,6 @@
           "group": "navigation"
         },
         {
-          "command": "lhqTreeView.renameElement",
-          "when": "view == lhqTreeView && lhqTreeHasSelectedItem && !lhqTreeHasLanguageSelection"
-        },
-        {
           "command": "lhqTreeView.showLanguages",
           "when": "view == lhqTreeView && !lhqTreeHasLanguagesVisible",
           "group": "navigation"
@@ -166,7 +167,11 @@
         },
         {
           "command": "lhqTreeView.renameElement",
-          "when": "view == lhqTreeView && lhqTreeHasSelectedItem && !lhqTreeHasLanguageSelection",
+          "when": "view == lhqTreeView && lhqTreeHasSelectedItem && !lhqTreeHasLanguageSelection"
+        },
+        {
+          "command": "lhqTreeView.editTranslations",
+          "when": "view == lhqTreeView && lhqTreeHasSelectedItem && !lhqTreeHasLanguageSelection && viewItem == resource",
           "group": "inline@1"
         },
         {
@@ -198,6 +203,11 @@
         "command": "lhqTreeView.addResource",
         "key": "insert",
         "when": "lhqEditorIsActive && !lhqTreeHasMultiSelection && !lhqTreeHasLanguageSelection"
+      },
+      {
+        "command": "lhqTreeView.editTranslations",
+        "key": "ctrl+enter",
+        "when": "focusedView == lhqTreeView && lhqEditorIsActive && lhqTreeHasSelectedResource"
       }
     ]
   },
@@ -231,7 +241,7 @@
     "typescript": "^5.8.3"
   },
   "dependencies": {
-    "@lhq/lhq-generators": "1.0.0-rc.46",
+    "@lhq/lhq-generators": "1.0.0-rc.47",
     "fs-extra": "11.3.0"
   }
 }
