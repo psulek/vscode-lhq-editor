@@ -14,5 +14,6 @@
     "eslint.enable": true, // Enable ESLint
     "eslint.debug": true, // Enable debugging for ESLint
     "eslint.lintTask.enable": true, // Enable ESLint linting task
-    "eslint.useFlatConfig": true
+    "eslint.useFlatConfig": true,
+    "editor.gotoLocation.multipleDefinitions": "goto"
 }

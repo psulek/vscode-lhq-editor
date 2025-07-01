@@ -118,9 +118,9 @@
     "menus": {
       "view/title": [
         {
-            "command": "lhqTreeView.projectProperties",
-            "when": "view == lhqTreeView",
-            "group": "navigation"
+          "command": "lhqTreeView.projectProperties",
+          "when": "view == lhqTreeView",
+          "group": "navigation"
         },
         {
           "command": "lhqTreeView.refresh",
@@ -230,6 +230,8 @@
     "@types/mocha": "^10.0.10",
     "@types/node": "20.x",
     "@types/vscode": "^1.100.0",
+    "@types/lodash.debounce": "^4.0.9",
+    "@types/lodash.throttle": "^4.1.9",
     "@typescript-eslint/eslint-plugin": "^8.34.0",
     "@typescript-eslint/parser": "^8.34.0",
     "@vscode/test-cli": "^0.0.11",
@@ -242,6 +244,8 @@
   },
   "dependencies": {
     "@lhq/lhq-generators": "1.0.0-rc.47",
-    "fs-extra": "11.3.0"
+    "fs-extra": "11.3.0",
+    "lodash.debounce": "4.0.8",
+    "lodash.throttle": "4.1.1"
   }
 }
