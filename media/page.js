@@ -243,6 +243,14 @@
 
                 // }
 
+                function validateTag(tagData) {
+                    if (!regexValidCharacters.test(tagData.value)) {
+                        return 'Only alphanumeric characters and underscores are allowed.';
+                    }
+
+                    return true;
+                }
+
                 const options = {
                     editTags: {
                         clicks: 2,
@@ -259,26 +267,24 @@
 
                     templates: {
                         tag: function (tagData) {
-                            return `<tag title="Double click to edit parameter"
+                            // const title = tagData.title || 'Double click to edit parameter';
+                            const title = 'Double click to edit parameter';
+                            return `<tag title='${title}'
                 contenteditable='false'
                 spellcheck='false'
-                tabIndex="-1"
+                tabIndex="${this.settings.a11y.focusableTags ? 0 : -1}"
 				draggable="true"
-                class="tagify__tag "
+                class="${this.settings.classNames.tag}"
                 ${this.getAttributes(tagData)}>
-            <x title='' class='tagify__tag__removeBtn' role='button' aria-label='remove tag'></x>
-            <div><span autocapitalize="false" autocorrect="off" spellcheck="false" class="tagify__tag-text">${tagData.value} (${tagData.order + 1})</span></div>
+            <x title='' class='${this.settings.classNames.tagX}' role='button' aria-label='remove tag'></x>
+            <div><span autocapitalize="false" autocorrect="off" spellcheck="false" class="${this.settings.classNames.tagText}">${tagData.value} (${tagData.order + 1})</span></div>
         </tag>
     `;
                         }
                     },
 
                     validate(tagData) {
-                        if (!regexValidCharacters.test(tagData.value)) {
-                            return 'Only alphanumeric characters and underscores are allowed.';
-                        }
-
-                        return true;
+                        return validateTag(tagData);
                     },
 
                     transformTag: function (tagData, originalData) {
@@ -309,6 +315,35 @@
 
                 tagify.on('remove', function ({ detail: { tag, data } }) {
                     reflectChanges();
+                });
+
+                tagify.on('invalid', function ({ detail: { tag, data } }) {
+                    debugger;
+                });
+
+                tagify.on('edit:updated', function ({ detail: { data, tag } }) {
+                    debugger;
+                    const isValid = validateTag(data);
+                    if (isValid !== true) {
+                        tagify.replaceTag(tag, { ...data, __isValid: isValid });
+                    } else {
+                        tag = tagify.getTagElmByValue(data.value);
+
+                        const newTagData = { ...data, __isValid: true };
+                        delete newTagData.title;
+                        delete newTagData["aria-invalid"];
+                        delete newTagData.class;
+                        delete newTagData.__tagId;
+                        tagify.replaceTag(tag, newTagData);
+                    }
+                });
+
+                tagify.on('add', function ({ detail: { data, tag } }) {
+                    debugger;
+                    const isValid = validateTag(data);
+                    if (isValid !== true) {
+                        tagify.replaceTag(tag, { ...data, __isValid: isValid });
+                    }
                 });
 
                 var dragsort = new DragSort(tagify.DOM.scope, {
