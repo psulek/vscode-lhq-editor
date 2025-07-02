@@ -46,6 +46,85 @@
         return _.startCase(this);
     };
 
+
+    const tooltips = new Map();
+
+    function showTooltip(uid, message, anchorEl) {
+        const timeout = 3000;
+        const oldTooltip = tooltips.get(uid);
+        if (oldTooltip) {
+            if (oldTooltip.isConnected) {
+                oldTooltip.remove();
+            }
+            tooltips.delete(uid);
+        }
+
+        let tooltip = document.createElement('div');
+        tooltips.set(uid, tooltip);
+        tooltip.textContent = message;
+        tooltip.classList.add('tooltip'); // Add the main tooltip class
+        let hideTimeoutId;
+        let removeTimeoutId;
+
+        const removeTooltip = () => {
+            if (tooltip) {
+                clearTimeout(hideTimeoutId);
+                clearTimeout(removeTimeoutId);
+                if (tooltip.isConnected) {
+                    tooltip.remove();
+                }
+                tooltips.delete(uid);
+                tooltip = null;
+            }
+        };
+
+        const scheduleRemoval = () => {
+            hideTimeoutId = window.setTimeout(() => {
+                tooltip.classList.add('tooltip-fade-out');
+
+                removeTimeoutId = window.setTimeout(() => {
+                    removeTooltip();
+                }, timeout);
+            }, 1000);
+        };;
+
+        const cancelRemoval = () => {
+            clearTimeout(hideTimeoutId);
+            clearTimeout(removeTimeoutId);
+            tooltip.classList.remove('tooltip-fade-out');
+        };
+
+        const handleClickOutside = (event) => {
+            if (tooltip && tooltip !== event.target) {
+                cancelRemoval();
+                removeTooltip();
+            }
+
+            document.removeEventListener('click', handleClickOutside, true);
+        };
+
+        tooltip.addEventListener('mouseenter', cancelRemoval);
+        tooltip.addEventListener('mouseleave', scheduleRemoval);
+        tooltip.addEventListener('click', (e) => {
+            e.stopPropagation();
+            cancelRemoval();
+            removeTooltip();
+        });
+
+        document.body.appendChild(tooltip);
+        const rect = anchorEl.getBoundingClientRect();
+        tooltip.style.left = `${rect.left + window.scrollX}px`;
+        tooltip.style.top = `${rect.bottom + window.scrollY + 5}px`;
+
+        setTimeout(() => {
+            if (tooltip) { // Check if tooltip still exists
+                document.addEventListener('click', handleClickOutside, true);
+            }
+        }, 200);
+
+        scheduleRemoval();
+    }
+
     let tagifyParams = null;
 
     const { createApp } = Vue;
@@ -201,11 +280,23 @@
                                 value: param.name,
                                 order: param.order
                             }));
-                        //tagify.removeAllTags();
-                        //tagify.addTags(tags);
-                        //reflectChanges();
                         tagifyParams.loadOriginalValues(tags);
                     } else {
+                        debugger;
+                        const invalidTagElm = tagifyParams.getTagElms().find(node => {
+                            const tagData = tagifyParams.getSetTagData(node);
+                            return tagData && tagData.__isValid !== true;
+                        });
+
+                        if (invalidTagElm) {
+                            this.paramsEnabled = !this.paramsEnabled;
+                            tagifyParams.setDisabled(!this.paramsEnabled);
+
+                            const tagData = tagifyParams.getSetTagData(invalidTagElm);
+                            showTooltip('params-invalid', tagData.__isValid, invalidTagElm);
+                            return;
+                        }
+
                         const tags = tagifyParams.value
                             .sort((a, b) => a.order - b.order)
                             .map(tag => ({
@@ -268,7 +359,11 @@
                     templates: {
                         tag: function (tagData) {
                             // const title = tagData.title || 'Double click to edit parameter';
-                            const title = 'Double click to edit parameter';
+                            //const title = 'Double click to edit parameter';
+                            const title = tagData.__isValid !== true ? tagData.__isValid : 'Double click to edit parameter';
+                            const txt1 = tagData.value || '';
+                            const txt2 = tagData.__isValid !== true ? '&#9679;' : `(${tagData.order + 1})`;
+
                             return `<tag title='${title}'
                 contenteditable='false'
                 spellcheck='false'
@@ -277,7 +372,7 @@
                 class="${this.settings.classNames.tag}"
                 ${this.getAttributes(tagData)}>
             <x title='' class='${this.settings.classNames.tagX}' role='button' aria-label='remove tag'></x>
-            <div><span autocapitalize="false" autocorrect="off" spellcheck="false" class="${this.settings.classNames.tagText}">${tagData.value} (${tagData.order + 1})</span></div>
+            <div><span autocapitalize="false" autocorrect="off" spellcheck="false" class="${this.settings.classNames.tagText}">${txt1} ${txt2}</span></div>
         </tag>
     `;
                         }
@@ -317,18 +412,18 @@
                     reflectChanges();
                 });
 
-                tagify.on('invalid', function ({ detail: { tag, data } }) {
-                    debugger;
+                tagify.on('invalid', function ({ detail }) {
+                    showTooltip('params-invalid', detail.message, tagify.DOM.input);
                 });
 
                 tagify.on('edit:updated', function ({ detail: { data, tag } }) {
                     debugger;
                     const isValid = validateTag(data);
+                    tag = tagify.getTagElmByValue(data.value);
                     if (isValid !== true) {
                         tagify.replaceTag(tag, { ...data, __isValid: isValid });
+                        showTooltip('params-invalid', isValid, tagify.DOM.input);
                     } else {
-                        tag = tagify.getTagElmByValue(data.value);
-
                         const newTagData = { ...data, __isValid: true };
                         delete newTagData.title;
                         delete newTagData["aria-invalid"];
@@ -339,7 +434,7 @@
                 });
 
                 tagify.on('add', function ({ detail: { data, tag } }) {
-                    debugger;
+                    //debugger;
                     const isValid = validateTag(data);
                     if (isValid !== true) {
                         tagify.replaceTag(tag, { ...data, __isValid: isValid });

@@ -1,0 +1,177 @@
+body {
+  font-family: sans-serif;
+  font-size: small;
+}
+
+a {
+  color: blue;
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+a:visited {
+  color: blue;
+}
+
+div.row > div[class^='col-'] {
+  margin-bottom: 5px;
+}
+
+.no-margin {
+  margin-bottom: 0 !important;
+}
+
+.highlight-row {
+  background-color: gainsboro;
+  margin-bottom: 0;
+  display: flex;
+  align-items: center;
+}
+
+label {
+  display: block;
+  white-space: nowrap;
+}
+
+.no-wrap {
+  white-space: nowrap;
+}
+
+.box {
+  margin-bottom: 0;
+  padding: 5px 0 5px 0;
+}
+
+input,
+textarea,
+select {
+  width: 100%;
+  padding: 3px;
+  box-sizing: border-box;
+  resize: none;
+}
+
+/* Prevent browser password manager suggestions */
+input:not([type='submit']):not([type='search']) {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  background-color: white !important;
+  color: inherit !important;
+}
+
+/* Reset autofill styles */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active {
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: inherit !important;
+  transition: background-color 5000s ease-in-out 0s;
+  box-shadow: inset 0 0 20px 20px white;
+}
+
+textarea {
+  max-height: 4.5em;
+  overflow-y: auto;
+}
+
+textarea.locked {
+  background-color: #f0f0f0;
+}
+
+.label-right {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.bold {
+  font-weight: bold;
+}
+
+.inline-label-input {
+  display: flex;
+  align-items: center;
+}
+
+.inline-label-input label {
+  margin-right: 10px;
+  line-height: 2em;
+  flex-shrink: 0;
+}
+
+.inline-label-input input {
+  flex: 1 1 0%;
+}
+
+.inline-label-input::after {
+  content: '';
+  display: table;
+  clear: both;
+}
+
+table#translations {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0 5px;
+}
+
+table#translations td {
+  border: none;
+  padding-bottom: 5px;
+}
+
+table#translations td:first-child {
+  padding-right: 20px;
+  text-wrap: nowrap;
+}
+
+table#translations td:nth-child(2) {
+  width: 100%;
+}
+
+tags.tagify {
+  width: 100%;
+}
+
+.tagify__tag[aria-invalid='true'] > div {
+  color: red;
+}
+
+.customTagify {
+  --tags-disabled-bg: white;
+  --readonly-striped: 0;
+}
+
+.customTagify[disabled] {
+  --tag-bg: var(--tags-disabled-bg);
+  opacity: 1;
+}
+
+.tooltip {
+  position: absolute;
+  z-index: 999;
+  opacity: 0.8;
+  background-color: #F8D7DA;
+  color: #721C24;
+  padding: 8px 12px;
+  border-radius: 5px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  transition: opacity 0.3s ease;
+}
+
+.tooltip-fade-out {
+  animation: tooltip-fadeOut 3s ease-out forwards;
+}
+
+@keyframes tooltip-fadeOut {
+  from {
+    opacity: 0.8;
+  }
+  to {
+    opacity: 0;
+  }
+}
