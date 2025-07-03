@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { ICategoryLikeTreeElement, ITreeElement } from '@lhq/lhq-generators';
 import { getElementFullPath, toPascalCasing } from './utils';
 import { isVirtualTreeElement, VirtualTreeElement } from './elements';
-import { SearchTreeOptions, AppTreeElementType, IVirtualLanguageElement } from './types';
+import { SearchTreeOptions, AppTreeElementType, IVirtualLanguageElement } from '../shared/types';
 import { appContext } from './context';
 
 // https://code.visualstudio.com/api/references/icons-in-labels#icon-listing

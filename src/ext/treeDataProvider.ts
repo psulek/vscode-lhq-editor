@@ -11,7 +11,7 @@ import { detectFormatting, generatorUtils, isNullOrEmpty, ModelUtils } from '@lh
 import { LhqTreeItem } from './treeItem';
 import { validateName } from './validator';
 import { filterTreeElements, filterVirtualTreeElements, isVirtualTreeElement, VirtualRootElement } from './elements';
-import type { SearchTreeOptions, MatchingElement, CultureInfo, IVirtualLanguageElement, ValidationError } from './types';
+import type { SearchTreeOptions, MatchingElement, CultureInfo, IVirtualLanguageElement, ValidationError } from '../shared/types';
 import { appContext } from './context';
 import {
     getMessageBoxText, createTreeElementPaths, findChildsByPaths, matchForSubstring,

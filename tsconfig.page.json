@@ -1,0 +1,37 @@
+{
+  "compilerOptions": {
+    "noEmit": true,
+    "module": "ESNext",
+
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "allowImportingTsExtensions": true,
+    "moduleDetection": "force",
+
+    "jsx": "preserve",
+    "jsxImportSource": "vue",
+
+    "noImplicitThis": true,
+    "strict": true,
+
+    "verbatimModuleSyntax": true,
+
+    "target": "ESNext",
+    "useDefineForClassFields": true,
+
+    // Recommended
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    // See <https://github.com/vuejs/vue-cli/pull/5688>
+    "skipLibCheck": true,
+
+    "lib": [
+      "ES2020",
+
+      "DOM",
+      "DOM.Iterable"
+    ],
+
+    "types": []
+  }
+}

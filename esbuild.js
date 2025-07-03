@@ -33,10 +33,12 @@ const copyFilesPlugin = copy({
     watch: watch
 });
 
+
+
 async function main() {
     const ctx = await esbuild.context({
         entryPoints: [
-            'src/extension.ts'
+            'src/ext/extension.ts'
         ],
         bundle: true,
         format: 'cjs',

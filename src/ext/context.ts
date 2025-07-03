@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { IVirtualLanguageElement } from './types';
+import { IVirtualLanguageElement } from '../shared/types';
 import { ITreeElement } from '@lhq/lhq-generators';
 import { VirtualTreeElement } from './elements';
 

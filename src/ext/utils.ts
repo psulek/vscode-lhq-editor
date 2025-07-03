@@ -5,7 +5,7 @@ import type { FileInfo, ReadFileInfoOptions, ITreeElementPaths, ITreeElement, IR
 import { fileUtils, isNullOrEmpty, ModelUtils, strCompare } from '@lhq/lhq-generators';
 
 import { ILogger, VsCodeLogger } from './logger';
-import { CultureInfo, CulturesMap, MatchForSubstringResult } from './types';
+import { CultureInfo, CulturesMap, MatchForSubstringResult } from '../shared/types';
 
 const messageBoxPrefix = '[LHQ Editor]';
 

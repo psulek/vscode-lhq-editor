@@ -1,6 +1,6 @@
 import { ICategoryLikeTreeElement, IRootModelElement, isNullOrEmpty, ITreeElement, ITreeElementPaths, ModelUtils, TreeElementType } from '@lhq/lhq-generators';
 import { createTreeElementPaths } from './utils';
-import type { IVirtualLanguageElement, IVirtualTreeElement, VirtualElementType } from './types';
+import type { IVirtualLanguageElement, IVirtualTreeElement, VirtualElementType } from '../shared/types';
 
 export function isVirtualTreeElement(element: ITreeElement | undefined, elementType?: VirtualElementType): boolean {
     return element !== undefined && element instanceof VirtualTreeElement && (!elementType || element.virtualElementType === elementType);
