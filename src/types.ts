@@ -62,3 +62,9 @@ export type CultureInfo = {
 export type CulturesMap = Record<string, CultureInfo>;
 
 export type ValidationError = { message: string, detail?: string };
+
+export type HtmlPageMessage = {
+    command: 'loadPage';
+    element: Object;
+    file: string;
+};

@@ -91,8 +91,7 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
     private _onDidChangeTreeData: vscode.EventEmitter<(ITreeElement | undefined)[] | undefined> = new vscode.EventEmitter<ITreeElement[] | undefined>();
     readonly onDidChangeTreeData: vscode.Event<any> = this._onDidChangeTreeData.event;
 
-    //private currentRootModel: IRootModelElement | null = null;
-    private currentRootModel: IRootModelElement | undefined;
+    private _currentRootModel: IRootModelElement | undefined;
     private currentVirtualRootElement: VirtualRootElement | null = null;
     private currentDocument: vscode.TextDocument | null = null;
     private currentJsonModel: LhqModel | null = null;
@@ -148,13 +147,16 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
     }
 
     private get resourcesUnderRoot(): boolean {
-        return this.currentRootModel?.options.resources === 'All';
+        return this._currentRootModel?.options.resources === 'All';
     }
 
     private get isTreeStructure(): boolean {
-        return this.currentRootModel?.options.categories === true;
+        return this._currentRootModel?.options.categories === true;
     }
 
+    public get currentRootModel(): IRootModelElement | undefined {
+        return this._currentRootModel;
+    }
 
     private async projectProperties(): Promise<void> {
         if (!this.currentDocument) {
@@ -165,7 +167,6 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
             value: boolean;
         }
 
-        //const root = this.currentRootModel!;
         const treeStructure = this.isTreeStructure;
         const resourcesUnderRoot = this.resourcesUnderRoot;
 
@@ -268,9 +269,9 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
                 return;
             }
 
-            this.currentRootModel!.options.categories = layout.value;
+            this._currentRootModel!.options.categories = layout.value;
             if (!layout.value) {
-                this.currentRootModel!.options.resources = 'All';
+                this._currentRootModel!.options.resources = 'All';
             }
             await saveChanges();
         };
@@ -309,7 +310,7 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
                 return;
             }
 
-            this.currentRootModel!.options.resources = selected.value ? 'All' : 'Categories';
+            this._currentRootModel!.options.resources = selected.value ? 'All' : 'Categories';
             await saveChanges();
         };
 
@@ -373,7 +374,7 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
                 const filter = searchText.substring(1);
                 const searchTreePaths = createTreeElementPaths(filter.length === 0 ? '/' : filter, true);
                 const paths = searchTreePaths.getPaths(true);
-                const elems = findChildsByPaths(this.currentRootModel!, searchTreePaths!);
+                const elems = findChildsByPaths(this._currentRootModel!, searchTreePaths!);
                 const elemIdx = -1;
                 this._currentSearch = { type: 'path', searchText, filter, paths, elems, uid: searchUid, elemIdx };
             }
@@ -393,7 +394,7 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
             } else {
                 const elems: MatchingElement[] = [];
 
-                this.currentRootModel!.iterateTree((elem, leaf) => {
+                this._currentRootModel!.iterateTree((elem, leaf) => {
                     let match = matchForSubstring(elem.name, filter, true);
                     if (match.match !== 'none') {
                         elems.push({ element: elem, match, leaf });
@@ -407,14 +408,14 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
 
         this._onDidChangeTreeData.fire(undefined);
 
-        if (this.currentRootModel) {
+        if (this._currentRootModel) {
             let elemToFocus: ITreeElement | undefined;
 
             if (this._currentSearch.type === 'language') {
                 elemToFocus = this.currentVirtualRootElement!.languagesRoot.find(this._currentSearch.filter ?? '');
             } else if (this._currentSearch.type === 'path') {
                 if (this._currentSearch.searchText === '/' || this._currentSearch.searchText === '\\') {
-                    elemToFocus = this.currentRootModel;
+                    elemToFocus = this._currentRootModel;
                     this._currentSearch.elemIdx = -1;
                 } else {
                     // const elems = this._currentSearch.elems;
@@ -471,7 +472,7 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
         let itemToUse: ITreeElement | undefined = this.view.selection[0];
 
         if (!itemToUse) {
-            itemToUse = this.currentRootModel;
+            itemToUse = this._currentRootModel;
         }
 
         if (itemToUse) {
@@ -528,7 +529,7 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
         }
 
         if (element.elementType === 'resource') {
-            return element.parent ?? this.currentRootModel;
+            return element.parent ?? this._currentRootModel;
         }
 
         return element.parent;
@@ -553,7 +554,7 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
     }
 
     private getTreeItems(source: DragTreeItem[]): ITreeElement[] {
-        const root = this.currentRootModel;
+        const root = this._currentRootModel;
         return isNullOrEmpty(root)
             ? []
             : source.map(item => {
@@ -666,7 +667,7 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
 
         const langElement = selectedElements[0];
 
-        if (this.currentRootModel!.primaryLanguage === langElement.name) {
+        if (this._currentRootModel!.primaryLanguage === langElement.name) {
             return await showMessageBox('info', `Language '${getCultureDesc(langElement.name)}' is already marked as primary.`);
         }
 
@@ -679,7 +680,7 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
             return;
         }
 
-        this.currentRootModel!.primaryLanguage = langElement.name;
+        this._currentRootModel!.primaryLanguage = langElement.name;
 
         const success = await this.applyChangesToTextDocument();
         await showMessageBox(success ? 'info' : 'err', success
@@ -697,7 +698,7 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
         const selectedCount = elemsToDelete.length;
         if (selectedCount === 0) { return; }
 
-        const restCount = Math.max(0, this.currentRootModel!.languages.length - selectedCount);
+        const restCount = Math.max(0, this._currentRootModel!.languages.length - selectedCount);
         if (restCount === 0) {
             return await showMessageBox('warn', `Cannot delete all languages. At least one language must remain.`, { modal: true });
         }
@@ -729,7 +730,7 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
             return;
         }
 
-        const root = this.currentRootModel!;
+        const root = this._currentRootModel!;
         elemsToDelete.forEach(elem => {
             if (!root.removeLanguage(elem.name)) {
                 logger().log('warn', `LhqTreeDataProvider.deleteLanguage: Cannot delete language '${elem.name}' - not found in model.`);
@@ -979,11 +980,11 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
 
             const items = [] as TranslationQuickPickItem[];
 
-            if (!this.currentRootModel) {
+            if (!this._currentRootModel) {
                 return resolve(undefined);
             }
 
-            const root = this.currentRootModel;
+            const root = this._currentRootModel;
 
             const langs: string[] = [root.primaryLanguage];
             if (root.languages?.length > 0) {
@@ -1049,7 +1050,7 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
         }
 
 
-        const serializedRoot = ModelUtils.serializeTreeElement(this.currentRootModel!, this.currentFormatting);
+        const serializedRoot = ModelUtils.serializeTreeElement(this._currentRootModel!, this.currentFormatting);
         const edit = new vscode.WorkspaceEdit();
         const doc = this.currentDocument!;
         edit.replace(
@@ -1067,13 +1068,13 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
     private validateDocument(): { success: boolean, error: ValidationError | undefined } {
         this._validationError = undefined;
 
-        if (this.currentRootModel) {
-            if (!this.resourcesUnderRoot && this.currentRootModel.resources.length > 0) {
+        if (this._currentRootModel) {
+            if (!this.resourcesUnderRoot && this._currentRootModel.resources.length > 0) {
                 this._validationError = {
                     message: `Resources are not allowed under root!`,
                     detail: `Please change project properties to 'Allow resources under root' or move resources to categories.`
                 };
-            } else if (!this.isTreeStructure && this.currentRootModel.categories.length > 0) {
+            } else if (!this.isTreeStructure && this._currentRootModel.categories.length > 0) {
                 this._validationError = {
                     message: `Categories are not allowed in flat structure!`,
                     detail: `Please change project properties 'Layout' to 'Hierarchical tree structure' or remove categories from the root.`
@@ -1095,7 +1096,7 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
         }
 
         element = element || (this.selectedElements.length > 0 ? this.selectedElements[0] : undefined);
-        element = element ?? this.currentRootModel!;
+        element = element ?? this._currentRootModel!;
 
         if (!this.currentDocument || !element) {
             return;
@@ -1192,7 +1193,7 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
 
         const added: string[] = [];
         result.map(item => item.culture.name).forEach(cultureName => {
-            if (this.currentRootModel?.addLanguage(cultureName)) {
+            if (this._currentRootModel?.addLanguage(cultureName)) {
                 const culture = cultures[cultureName];
                 if (culture) {
                     added.push(`${culture.engName} (${culture.name})`);
@@ -1305,7 +1306,7 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
             const baseName = path.basename(document.uri.fsPath);
             this.view.title = `${baseName} [LHQ Structure]`;
 
-            if (this.currentDocument?.uri.toString() !== document.uri.toString() || !this.currentRootModel || forceRefresh === true) {
+            if (this.currentDocument?.uri.toString() !== document.uri.toString() || !this._currentRootModel || forceRefresh === true) {
                 this.currentDocument = document;
                 this.refresh();
             }
@@ -1324,7 +1325,7 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
         if (this.currentDocument) {
             this.currentJsonModel = null;
 
-            this.currentRootModel = undefined;
+            this._currentRootModel = undefined;
             this.currentVirtualRootElement = null;
             try {
                 const docText = this.currentDocument.getText();
@@ -1346,8 +1347,8 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
                 try {
                     validateResult = generatorUtils.validateLhqModel(this.currentJsonModel);
                     if (validateResult.success && validateResult.model) {
-                        this.currentRootModel = ModelUtils.createRootElement(validateResult.model);
-                        this.currentVirtualRootElement = new VirtualRootElement(this.currentRootModel, appContext.languagesVisible);
+                        this._currentRootModel = ModelUtils.createRootElement(validateResult.model);
+                        this.currentVirtualRootElement = new VirtualRootElement(this._currentRootModel, appContext.languagesVisible);
                     } else {
                         this.currentJsonModel = null;
                     }
@@ -1359,7 +1360,7 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
                     return;
                 }
 
-                if (this.currentRootModel === undefined) {
+                if (this._currentRootModel === undefined) {
                     const error = validateResult
                         ? `Validation errors while parsing LHQ file '${this.documentPath}': \n${validateResult.error}`
                         : `Error validating LHQ file '${this.documentPath}'`;
@@ -1372,7 +1373,7 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
             }
 
         } else {
-            this.currentRootModel = undefined;
+            this._currentRootModel = undefined;
             this.currentVirtualRootElement = null;
         }
 
@@ -1384,7 +1385,7 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
     }
 
     getChildren(element?: ITreeElement): Thenable<ITreeElement[]> {
-        if (!this.currentRootModel) {
+        if (!this._currentRootModel) {
             return Promise.resolve([]);
         }
 
@@ -1406,7 +1407,7 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
             //if (languagesVisible()) {
             result.push(this.currentVirtualRootElement!.languagesRoot);
             //}
-            result.push(this.currentRootModel);
+            result.push(this._currentRootModel);
         }
 
         return Promise.resolve(result);

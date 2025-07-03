@@ -1,5 +1,7 @@
+/// <reference types="vscode-webview" />
+
 (function () {
-    // const vscode = acquireVsCodeApi();
+    const vscode = acquireVsCodeApi();
 
     /**
      * @typedef {Object} CultureInfo
@@ -37,6 +39,19 @@
         return lang ?? '';
     }
 
+    window.addEventListener('message', event => {
+        debugger;
+        message = event.data; // The json data that the extension sent
+        switch (message.command) {
+            case 'loadPage': {
+                const element = message.element;
+                const file = message.file;
+                console.log(`[Page] Loading page for file: ${file}, element: `, element);
+                break;
+            }
+        }
+    });
+
     // Add the method to String prototype
     String.prototype.toPascalCase = function () {
         if (!this) {
@@ -46,69 +61,105 @@
         return _.startCase(this);
     };
 
+    /**
+     * @typedef {Object} TooltipItem
+     * @property {HTMLDivElement} tooltip
+     * @property {string} uid
+     * @property {number} date
+     * @property {number} hideTimeoutId
+     * @property {number} removeTimeoutId
+     */
 
-    const tooltips = new Map();
+    /** @type {Map<string, TooltipItem>} */
+    const tooltipsMap = new Map();
+
+    let handleClickOutsideInitialized = false;
+
+    /** @param {TooltipItem} item */
+    function removeTooltip(item) {
+        if (item && item.tooltip) {
+            if (item.hideTimeoutId) { clearTimeout(item.hideTimeoutId); }
+            if (item.removeTimeoutId) { clearTimeout(item.removeTimeoutId); }
+            if (item.tooltip.isConnected) { item.tooltip.remove(); }
+            if (tooltipsMap.has(item.uid)) {
+                tooltipsMap.delete(item.uid);
+                //console.log(`[Tooltip] Removed tooltip '${item.uid}'.`);
+            }
+            item.tooltip = null;
+        }
+    };
+
+    /** @param {TooltipItem} item */
+    function cancelRemoval(item) {
+        if (item && item.tooltip) {
+            if (item.hideTimeoutId) { clearTimeout(item.hideTimeoutId); }
+            if (item.removeTimeoutId) { clearTimeout(item.removeTimeoutId); }
+            item.tooltip.classList.remove('tooltip-fade-out');
+            //console.log(`[Tooltip] Cancel removal of tooltip '${item.uid}'.`);
+        }
+    }
 
     function showTooltip(uid, message, anchorEl) {
-        const timeout = 3000;
-        const oldTooltip = tooltips.get(uid);
-        if (oldTooltip) {
-            if (oldTooltip.isConnected) {
-                oldTooltip.remove();
-            }
-            tooltips.delete(uid);
+        const removeTimeout = 3000;
+        const hideTimeout = 1000;
+        const oldTooltipItem = tooltipsMap.get(uid);
+        if (oldTooltipItem) {
+            removeTooltip(oldTooltipItem);
         }
 
         let tooltip = document.createElement('div');
-        tooltips.set(uid, tooltip);
         tooltip.textContent = message;
         tooltip.classList.add('tooltip'); // Add the main tooltip class
-        let hideTimeoutId;
-        let removeTimeoutId;
-
-        const removeTooltip = () => {
-            if (tooltip) {
-                clearTimeout(hideTimeoutId);
-                clearTimeout(removeTimeoutId);
-                if (tooltip.isConnected) {
-                    tooltip.remove();
-                }
-                tooltips.delete(uid);
-                tooltip = null;
-            }
+        // let hideTimeoutId;
+        // let removeTimeoutId;
+        const tooltipItem = {
+            tooltip: tooltip,
+            uid: uid,
+            date: Date.now(),
+            hideTimeoutId: null,
+            removeTimeoutId: null
         };
+        tooltipsMap.set(uid, tooltipItem);
 
         const scheduleRemoval = () => {
-            hideTimeoutId = window.setTimeout(() => {
-                tooltip.classList.add('tooltip-fade-out');
+            if (tooltipItem.tooltip) {
+                //console.log(`[Tooltip] scheduled hide timeout(${hideTimeout}) for tooltip '${tooltipItem.uid}'.`);
+                tooltipItem.hideTimeoutId = window.setTimeout(() => {
+                    if (tooltipItem.tooltip) {
+                        tooltipItem.tooltip.classList.add('tooltip-fade-out');
+                    }
 
-                removeTimeoutId = window.setTimeout(() => {
-                    removeTooltip();
-                }, timeout);
-            }, 1000);
-        };;
-
-        const cancelRemoval = () => {
-            clearTimeout(hideTimeoutId);
-            clearTimeout(removeTimeoutId);
-            tooltip.classList.remove('tooltip-fade-out');
+                    //console.log(`[Tooltip] scheduled remove timeout(${removeTimeout}) for tooltip '${tooltipItem.uid}'.`);
+                    tooltipItem.removeTimeoutId = window.setTimeout(() => {
+                        removeTooltip(tooltipItem);
+                    }, removeTimeout);
+                }, hideTimeout);
+            }
         };
 
         const handleClickOutside = (event) => {
-            if (tooltip && tooltip !== event.target) {
-                cancelRemoval();
-                removeTooltip();
+            // remove all tooltipList
+            if (tooltipsMap.size > 0) {
+                const now = Date.now();
+                tooltipsMap.values().filter(x => (now - x.date) > 200).forEach(item => {
+                    if (item.tooltip && !item.tooltip.contains(event.target)) {
+                        //console.log(`[Tooltip] click outside, remove/cancel tooltip '${item.uid}'.`);
+                        cancelRemoval(item);
+                        removeTooltip(item);
+                    }
+                });
             }
 
-            document.removeEventListener('click', handleClickOutside, true);
+            //document.removeEventListener('click', handleClickOutside, true);
         };
 
-        tooltip.addEventListener('mouseenter', cancelRemoval);
+        tooltip.addEventListener('mouseenter', () => { cancelRemoval(tooltipItem); });
         tooltip.addEventListener('mouseleave', scheduleRemoval);
         tooltip.addEventListener('click', (e) => {
             e.stopPropagation();
-            cancelRemoval();
-            removeTooltip();
+            //console.log(`[Tooltip] click on tooltip, remove/cancel tooltip '${item.uid}'.`);
+            cancelRemoval(tooltipItem);
+            removeTooltip(tooltipItem);
         });
 
         document.body.appendChild(tooltip);
@@ -116,11 +167,15 @@
         tooltip.style.left = `${rect.left + window.scrollX}px`;
         tooltip.style.top = `${rect.bottom + window.scrollY + 5}px`;
 
-        setTimeout(() => {
-            if (tooltip) { // Check if tooltip still exists
-                document.addEventListener('click', handleClickOutside, true);
-            }
-        }, 200);
+        if (!handleClickOutsideInitialized) {
+            setTimeout(() => {
+                if (!handleClickOutsideInitialized && tooltipItem.tooltip) {
+                    handleClickOutsideInitialized = true;
+                    //console.log(`[Tooltip] initialized click outside handler.`);
+                    document.addEventListener('click', handleClickOutside, true);
+                }
+            }, 200);
+        }
 
         scheduleRemoval();
     }
@@ -417,7 +472,6 @@
                 });
 
                 tagify.on('edit:updated', function ({ detail: { data, tag } }) {
-                    debugger;
                     const isValid = validateTag(data);
                     tag = tagify.getTagElmByValue(data.value);
                     if (isValid !== true) {

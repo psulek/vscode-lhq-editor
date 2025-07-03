@@ -3,20 +3,21 @@
 
 <head>
     <meta charset="UTF-8">
+    <!-- <000meta http-equiv="Content-Security-Policy" content=""> -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Editor</title>
-    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
-    <script src="lodash.min.js"></script>
-    <!-- http://flexboxgrid.com/ -->
-    <link rel="stylesheet" href="flexboxgrid.min.css" type="text/css">
-    <!-- https://yaireo.github.io/tagify/ -->
-    <script src="tagify/tagify.js"></script>
-    <script src="tagify/tagify.polyfills.min.js"></script>
-    <script src="tagify/dragsort.js"></script>
-    <link href="tagify/tagify.css" rel="stylesheet" type="text/css" />
-    <link href="tagify/dragsort.css" rel="stylesheet" type="text/css" />
+    <title>LHQ Editor</title>
 
-    <link href="page.css" rel="stylesheet" type="text/css" />
+    <link href="flexboxgrid.min.css" rel="stylesheet">
+    <link href="tagify/tagify.css" rel="stylesheet" />
+    <link href="tagify/dragsort.css" rel="stylesheet" />
+    <link href="page.css" rel="stylesheet" />
+
+    <script nonce="" src="vue/vue.global.js"></script>
+    <script nonce="" src="lodash.min.js"></script>
+
+    <script nonce="" src="tagify/tagify.js"></script>
+    <script nonce="" src="tagify/tagify.polyfills.min.js"></script>
+    <script nonce="" src="tagify/dragsort.js"></script>
 </head>
 
 <body>
@@ -80,7 +81,7 @@
                                 </td>
                                 <td v-if="paramsEnabled">
                                     <button type="button" style="padding: 5 0 5 0;height:35px" id="cancelEditParameters"
-                                    data-cancel="true" @click="editParameters">Cancel</button>
+                                        data-cancel="true" @click="editParameters">Cancel</button>
                                 </td>
                             </tr>
                         </table>

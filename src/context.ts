@@ -21,6 +21,8 @@ const contextKeys = {
 export class AppContext {
     private _ctx!: vscode.ExtensionContext;
     private _isEditorActive = false;
+    private activeTheme = ''; // not supported yet
+    private _selectedElements: ITreeElement[] = [];
 
     public init(ctx: vscode.ExtensionContext) {
         this._ctx = ctx;
@@ -51,7 +53,32 @@ export class AppContext {
         }
     }
 
+    public getNonce(): string {
+        let text = '';
+        const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+        for (let i = 0; i < 32; i++) {
+            text += possible.charAt(Math.floor(Math.random() * possible.length));
+        }
+        return text;
+    }
+
+    public getFileUri = (...pathParts: string[]): vscode.Uri => {
+        return vscode.Uri.joinPath(this._ctx.extensionUri, ...pathParts);
+    };
+
+    public getMediaUri = (webview: vscode.Webview, filename: string, themed: boolean = false): vscode.Uri => {
+        const diskPath = themed
+            ? vscode.Uri.joinPath(this._ctx.extensionUri, 'media', this.activeTheme, filename)
+            : vscode.Uri.joinPath(this._ctx.extensionUri, 'media', filename);
+        return webview.asWebviewUri(diskPath);
+    };
+
+    public get selectedElements(): ITreeElement[] {
+        return this._selectedElements ?? [];
+    }
+
     public setTreeViewHasSelectedItem(selectedElements: ITreeElement[]): void {
+        this._selectedElements = selectedElements;
         const hasSelectedItem = selectedElements.length === 1;
         const hasMultiSelection = selectedElements.length > 1;
         let hasSelectedDiffParents = false;

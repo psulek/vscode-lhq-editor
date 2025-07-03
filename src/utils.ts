@@ -7,6 +7,11 @@ import { fileUtils, isNullOrEmpty, ModelUtils, strCompare } from '@lhq/lhq-gener
 import { ILogger, VsCodeLogger } from './logger';
 import { CultureInfo, CulturesMap, MatchForSubstringResult } from './types';
 
+import 'reflect-metadata';
+
+import { instanceToPlain } from 'class-transformer';
+
+
 const messageBoxPrefix = '[LHQ Editor]';
 
 let _logger: VsCodeLogger = new VsCodeLogger();
@@ -252,4 +257,8 @@ export function findCulture(name: string): CultureInfo | undefined {
 export function getCultureDesc(name: string): string {
     const culture = findCulture(name);
     return culture ? `${culture?.engName ?? ''} (${culture?.name ?? ''})` : name;
+}
+
+export function treeElementToObject<T extends ITreeElement>(element: T): Object {
+    return instanceToPlain(element, {enableCircularCheck: true});
 }

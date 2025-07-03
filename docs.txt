@@ -4,18 +4,6 @@ https://code.visualstudio.com/api/references/icons-in-labels#icon-listing
 tree view:
 https://code.visualstudio.com/api/extension-guides/tree-view
 
+http://flexboxgrid.com/
 
-------------
-"keybindings": [
-      {
-        "command": "lhqTreeView.renameElement",
-        "key": "F2",
-        "when": "focusedView == lhqTreeView && lhqEditorIsActive && lhqTreeHasSelectedItem"
-      }
-
-
-      {
-        "command": "lhqTreeView.findInTreeView",
-        "key": "ctrl+f",
-        "when": "lhqEditorIsActive"
-      },
+https://yaireo.github.io/tagify/
