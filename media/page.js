@@ -40,7 +40,6 @@
     }
 
     window.addEventListener('message', event => {
-        debugger;
         message = event.data; // The json data that the extension sent
         switch (message.command) {
             case 'loadPage': {
@@ -322,7 +321,6 @@
             },
 
             editParameters(e) {
-                //debugger;
                 const isCancel = e.target.dataset['cancel'] === 'true';
                 this.paramsEnabled = !this.paramsEnabled;
                 tagifyParams.setDisabled(!this.paramsEnabled);
@@ -337,7 +335,6 @@
                             }));
                         tagifyParams.loadOriginalValues(tags);
                     } else {
-                        debugger;
                         const invalidTagElm = tagifyParams.getTagElms().find(node => {
                             const tagData = tagifyParams.getSetTagData(node);
                             return tagData && tagData.__isValid !== true;
@@ -488,7 +485,6 @@
                 });
 
                 tagify.on('add', function ({ detail: { data, tag } }) {
-                    //debugger;
                     const isValid = validateTag(data);
                     if (isValid !== true) {
                         tagify.replaceTag(tag, { ...data, __isValid: isValid });

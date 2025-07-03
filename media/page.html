@@ -12,7 +12,7 @@
     <link href="tagify/dragsort.css" rel="stylesheet" />
     <link href="page.css" rel="stylesheet" />
 
-    <script nonce="" src="vue/vue.global.js"></script>
+    <script nonce="" src="vue/vue.global.prod.js"></script>
     <script nonce="" src="lodash.min.js"></script>
 
     <script nonce="" src="tagify/tagify.js"></script>
@@ -22,113 +22,112 @@
 
 <body>
     <div id="app">
-        <div class="row start-xs middle-xs">
-            <div class="col-xs-1 label-right">
-                <label for="name">{{ item.elementType.toPascalCase() }}:</label>
-            </div>
-            <div class="col-xs">
-                <a href="#" @click="openResource" :title="'Click to locate ' + item.elementType + ' in tree view...'">
-                    {{ fullPath }}
-                </a>
-            </div>
-        </div>
-        <div class="row start-xs middle-xs ">
-            <div class="col-xs-1 label-right">
-                <label for="name">Name:</label>
-            </div>
-            <div class="col-xs">
-                <input type="text" id="name" v-model="item.name" autocomplete="off">
-            </div>
-            <div class="col-xs-1 label-right" v-if="isResource">
-                <label for="state">State:</label>
-            </div>
-            <div class="col-xs-3" v-if="isResource">
-                <select id="state" v-model="item.state">
-                    <option disabled value="">Please select one</option>
-                    <option>New</option>
-                    <option>Edited</option>
-                    <option>NeedsReview</option>
-                    <option>Final</option>
-                </select>
-                <!-- <input type="hidden" id="resourceState" value="{{ item.state }}" ref="resourceState"> -->
-            </div>
-        </div>
-        <div class="row start-xs middle-xs">
-            <div class="col-xs-1 label-right">
-                <label for="description">Description:</label>
-            </div>
-            <div class="col-xs">
-                <input type="text" id="description" v-model="item.description" autocomplete="off">
-            </div>
-        </div>
-        <div class="row start-xs middle-xs" v-if="isResource">
-            <div class="col-xs-1 label-right">
-                <label for="parameters">Parameters:</label>
-            </div>
-            <div class="col-xs-11">
-                <div class="row no-margin">
-                    <div class="col-xs">
-                        <table style="width: 100%;">
-                            <tr>
-                                <td style="width: 100%;">
-                                    <input type="hidden" id="parameters" class="customTagify" ref="parameters">
+        <table id="layout">
+            <tr>
+                <td>
+                    <label for="name">{{ item.elementType.toPascalCase() }}:</label>
+                </td>
+                <td class="fullrow">
+                    <a href="#" @click="openResource"
+                        :title="'Click to locate ' + item.elementType + ' in tree view...'">
+                        {{ fullPath }}
+                    </a>
+                </td>
+            </tr>
+            <tr>
+                <td>
+                    <label for="name">Name:</label>
+                </td>
+                <td>
+                    <div style="display: flex; flex-direction: row; align-items: center; gap: 1em; width: 100%;">
+                        <input type="text" id="name" v-model="item.name" autocomplete="off" style="flex-basis: 60%;">
+
+                        <template v-if="isResource">
+                            <label for="state">State:</label>
+                            <select id="state" v-model="item.state" style="flex-basis: 40%;">
+                                <option disabled value="">Please select one</option>
+                                <option>New</option>
+                                <option>Edited</option>
+                                <option>NeedsReview</option>
+                                <option>Final</option>
+                            </select>
+                        </template>
+                    </div>
+                </td>
+            </tr>
+            <tr>
+                <td>
+                    <label for="description">Description:</label>
+                </td>
+                <td>
+                    <input type="text" id="description" v-model="item.description" autocomplete="off">
+                </td>
+            </tr>
+            <tr>
+                <td>
+                    <label for="parameters">Parameters:</label>
+                </td>
+                <td>
+                    <table style="width: 100%;">
+                        <tr>
+                            <td style="width: 100%; padding-left: 0;">
+                                <input type="hidden" id="parameters" class="customTagify" ref="parameters">
+                            </td>
+                            <td>
+                                <button type="button" style="padding: 5 0 5 0;height:35px" id="editParameters"
+                                    @click="editParameters">
+                                    {{ paramsEnabled ? 'Apply' : 'Edit' }}
+                                </button>
+                            </td>
+                            <td v-if="paramsEnabled">
+                                <button type="button" style="padding: 5 0 5 0;height:35px" id="cancelEditParameters"
+                                    data-cancel="true" @click="editParameters">Cancel</button>
+                            </td>
+                        </tr>
+                    </table>
+                </td>
+            </tr>
+            <template v-if="isResource">
+                <tr style="padding-bottom: 15px;">
+                    <td>&nbsp;</td>
+                    <td class="highlight-row" style="padding: 5px;">
+                        <label>Translations ({{ translationCount }})</label>
+                    </td>
+                </tr>
+                <tr>
+                    <td>&nbsp;</td>
+                    <td>
+                        <table id="translations" v-if="translations.length > 0">
+                            <tr v-for="(translation, index) in translations" :key="culture">
+                                <td style="padding-left: 0;">
+                                    <label :class="{ 'bold': translation.isPrimary }" class="no-wrap"
+                                        style="text-align: left;"
+                                        :title="translation.culture + (translation.isPrimary ? ' [primary]' : '')">
+                                        {{ translation.culture }}
+                                    </label>
                                 </td>
                                 <td>
-                                    <button type="button" style="padding: 5 0 5 0;height:35px" id="editParameters"
-                                        @click="editParameters">
-                                        {{ paramsEnabled ? 'Apply' : 'Edit' }}
-                                    </button>
+                                    <textarea v-model="translation.valueRef.value" rows="1" @input="autoResizeTextarea"
+                                        :placeholder="'Translation for ' + translation.culture"
+                                        :readonly="translation.valueRef.locked"
+                                        :class="{ 'locked': translation.valueRef.locked }"
+                                        :title="translation.valueRef.locked ? 'Editing of translation is locked.':''"></textarea>
                                 </td>
-                                <td v-if="paramsEnabled">
-                                    <button type="button" style="padding: 5 0 5 0;height:35px" id="cancelEditParameters"
-                                        data-cancel="true" @click="editParameters">Cancel</button>
+                                <td style="vertical-align: baseline; padding-left: 5px;">
+                                    <button @click="lockTranslation(translation)"
+                                        :title="translation.valueRef.locked ? 'Unlock translation' : 'Lock translation'">
+                                        {{ translation.valueRef.locked ? 'U' : 'L' }}
+                                    </button>
                                 </td>
                             </tr>
                         </table>
-                    </div>
-                    <!-- <div class="col-xs-1">
-                        
-                    </div> -->
-                </div>
-            </div>
-        </div>
-        <div class="row start-xs middle-xs" style="padding-bottom: 15px;" v-if="isResource">
-            <div class="col-xs-offset-1 col-xs highlight-row">
-                <div class="box">
-                    <label>Translations ({{ translationCount }})</label>
-                </div>
-            </div>
-        </div>
-        <div class="row start-xs middle-xs" v-if="isResource">
-            <div class="col-xs-offset-1 col-xs">
-                <table id="translations" v-if="translations.length > 0">
-                    <tr v-for="(translation, index) in translations" :key="index">
-                        <td>
-                            <label :class="{ 'bold': translation.isPrimary }" class="no-wrap"
-                                :title="translation.culture + (translation.isPrimary ? ' [primary]' : '')">
-                                {{ translation.culture }}
-                            </label>
-                        </td>
-                        <td>
-                            <textarea v-model="translation.valueRef.value" rows="1" @input="autoResizeTextarea"
-                                :placeholder="'Translation for ' + translation.culture"
-                                :readonly="translation.valueRef.locked"
-                                :class="{ 'locked': translation.valueRef.locked }"
-                                :title="translation.valueRef.locked ? 'Editing of translation is locked.':''"></textarea>
-                        </td>
-                        <td style="vertical-align: baseline;">
-                            <button @click="lockTranslation(translation)"
-                                :title="translation.valueRef.locked ? 'Unlock translation' : 'Lock translation'">
-                                {{ translation.valueRef.locked ? 'U' : 'L' }}
-                            </button>
-                        </td>
-                    </tr>
-                </table>
-                <div v-else>
-                    <p>No translations available.</p>
-                </div>
-            </div>
-        </div>
+                        <div v-else>
+                            <p>No translations available.</p>
+                        </div>
+                    </td>
+                </tr>
+            </template>
+        </table>
     </div>
 
     <script src="page.js"></script>
