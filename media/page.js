@@ -33,13 +33,18 @@
         message = event.data;
         switch (message.command) {
             case 'loadPage': {
-                debugger;
                 domBody.dataset['loading'] = 'true';
                 const element = message.element;
                 const file = message.file;
                 usedCultures = message.cultures || [];
                 currentPrimaryLang = message.primaryLang;
+                const oldElement = window.pageApp.item;
                 window.pageApp.item = element;
+
+                debugger;
+                window.pageApp.$nextTick(() => {
+                    window.pageApp.bindTagParameters(oldElement);
+                });
                 delete domBody.dataset['loading'];
                 break;
             }
@@ -193,13 +198,6 @@
         },
 
         computed: {
-            // parametersDisplay() {
-            //     if (this.item && this.item.parameters) {
-            //         return this.item.parameters.map(x => `${x.name} (${x.order})`).join(', ');
-            //     }
-            //     return '';
-            // },
-
             translationCount() {
                 if (this.item && this.item.values) {
                     return this.item.values.length;
@@ -252,13 +250,14 @@
         },
 
         mounted() {
+            console.log('Page app mounted');
             // Use nextTick to ensure the DOM has been updated after the initial render.
             this.$nextTick(() => {
                 this.debouncedResize();
 
-                //if (this.isResource) {
-                    this.createParametersTags();
-                //}
+                if (this.isResource) {
+                    // this.createParametersTags();
+                }
             });
             window.addEventListener('resize', this.debouncedResize);
         },
@@ -275,16 +274,33 @@
                 console.log('Item changed');
                 console.log('value: ', value, ', oldValue: ', oldValue);
 
-                // if (oldValue.elementType === 'resource' && !this.isResource) {
-                //     if (tagifyParams) {
-                //         tagifyParams.destroy();
-                //         tagifyParams = null;
-                //     }
+                // if (oldValue.elementType !== value.elementType) {
+                //     this.bindTagParameters();
                 // }
+            },
 
-                // if (value.elementType === 'resource' && !tagifyParams) {
-                //     this.createParametersTags();
-                // }
+            bindTagParameters(oldValue) {
+                debugger;
+
+                const destroy = () => {
+                    if (tagifyParams) {
+                        tagifyParams.destroy();
+                        tagifyParams.DOM.originalInput.value = '';
+                        tagifyParams = null;
+                    }
+                };
+
+                if (oldValue.elementType === 'resource' && !this.isResource) {
+                    destroy();
+                }
+
+                if (this.isResource) {
+                    if (tagifyParams) {
+                        destroy();
+                    }
+
+                    this.createParametersTags();
+                }
             },
 
             editParameters(e) {
@@ -377,8 +393,6 @@
 
                     templates: {
                         tag: function (tagData) {
-                            // const title = tagData.title || 'Double click to edit parameter';
-                            //const title = 'Double click to edit parameter';
                             const title = tagData.__isValid !== true ? tagData.__isValid : 'Double click to edit parameter';
                             const txt1 = tagData.value || '';
                             const txt2 = tagData.__isValid !== true ? '&#9679;' : `(${tagData.order + 1})`;

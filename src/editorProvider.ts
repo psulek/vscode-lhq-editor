@@ -39,7 +39,7 @@ export class LhqEditorProvider implements vscode.CustomTextEditorProvider {
             ]
         };
 
-        const debouncedOnSelectionChanged = debounce(this.onSelectionChanged.bind(this), 500, { leading: false, trailing: true });
+        const debouncedOnSelectionChanged = debounce(this.onSelectionChanged.bind(this), 200, { leading: false, trailing: true });
         appContext.setSelectionChangedCallback(debouncedOnSelectionChanged);
 
         this.treeDataProvider.updateDocument(document);
