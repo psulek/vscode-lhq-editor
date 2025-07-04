@@ -7,3 +7,4 @@ https://code.visualstudio.com/api/extension-guides/tree-view
 http://flexboxgrid.com/
 
 https://yaireo.github.io/tagify/
+https://github.com/yairEO/tagify

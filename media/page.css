@@ -6,6 +6,22 @@ body {
   color: var(--vscode-editor-foreground);
 }
 
+div#loading {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 1em;
+  width: 100%;
+}
+
+body:not([data-loading]) > #loading {
+  display: none;
+}
+
+body[data-loading] > div#app {
+  display: none;
+}
+
 a {
   /* color: blue; */
   color: var(--vscode-textLink-foreground);

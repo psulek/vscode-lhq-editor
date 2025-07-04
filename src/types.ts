@@ -67,4 +67,6 @@ export type HtmlPageMessage = {
     command: 'loadPage';
     element: Object;
     file: string;
+    cultures: CultureInfo[];
+    primaryLang: string;
 };

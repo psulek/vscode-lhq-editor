@@ -13,23 +13,11 @@
      */
 
     /** @type  CultureInfo[] */
-    const usedCultures = [{
-        engName: 'English',
-        name: 'en',
-        nativeName: 'English',
-        lcid: 1033,
-        isNeutral: false
-    }, {
-        engName: 'Slovak',
-        name: 'sk',
-        nativeName: 'Slovenčina',
-        lcid: 1051,
-        isNeutral: false
-    }];
+    let usedCultures = [];
 
     const regexValidCharacters = /^[a-zA-Z]+[a-zA-Z0-9_]*$/;
 
-    const currentPrimaryLang = 'en';
+    let currentPrimaryLang = 'en';
 
     function getCultureName(lang) {
         if (lang && lang !== '') {
@@ -39,13 +27,20 @@
         return lang ?? '';
     }
 
+    const domBody = document.getElementsByTagName('body')[0];
+
     window.addEventListener('message', event => {
-        message = event.data; // The json data that the extension sent
+        message = event.data;
         switch (message.command) {
             case 'loadPage': {
+                debugger;
+                domBody.dataset['loading'] = 'true';
                 const element = message.element;
                 const file = message.file;
-                console.log(`[Page] Loading page for file: ${file}, element: `, element);
+                usedCultures = message.cultures || [];
+                currentPrimaryLang = message.primaryLang;
+                window.pageApp.item = element;
+                delete domBody.dataset['loading'];
                 break;
             }
         }
@@ -188,55 +183,12 @@
     };
     const debounceWait = 500;
 
-    const sampleData = JSON.parse(`{
-  "name": "Title",
-  "elementType": "resource",
-  "description": "This is a sample resource for testing purposes.",
-  "isRoot": false,
-  "paths": {
-    "paths": [
-      "Strings",
-      "Title"
-    ]
-  },
-  "data": {},
-  "state": "Edited",
-  "comment": "Hi {0}, we're glad you are using {1} at {2} EN",
-  "hasParameters": true,
-  "hasValues": true,
-  "parameters": [
-    {
-      "name": "date",
-      "order": 0
-    },
-    {
-      "name": "userName",
-      "order": 1
-    },
-    {
-      "name": "productName",
-      "order": 2
-    }
-  ],
-  "values": [
-    {
-      "languageName": "en",
-      "value": "EN Hi {0}, we're glad you are using {1} at {2} EN",
-      "locked": false
-    },
-    {
-      "languageName": "sk",
-      "value": "SK Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut l",
-      "locked": true
-    }
-  ]
-}`);
-
-    createApp({
+    window.pageApp = createApp({
         data() {
             return {
-                item: sampleData,
-                paramsEnabled: false,
+                // item: sampleData,
+                item: { elementType: 'model' },
+                paramsEnabled: false
             };
         },
 
@@ -281,8 +233,8 @@
             },
 
             fullPath() {
-                if (this.item && this.item.paths && this.item.paths.paths) {
-                    return '/' + this.item.paths.paths.join('/');
+                if (this.item && this.item.paths) {
+                    return '/' + this.item.paths.join('/');
                 }
 
                 return '';
@@ -303,8 +255,10 @@
             // Use nextTick to ensure the DOM has been updated after the initial render.
             this.$nextTick(() => {
                 this.debouncedResize();
-                this.createParametersTags();
-                //this.createStateSelector();
+
+                //if (this.isResource) {
+                    this.createParametersTags();
+                //}
             });
             window.addEventListener('resize', this.debouncedResize);
         },
@@ -316,8 +270,21 @@
         },
 
         methods: {
-            onChange() {
-                console.log('Item changed:', this.item);
+            onChange(value, oldValue) {
+                // console.log('Item changed:', this.item);
+                console.log('Item changed');
+                console.log('value: ', value, ', oldValue: ', oldValue);
+
+                // if (oldValue.elementType === 'resource' && !this.isResource) {
+                //     if (tagifyParams) {
+                //         tagifyParams.destroy();
+                //         tagifyParams = null;
+                //     }
+                // }
+
+                // if (value.elementType === 'resource' && !tagifyParams) {
+                //     this.createParametersTags();
+                // }
             },
 
             editParameters(e) {
@@ -528,15 +495,6 @@
                 }
             },
 
-            // createStateSelector() {
-            //     debugger;
-            //     const tagify = new Tagify(this.$refs.resourceState, {
-            //         enforceWhitelist: true,
-            //         mode: "select",
-            //         whitelist: ['New', 'Edited', 'NeedsReview', 'Final'],
-            //     });
-            // },
-
             resizeAllTextAreas() {
                 const textareas = document.querySelectorAll('textarea');
                 textareas.forEach(textarea => this.resizeTextarea(textarea));
@@ -560,4 +518,6 @@
             }
         }
     }).mount('#app');
+
+    //window.pageApp = pageApp;
 }());

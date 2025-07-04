@@ -259,6 +259,15 @@ export function getCultureDesc(name: string): string {
     return culture ? `${culture?.engName ?? ''} (${culture?.name ?? ''})` : name;
 }
 
-export function treeElementToObject<T extends ITreeElement>(element: T): Object {
-    return instanceToPlain(element, {enableCircularCheck: true});
-}
+// export function treeElementToObject<T extends ITreeElement>(element: T): Object {
+//     const obj = instanceToPlain(element, {enableCircularCheck: true});
+//     // Remove prefix _ from property names
+//     for (const key of Object.keys(obj)) {
+//         if (key.startsWith('_')) {
+//             const newKey = key.substring(1);
+//             obj[newKey] = obj[key];
+//             delete obj[key];
+//         }
+//     }
+//     return obj;
+// }

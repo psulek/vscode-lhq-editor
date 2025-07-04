@@ -1,16 +1,25 @@
 import * as vscode from 'vscode';
 import { LhqTreeDataProvider } from './treeDataProvider';
-import { logger, showMessageBox, treeElementToObject } from './utils';
+import { findCulture, logger, showMessageBox } from './utils';
 import { appContext } from './context';
 import { HtmlPageMessage } from './types';
+import debounce from 'lodash.debounce';
+
 
 export class LhqEditorProvider implements vscode.CustomTextEditorProvider {
     public static readonly viewType = 'lhq.customEditor';
+
+    private currentDocument: vscode.TextDocument | undefined;
+    private currentWebviewPanel: vscode.WebviewPanel | undefined;
 
     constructor(
         private readonly context: vscode.ExtensionContext,
         private readonly treeDataProvider: LhqTreeDataProvider
     ) { }
+
+    private onSelectionChanged(): void {
+        this.reflectSelectedElementToWebview();
+    }
 
     public async resolveCustomTextEditor(
         document: vscode.TextDocument,
@@ -19,6 +28,8 @@ export class LhqEditorProvider implements vscode.CustomTextEditorProvider {
     ): Promise<void> {
 
         logger().log('debug', `LhqEditorProvider.resolveCustomTextEditor for: ${document.fileName}`);
+        this.currentDocument = document;
+        this.currentWebviewPanel = webviewPanel;
 
         webviewPanel.webview.options = {
             enableScripts: true,
@@ -28,6 +39,9 @@ export class LhqEditorProvider implements vscode.CustomTextEditorProvider {
             ]
         };
 
+        const debouncedOnSelectionChanged = debounce(this.onSelectionChanged.bind(this), 500, { leading: false, trailing: true });
+        appContext.setSelectionChangedCallback(debouncedOnSelectionChanged);
+
         this.treeDataProvider.updateDocument(document);
         await this.updateWebviewContent(webviewPanel, document);
         appContext.isEditorActive = true;
@@ -36,9 +50,14 @@ export class LhqEditorProvider implements vscode.CustomTextEditorProvider {
         const changeDocumentSubscription = vscode.workspace.onDidChangeTextDocument(async e => {
             logger().log('debug', `LhqEditorProvider.onDidChangeTextDocument for active editor: ${e.document?.fileName ?? '-'}`);
             if (e.document.uri.toString() === document.uri.toString() && document.fileName.endsWith('.lhq')) {
-                this.treeDataProvider.updateDocument(e.document, e.contentChanges?.length > 0);
-                await this.updateWebviewContent(webviewPanel, e.document);
-                //this.treeDataProvider.updateDocument(e.document, e.contentChanges?.length > 0);
+                this.currentDocument = e.document;
+                const hasChanges = e.contentChanges?.length > 0;
+                this.treeDataProvider.updateDocument(e.document, hasChanges);
+
+                if (hasChanges) {
+                    this.reflectSelectedElementToWebview();
+                    // this.reflectSelectedElementToWebview(webviewPanel, e.document);
+                }
             }
         });
 
@@ -94,25 +113,32 @@ export class LhqEditorProvider implements vscode.CustomTextEditorProvider {
     }
 
     private async updateWebviewContent(webviewPanel: vscode.WebviewPanel, document: vscode.TextDocument): Promise<void> {
-        if (!webviewPanel || !webviewPanel.webview) { return; }
+        if (!webviewPanel || !webviewPanel.webview || !document) { return; }
 
-        //const jsonContent = document.getText();
         webviewPanel.webview.html = await this.getHtmlForWebview(webviewPanel.webview);
-        const element = (appContext.selectedElements.length > 0 ? appContext.selectedElements[0] : undefined) ?? this.treeDataProvider.currentRootModel;
-        const message: HtmlPageMessage = {
-            command: 'loadPage',
-            file: document.fileName,
-            element: treeElementToObject(element!),
-        };
-        webviewPanel.webview.postMessage(message);
+        // this.reflectSelectedElementToWebview(webviewPanel, document);
+        this.reflectSelectedElementToWebview();
         logger().log('debug', `LhqEditorProvider.updateWebviewContent for: ${document.fileName ?? '-'}`);
-
-        //console.log(replacedHtml);
-
     }
 
-    private async getHtmlForWebview(webview: vscode.Webview): Promise<string> {
-        // const pageHtmlUri = appContext.getMediaUri(webview, 'page.html');
+    // public reflectSelectedElementToWebview(webviewPanel: vscode.WebviewPanel, document: vscode.TextDocument): void {
+    public reflectSelectedElementToWebview(): void {
+        if (!this.currentWebviewPanel || !this.currentWebviewPanel.webview || !this.currentDocument) { return; }
+
+        const rootModel = this.treeDataProvider.currentRootModel!;
+        const element = (appContext.selectedElements.length > 0 ? appContext.selectedElements[0] : undefined) ?? rootModel;
+        const cultures = rootModel.languages.map(lang => findCulture(lang)).filter(c => !!c);
+        const message: HtmlPageMessage = {
+            command: 'loadPage',
+            file: this.currentDocument.fileName ?? '',
+            cultures: cultures,
+            primaryLang: rootModel.primaryLanguage,
+            element: element.toJson(),
+        };
+        this.currentWebviewPanel.webview.postMessage(message);
+    }
+
+    private async getHtmlForWebview(webview: vscode.Webview): Promise<string> {``
         const pageHtmlUri = appContext.getFileUri('media', 'page.html');
         const pageHtmlRaw = await vscode.workspace.fs.readFile(pageHtmlUri);
         let pageHtml = new TextDecoder().decode(pageHtmlRaw);

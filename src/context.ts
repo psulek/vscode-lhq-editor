@@ -23,6 +23,14 @@ export class AppContext {
     private _isEditorActive = false;
     private activeTheme = ''; // not supported yet
     private _selectedElements: ITreeElement[] = [];
+    private _onSelectionChanged: CallableFunction | undefined;
+
+    // private _emitter = new vscode.EventEmitter<void>();
+    // public readonly onSelectionChanged: vscode.Event<void> = this._emitter.event;
+
+    public setSelectionChangedCallback(callback: CallableFunction): void {
+        this._onSelectionChanged = callback;
+    }
 
     public init(ctx: vscode.ExtensionContext) {
         this._ctx = ctx;
@@ -79,6 +87,13 @@ export class AppContext {
 
     public setTreeViewHasSelectedItem(selectedElements: ITreeElement[]): void {
         this._selectedElements = selectedElements;
+        if (this._onSelectionChanged) {
+            // @ts-ignore
+            this._onSelectionChanged.call(this);
+        }
+
+        // this._emitter.fire();
+
         const hasSelectedItem = selectedElements.length === 1;
         const hasMultiSelection = selectedElements.length > 1;
         let hasSelectedDiffParents = false;
