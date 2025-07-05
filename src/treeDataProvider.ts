@@ -338,8 +338,8 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
         this.refresh();
     }
 
+
     public async updateElement(element: Record<string, unknown>): Promise<void> {
-        debugger;
         if (!element || !this._currentRootModel || !this.currentDocument) {
             return;
         }
@@ -350,6 +350,12 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
         const elem = elementType === 'model'
             ? this._currentRootModel
             : this._currentRootModel.getElementByPath(paths, elementType as CategoryOrResourceType);
+
+        interface ITranslationItem {
+            valueRef: Partial<IResourceValueElement>;
+            culture: CultureInfo;
+            isPrimary: boolean;
+        }
 
         if (elem && !isVirtualTreeElement(elem)) {
             const newName = (element.name as string ?? '').trim();
@@ -377,15 +383,19 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
 
                 // values
                 res.removeValues();
-                const values = element.values as Array<Partial<IResourceValueElement>>;
+                const values: Array<Partial<IResourceValueElement>> = (element.translations as Array<ITranslationItem>)
+                    .map(x => ({
+                        languageName: x.valueRef.languageName,
+                        value: x.valueRef.value,
+                        locked: x.valueRef.locked
+                    }));
                 res.addValues(values, { existing: 'skip' });
-
             }
 
             const success = await this.applyChangesToTextDocument();
 
             this._onDidChangeTreeData.fire([elem]);
-            await this.view.reveal(elem, { expand: true, select: true, focus: true });
+            // await this.view.reveal(elem, { expand: true, select: true, focus: true });
 
             const elemPath = getElementFullPath(elem);
             if (!success) {

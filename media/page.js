@@ -22,6 +22,21 @@
      * @property {boolean} paramsEnabled
      */
 
+    /**
+     * @typedef {Object} ResourceValueElement
+     * @property {string} languageName
+     * @property {string} value
+     * @property {boolean} locked
+     * @property {boolean} auto
+     */
+
+    /**
+     * @typedef {Object} TranslationItem
+     * @property {ResourceValueElement} valueRef
+     * @property {CultureInfo} culture
+     * @property {boolean} isPrimary
+     */
+
     const regexValidCharacters = /^[a-zA-Z]+[a-zA-Z0-9_]*$/;
 
     let currentPrimaryLang = 'en';
@@ -42,16 +57,26 @@
             case 'loadPage': {
                 domBody.dataset['loading'] = 'true';
                 const element = message.element;
-                const file = message.file;
+                //const file = message.file;
                 usedCultures = message.cultures || [];
-                currentPrimaryLang = message.primaryLang;
+                if (usedCultures.length === 0) {
+                    usedCultures = [{
+                        name: 'en',
+                        engName: 'English',
+                        nativeName: 'English',
+                        lcid: 1033,
+                        isNeutral: true
+                    }];
+                }
+                currentPrimaryLang = message.primaryLang ?? 'en';
                 const oldElement = window.pageApp.item;
 
                 window.pageApp.loading = true;
                 window.pageApp.item = undefined;
 
                 window.pageApp.$nextTick(() => {
-                    window.pageApp.item = element;
+                    //window.pageApp.item = element;
+                    setNewElement(element);
                     window.pageApp.loading = false;
 
                     window.pageApp.$nextTick(() => {
@@ -63,6 +88,41 @@
             }
         }
     });
+
+    function setNewElement(element) {
+        debugger;
+        if (!element) { return; }
+
+        /** @type TranslationItem[] */
+        const translations = [];
+
+        if (element.values === undefined || element.values === null) {
+            element.values = [];
+        }
+
+        /** @type ResourceValueElement | undefined */
+        const primaryValue = element.values.find(x => x.languageName === currentPrimaryLang);
+        translations.push({
+            valueRef: primaryValue ?? { languageName: currentPrimaryLang, value: '' },
+            culture: getCultureName(currentPrimaryLang),
+            isPrimary: true
+        });
+
+
+        usedCultures.forEach(culture => {
+            if (culture.name !== currentPrimaryLang) {
+                const value = element.values.find(x => x.languageName === culture.name);
+                translations.push({
+                    valueRef: value ?? { languageName: culture.name, value: '' },
+                    culture: getCultureName(culture.name),
+                    isPrimary: false
+                });
+            }
+        });
+
+        element.translations = translations;
+        window.pageApp.item = element;
+    }
 
     // Add the method to String prototype
     String.prototype.toPascalCase = function () {
@@ -208,41 +268,16 @@
         paramsEnabled: false
     };
 
-    /** @type {ReturnType<typeof createApp>} */
     window.pageApp = createApp({
         data() { return newPageItem; },
 
         computed: {
             translationCount() {
-                if (this.item && this.item.values) {
-                    return this.item.values.length;
-                }
-                return 0;
-            },
-
-            translations() {
-                const result = [];
-                if (this.item && this.item.values) {
-                    const primaryValue = this.item.values.find(x => x.languageName === currentPrimaryLang);
-                    if (primaryValue) {
-                        result.push({
-                            valueRef: primaryValue,
-                            culture: getCultureName(primaryValue.languageName),
-                            isPrimary: true
-                        });
-                    }
-
-                    this.item.values.forEach(value => {
-                        if (value.languageName !== currentPrimaryLang) {
-                            result.push({
-                                valueRef: value,
-                                culture: getCultureName(value.languageName),
-                                isPrimary: false
-                            });
-                        }
-                    });
-                }
-                return result;
+                return usedCultures.length;
+                // if (this.item && this.item.values) {
+                //     return this.item.values.length;
+                // }
+                // return 0;
             },
 
             fullPath() {
@@ -287,7 +322,6 @@
 
         methods: {
             onChange(value, oldValue) {
-                // debugger;
                 if (this.item && oldValue !== undefined) {
                     const data = toRaw(this.item);
 
@@ -365,6 +399,7 @@
             },
 
             lockTranslation(translation) {
+                debugger;
                 if (translation && translation.valueRef) {
                     translation.valueRef.locked = !translation.valueRef.locked;
                     this.debouncedOnChange();

@@ -5,6 +5,7 @@ import { appContext } from './context';
 import { HtmlPageMessage } from './types';
 import debounce from 'lodash.debounce';
 import { CategoryLikeTreeElementToJsonOptions, ITreeElement } from '@lhq/lhq-generators';
+import { isVirtualTreeElement } from './elements';
 
 
 export class LhqEditorProvider implements vscode.CustomTextEditorProvider {
@@ -49,7 +50,7 @@ export class LhqEditorProvider implements vscode.CustomTextEditorProvider {
         // this.treeDataProvider.updateDocument(document);
 
         const didReceiveMessageSubscription = webviewPanel.webview.onDidReceiveMessage(async message => {
-            debugger;
+            //debugger;
             switch (message.command) {
                 case 'update':
                     try {
@@ -74,8 +75,7 @@ export class LhqEditorProvider implements vscode.CustomTextEditorProvider {
                 this.treeDataProvider.updateDocument(e.document, hasChanges);
 
                 if (hasChanges) {
-                    this.reflectSelectedElementToWebview();
-                    // this.reflectSelectedElementToWebview(webviewPanel, e.document);
+                    // this.reflectSelectedElementToWebview();
                 }
             }
         });
@@ -147,6 +147,11 @@ export class LhqEditorProvider implements vscode.CustomTextEditorProvider {
 
         const rootModel = this.treeDataProvider.currentRootModel!;
         const element = (appContext.selectedElements.length > 0 ? appContext.selectedElements[0] : undefined) ?? rootModel;
+
+        if (isVirtualTreeElement(element)) {
+            return;
+        }
+
         const cultures = rootModel.languages.map(lang => findCulture(lang)).filter(c => !!c);
         const toJsonOptions: CategoryLikeTreeElementToJsonOptions = {
             includeCategories: false,
