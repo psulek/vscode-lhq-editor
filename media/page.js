@@ -16,7 +16,7 @@
     let usedCultures = [];
 
     /**
-     * @typedef {Object} PageItem
+     * @typedef {Object} PageData
      * @property {Object} item
      * @property {boolean} loading
      * @property {boolean} paramsEnabled
@@ -46,11 +46,17 @@
                 usedCultures = message.cultures || [];
                 currentPrimaryLang = message.primaryLang;
                 const oldElement = window.pageApp.item;
-                window.pageApp.item = element;
-                window.pageApp.loading = false;
+
+                window.pageApp.loading = true;
+                window.pageApp.item = undefined;
 
                 window.pageApp.$nextTick(() => {
-                    window.pageApp.bindTagParameters(oldElement);
+                    window.pageApp.item = element;
+                    window.pageApp.loading = false;
+
+                    window.pageApp.$nextTick(() => {
+                        window.pageApp.bindTagParameters(oldElement);
+                    });
                 });
                 delete domBody.dataset['loading'];
                 break;
@@ -195,13 +201,14 @@
     };
     const debounceWait = 500;
 
-    /** @type PageItem */
+    /** @type PageData */
     const newPageItem = {
         item: undefined,
         loading: true,
         paramsEnabled: false
     };
 
+    /** @type {ReturnType<typeof createApp>} */
     window.pageApp = createApp({
         data() { return newPageItem; },
 
@@ -280,12 +287,13 @@
 
         methods: {
             onChange(value, oldValue) {
-                debugger;
+                // debugger;
                 if (this.item && oldValue !== undefined) {
                     const data = toRaw(this.item);
 
                     if (data) {
-                        // vscode.postMessage({ command: 'update', data: data });
+                        console.log('Data changed:', data);
+                        vscode.postMessage({ command: 'update', data: data });
                     }
                 }
             },

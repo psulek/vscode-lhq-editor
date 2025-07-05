@@ -3,8 +3,8 @@ import { QuickPickItemKind } from 'vscode';
 import path from 'node:path';
 
 import type {
-    CategoryOrResourceType, FormattingOptions, ICategoryLikeTreeElement, IResourceElement, IRootModelElement,
-    ITreeElement, LhqModel, LhqValidationResult, TreeElementType
+    CategoryOrResourceType, FormattingOptions, ICategoryLikeTreeElement, IResourceElement, IResourceParameterElement, IResourceValueElement, IRootModelElement,
+    ITreeElement, LhqModel, LhqModelResourceTranslationState, LhqValidationResult, TreeElementType
 } from '@lhq/lhq-generators';
 import { detectFormatting, generatorUtils, isNullOrEmpty, ModelUtils } from '@lhq/lhq-generators';
 
@@ -338,7 +338,7 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
         this.refresh();
     }
 
-    public updateElement(element: Record<string, unknown>): void {
+    public async updateElement(element: Record<string, unknown>): Promise<void> {
         debugger;
         if (!element || !this._currentRootModel || !this.currentDocument) {
             return;
@@ -352,13 +352,45 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
             : this._currentRootModel.getElementByPath(paths, elementType as CategoryOrResourceType);
 
         if (elem && !isVirtualTreeElement(elem)) {
-            elem.name = element.name as string;
+            const newName = (element.name as string ?? '').trim();
+
+            if (newName !== elem.name) {
+                const validationError = this.validateElementName(elementType, newName, elem.parent);
+                if (validationError) {
+                    return await showMessageBox('warn', validationError);
+                }
+            }
+
+            elem.name = newName;
             elem.description = element.description as string | undefined;
 
             if (elementType === 'resource') {
                 const res = elem as IResourceElement;
-                // res.parameters = params;
-            } else if (elementType === 'category') {
+
+                res.state = element.state as LhqModelResourceTranslationState ?? 'New';
+
+                // parameters
+                res.removeParameters();
+                //const params = element.parameters as Array<{name: string, order: number}>;
+                const params = element.parameters as Array<Partial<IResourceParameterElement>>;
+                res.addParameters(params, { existing: 'skip' });
+
+                // values
+                res.removeValues();
+                const values = element.values as Array<Partial<IResourceValueElement>>;
+                res.addValues(values, { existing: 'skip' });
+
+            }
+
+            const success = await this.applyChangesToTextDocument();
+
+            this._onDidChangeTreeData.fire([elem]);
+            await this.view.reveal(elem, { expand: true, select: true, focus: true });
+
+            const elemPath = getElementFullPath(elem);
+            if (!success) {
+                logger().log('error', `UpdateElement: vscode.workspace.applyEdit failed for: ${elemPath}`);
+                return await showMessageBox('err', `Failed to apply changes.`);
             }
         }
     }

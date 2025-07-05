@@ -1,4 +1,4 @@
-import { ICategoryLikeTreeElement, IRootModelElement, isNullOrEmpty, ITreeElement, ITreeElementPaths, ModelUtils, TreeElementType } from '@lhq/lhq-generators';
+import { ICategoryLikeTreeElement, IRootModelElement, isNullOrEmpty, ITreeElement, ITreeElementPaths, ModelUtils, TreeElementToJsonOptions, TreeElementType } from '@lhq/lhq-generators';
 import { createTreeElementPaths } from './utils';
 import type { IVirtualLanguageElement, IVirtualTreeElement, VirtualElementType } from './types';
 
@@ -27,6 +27,10 @@ export class VirtualTreeElement implements IVirtualTreeElement {
         this._name = name;
         this._virtualElementType = virtualElementType;
         this._paths = createTreeElementPaths('/');
+    }
+    
+    toJson<TOptions extends TreeElementToJsonOptions>(options?: TOptions): Record<string, unknown> {
+        return {};
     }
 
     get virtualElementType(): VirtualElementType {

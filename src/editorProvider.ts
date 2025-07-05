@@ -48,12 +48,19 @@ export class LhqEditorProvider implements vscode.CustomTextEditorProvider {
         appContext.isEditorActive = true;
         // this.treeDataProvider.updateDocument(document);
 
-        const didReceiveMessageSubscription = webviewPanel.webview.onDidReceiveMessage(message => {
+        const didReceiveMessageSubscription = webviewPanel.webview.onDidReceiveMessage(async message => {
             debugger;
             switch (message.command) {
                 case 'update':
-                    const element = JSON.parse(message.data) as Record<string, unknown>;
-                    this.treeDataProvider.updateElement(element);
+                    try {
+                        const element = message.data as Record<string, unknown>;
+                        if (element) {
+                            await this.treeDataProvider.updateElement(element);
+                        }
+                    } catch (e) {
+                        logger().log('error', `LhqEditorProvider.onDidReceiveMessage: Error parsing element data: ${e}`);
+                        return;
+                    }
                     break;
             }
         });
