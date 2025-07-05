@@ -15,6 +15,13 @@
     /** @type  CultureInfo[] */
     let usedCultures = [];
 
+    /**
+     * @typedef {Object} PageItem
+     * @property {Object} item
+     * @property {boolean} loading
+     * @property {boolean} paramsEnabled
+     */
+
     const regexValidCharacters = /^[a-zA-Z]+[a-zA-Z0-9_]*$/;
 
     let currentPrimaryLang = 'en';
@@ -40,8 +47,8 @@
                 currentPrimaryLang = message.primaryLang;
                 const oldElement = window.pageApp.item;
                 window.pageApp.item = element;
+                window.pageApp.loading = false;
 
-                debugger;
                 window.pageApp.$nextTick(() => {
                     window.pageApp.bindTagParameters(oldElement);
                 });
@@ -181,21 +188,22 @@
 
     let tagifyParams = null;
 
-    const { createApp } = Vue;
+    const { createApp, toRaw } = Vue;
     const debounceOpts = {
         leading: false,
         trailing: true
     };
     const debounceWait = 500;
 
+    /** @type PageItem */
+    const newPageItem = {
+        item: undefined,
+        loading: true,
+        paramsEnabled: false
+    };
+
     window.pageApp = createApp({
-        data() {
-            return {
-                // item: sampleData,
-                item: { elementType: 'model' },
-                paramsEnabled: false
-            };
-        },
+        data() { return newPageItem; },
 
         computed: {
             translationCount() {
@@ -246,6 +254,8 @@
         created() {
             this.debouncedOnChange = _.debounce(this.onChange, debounceWait, debounceOpts);
             this.$watch('item', this.debouncedOnChange, { deep: true, immediate: false });
+            // this.$watch('item.name', (value, oldvalue) => { this.debouncedOnChange('name', value, oldvalue) }, { immediate: false });
+            // this.$watch('item.description', (value, oldvalue) => { this.debouncedOnChange('description', value, oldvalue) }, { immediate: false });
             this.debouncedResize = _.debounce(this.resizeAllTextAreas, 100, debounceOpts);
         },
 
@@ -270,18 +280,17 @@
 
         methods: {
             onChange(value, oldValue) {
-                // console.log('Item changed:', this.item);
-                console.log('Item changed');
-                console.log('value: ', value, ', oldValue: ', oldValue);
+                debugger;
+                if (this.item && oldValue !== undefined) {
+                    const data = toRaw(this.item);
 
-                // if (oldValue.elementType !== value.elementType) {
-                //     this.bindTagParameters();
-                // }
+                    if (data) {
+                        // vscode.postMessage({ command: 'update', data: data });
+                    }
+                }
             },
 
             bindTagParameters(oldValue) {
-                debugger;
-
                 const destroy = () => {
                     if (tagifyParams) {
                         tagifyParams.destroy();
@@ -290,7 +299,7 @@
                     }
                 };
 
-                if (oldValue.elementType === 'resource' && !this.isResource) {
+                if (oldValue && oldValue.elementType === 'resource' && !this.isResource) {
                     destroy();
                 }
 

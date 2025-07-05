@@ -4,6 +4,7 @@ import { findCulture, logger, showMessageBox } from './utils';
 import { appContext } from './context';
 import { HtmlPageMessage } from './types';
 import debounce from 'lodash.debounce';
+import { CategoryLikeTreeElementToJsonOptions, ITreeElement } from '@lhq/lhq-generators';
 
 
 export class LhqEditorProvider implements vscode.CustomTextEditorProvider {
@@ -46,6 +47,17 @@ export class LhqEditorProvider implements vscode.CustomTextEditorProvider {
         await this.updateWebviewContent(webviewPanel, document);
         appContext.isEditorActive = true;
         // this.treeDataProvider.updateDocument(document);
+
+        const didReceiveMessageSubscription = webviewPanel.webview.onDidReceiveMessage(message => {
+            debugger;
+            switch (message.command) {
+                case 'update':
+                    const element = JSON.parse(message.data) as Record<string, unknown>;
+                    this.treeDataProvider.updateElement(element);
+                    break;
+            }
+        });
+
 
         const changeDocumentSubscription = vscode.workspace.onDidChangeTextDocument(async e => {
             logger().log('debug', `LhqEditorProvider.onDidChangeTextDocument for active editor: ${e.document?.fileName ?? '-'}`);
@@ -98,6 +110,7 @@ export class LhqEditorProvider implements vscode.CustomTextEditorProvider {
             changeDocumentSubscription.dispose();
             viewStateSubscription.dispose();
             willSaveTextSubscription.dispose();
+            didReceiveMessageSubscription.dispose();
 
             // delayed a little..
             setTimeout(() => {
@@ -128,17 +141,21 @@ export class LhqEditorProvider implements vscode.CustomTextEditorProvider {
         const rootModel = this.treeDataProvider.currentRootModel!;
         const element = (appContext.selectedElements.length > 0 ? appContext.selectedElements[0] : undefined) ?? rootModel;
         const cultures = rootModel.languages.map(lang => findCulture(lang)).filter(c => !!c);
+        const toJsonOptions: CategoryLikeTreeElementToJsonOptions = {
+            includeCategories: false,
+            includeResources: false
+        };
         const message: HtmlPageMessage = {
             command: 'loadPage',
             file: this.currentDocument.fileName ?? '',
             cultures: cultures,
             primaryLang: rootModel.primaryLanguage,
-            element: element.toJson(),
+            element: element.toJson(toJsonOptions),
         };
         this.currentWebviewPanel.webview.postMessage(message);
     }
 
-    private async getHtmlForWebview(webview: vscode.Webview): Promise<string> {``
+    private async getHtmlForWebview(webview: vscode.Webview): Promise<string> {
         const pageHtmlUri = appContext.getFileUri('media', 'page.html');
         const pageHtmlRaw = await vscode.workspace.fs.readFile(pageHtmlUri);
         let pageHtml = new TextDecoder().decode(pageHtmlRaw);

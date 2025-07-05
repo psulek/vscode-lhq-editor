@@ -338,6 +338,31 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
         this.refresh();
     }
 
+    public updateElement(element: Record<string, unknown>): void {
+        debugger;
+        if (!element || !this._currentRootModel || !this.currentDocument) {
+            return;
+        }
+
+        const path = element.paths as string[];
+        const elementType = element.elementType as TreeElementType;
+        const paths = createTreeElementPaths('/' + path.join('/'), true);
+        const elem = elementType === 'model'
+            ? this._currentRootModel
+            : this._currentRootModel.getElementByPath(paths, elementType as CategoryOrResourceType);
+
+        if (elem && !isVirtualTreeElement(elem)) {
+            elem.name = element.name as string;
+            elem.description = element.description as string | undefined;
+
+            if (elementType === 'resource') {
+                const res = elem as IResourceElement;
+                // res.parameters = params;
+            } else if (elementType === 'category') {
+            }
+        }
+    }
+
     private async advancedFind(): Promise<any> {
         if (!this.currentDocument) {
             return;

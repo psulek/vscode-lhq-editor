@@ -44,7 +44,7 @@
         <span>Loading</span>
     </div>
     <div id="app">
-        <table id="layout">
+        <table id="layout" v-if="!loading">
             <tr>
                 <td>
                     <label for="name">{{ item.elementType.toPascalCase() }}:</label>
