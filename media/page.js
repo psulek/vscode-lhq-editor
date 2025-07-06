@@ -20,6 +20,7 @@
      * @property {Object} item
      * @property {boolean} loading
      * @property {boolean} paramsEnabled
+     * @property {boolean} invalidData
      */
 
     /**
@@ -53,8 +54,34 @@
 
     window.addEventListener('message', event => {
         message = event.data;
+        console.log('Received message:', message);
         switch (message.command) {
+            case 'invalidData': {
+                /*
+                command: 'invalidData';
+                fullPath: string;
+                message: string;
+                field: string
+                */
+
+                debugger;
+                if (!window.pageApp.item || window.pageApp.fullPath !== message.fullPath) {
+                    return;
+                }
+
+                const elem = document.getElementById(message.field) || domBody;
+                showTooltip(`${message.field}-invalid`, message.message, elem);
+
+                break;
+            }
             case 'loadPage': {
+                /*
+                command: 'loadPage';
+                element: Object;
+                file: string;
+                cultures: CultureInfo[];
+                primaryLang: string;
+                */
                 domBody.dataset['loading'] = 'true';
                 const element = message.element;
                 //const file = message.file;
@@ -266,7 +293,8 @@
     const newPageItem = {
         item: undefined,
         loading: true,
-        paramsEnabled: false
+        paramsEnabled: false,
+        invalidData: false
     };
 
     window.pageApp = createApp({
@@ -326,6 +354,11 @@
                 if (this.item && oldValue !== undefined) {
                     const data = toRaw(this.item);
 
+                    if (this.item.invalidData) {
+                        console.warn('Invalid data, will not send data!', data);
+                        return;
+                    }
+
                     if (data) {
                         console.log('Data changed:', data);
                         vscode.postMessage({ command: 'update', data: data });
@@ -355,6 +388,26 @@
                 }
             },
 
+            updateInvalidData(forceInvalid) {
+                if (forceInvalid === true) {
+                    this.item.invalidData = true;
+                } else {
+                    // check invalid params
+                    const invalidTagElm = tagifyParams.getTagElms().find(node => {
+                        const tagData = tagifyParams.getSetTagData(node);
+                        return tagData && tagData.__isValid !== true;
+                    });
+
+                    if (invalidTagElm) {
+                        this.item.invalidData = true;
+                    }
+
+                    // showTooltip('params-invalid', tagData.__isValid, invalidTagElm);
+                }
+
+                return this.item.invalidData;
+            },
+
             editParameters(e) {
                 const isCancel = e.target.dataset['cancel'] === 'true';
                 this.paramsEnabled = !this.paramsEnabled;
@@ -376,8 +429,10 @@
                         });
 
                         if (invalidTagElm) {
-                            this.paramsEnabled = !this.paramsEnabled;
-                            tagifyParams.setDisabled(!this.paramsEnabled);
+                            this.paramsEnabled = true;
+                            tagifyParams.setDisabled(false);
+                            // this.paramsEnabled = !this.paramsEnabled;
+                            // tagifyParams.setDisabled(!this.paramsEnabled);
 
                             const tagData = tagifyParams.getSetTagData(invalidTagElm);
                             showTooltip('params-invalid', tagData.__isValid, invalidTagElm);
@@ -415,12 +470,7 @@
 
             createParametersTags() {
                 const input = this.$refs.parameters;
-                // input.addEventListener('change', onTagsChange);
-
-                // function onTagsChange(e) {
-                //     const { name, value } = e.target;
-
-                // }
+                const self = this;
 
                 function validateTag(tagData) {
                     if (!regexValidCharacters.test(tagData.value)) {
@@ -500,6 +550,7 @@
 
                 tagify.on('invalid', function ({ detail }) {
                     showTooltip('params-invalid', detail.message, tagify.DOM.input);
+                    self.updateInvalidData(true);
                 });
 
                 tagify.on('edit:updated', function ({ detail: { data, tag } }) {
@@ -508,6 +559,7 @@
                     if (isValid !== true) {
                         tagify.replaceTag(tag, { ...data, __isValid: isValid });
                         showTooltip('params-invalid', isValid, tagify.DOM.input);
+                        self.updateInvalidData(true);
                     } else {
                         const newTagData = { ...data, __isValid: true };
                         delete newTagData.title;
@@ -515,6 +567,7 @@
                         delete newTagData.class;
                         delete newTagData.__tagId;
                         tagify.replaceTag(tag, newTagData);
+                        self.updateInvalidData();
                     }
                 });
 

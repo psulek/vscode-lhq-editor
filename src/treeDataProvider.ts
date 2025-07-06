@@ -11,7 +11,7 @@ import { detectFormatting, generatorUtils, isNullOrEmpty, ModelUtils } from '@lh
 import { LhqTreeItem } from './treeItem';
 import { validateName } from './validator';
 import { filterTreeElements, filterVirtualTreeElements, isVirtualTreeElement, VirtualRootElement } from './elements';
-import type { SearchTreeOptions, MatchingElement, CultureInfo, IVirtualLanguageElement, ValidationError } from './types';
+import type { SearchTreeOptions, MatchingElement, CultureInfo, IVirtualLanguageElement, ValidationError, IMessageSender } from './types';
 import { appContext } from './context';
 import {
     getMessageBoxText, createTreeElementPaths, findChildsByPaths, matchForSubstring,
@@ -100,6 +100,7 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
     private selectedElements: ITreeElement[] = [];
     private view: vscode.TreeView<any>;
     private _validationError: ValidationError | undefined;
+    private _messageSender: IMessageSender = undefined!;
 
     constructor(private context: vscode.ExtensionContext) {
 
@@ -144,6 +145,10 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
                 appContext.setTreeViewHasSelectedItem(this.selectedElements);
             })
         );
+    }
+
+    public setMessageSender(sender: IMessageSender): void {
+        this._messageSender = sender;
     }
 
     private get resourcesUnderRoot(): boolean {
@@ -363,44 +368,79 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
             if (newName !== elem.name) {
                 const validationError = this.validateElementName(elementType, newName, elem.parent);
                 if (validationError) {
-                    return await showMessageBox('warn', validationError);
+                    //return await showMessageBox('warn', validationError);
+                    this._messageSender.sendMessage({
+                        command: 'invalidData',
+                        fullPath: getElementFullPath(elem),
+                        message: validationError,
+                        field: 'name'
+                    });
+                    return;
                 }
             }
 
-            elem.name = newName;
-            elem.description = element.description as string | undefined;
+            let changed = false;
+            if (newName !== elem.name) {
+                elem.name = newName;
+                changed = true;
+            }
+
+            const newDescription = element.description as string | undefined;
+            if (newDescription !== elem.description) {
+                elem.description = newDescription;
+                changed = true;
+            }
 
             if (elementType === 'resource') {
                 const res = elem as IResourceElement;
 
-                res.state = element.state as LhqModelResourceTranslationState ?? 'New';
+                const newState = element.state as LhqModelResourceTranslationState ?? 'New';
+                if (res.state !== newState) {
+                    res.state = newState;
+                    changed = true;
+                }
 
                 // parameters
-                res.removeParameters();
-                //const params = element.parameters as Array<{name: string, order: number}>;
+                const oldParams = res.parameters.map(x => `${x.name}:${x.order}`).join(',');
                 const params = element.parameters as Array<Partial<IResourceParameterElement>>;
-                res.addParameters(params, { existing: 'skip' });
+                const newParams = params.map(x => `${x.name}:${x.order}`).join(',');
+
+                if (newParams !== oldParams) {
+                    changed = true;
+                    res.removeParameters();
+                    res.addParameters(params, { existing: 'skip' });
+                }
 
                 // values
-                res.removeValues();
+                const oldValues = res.values.map(x => `${x.languageName}:${x.value}:${x.locked}`).join(',');
                 const values: Array<Partial<IResourceValueElement>> = (element.translations as Array<ITranslationItem>)
                     .map(x => ({
                         languageName: x.valueRef.languageName,
                         value: x.valueRef.value,
                         locked: x.valueRef.locked
                     }));
-                res.addValues(values, { existing: 'skip' });
+                const newValues = values.map(x => `${x.languageName}:${x.value}:${x.locked}`).join(',');
+
+                if (newValues !== oldValues) {
+                    changed = true;
+                    res.removeValues();
+                    res.addValues(values, { existing: 'skip' });
+                }
             }
 
-            const success = await this.applyChangesToTextDocument();
+            if (changed) {
+                const success = await this.applyChangesToTextDocument();
 
-            this._onDidChangeTreeData.fire([elem]);
-            // await this.view.reveal(elem, { expand: true, select: true, focus: true });
+                this._onDidChangeTreeData.fire([elem]);
+                // await this.view.reveal(elem, { expand: true, select: true, focus: true });
 
-            const elemPath = getElementFullPath(elem);
-            if (!success) {
-                logger().log('error', `UpdateElement: vscode.workspace.applyEdit failed for: ${elemPath}`);
-                return await showMessageBox('err', `Failed to apply changes.`);
+                const elemPath = getElementFullPath(elem);
+                if (!success) {
+                    logger().log('error', `UpdateElement: vscode.workspace.applyEdit failed for: ${elemPath}`);
+                    return await showMessageBox('err', `Failed to apply changes.`);
+                }
+            } else {
+                logger().log('debug', `UpdateElement: No changes for element '${getElementFullPath(elem)}'.`);
             }
         }
     }
@@ -1401,10 +1441,16 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
             // @ts-ignore
             logger().log('debug', `LhqTreeDataProvider.updateDocument [INVALID] with: ${document?.uri?.fsPath}`);
             this.view.title = `LHQ Structure`;
-            appContext.isEditorActive = false;
+            // appContext.isEditorActive = false;
             this.currentDocument = null;
             this._validationError = undefined;
+            void this.clearSelection();
             this.refresh();
+
+            setTimeout(() => {
+               appContext.isEditorActive = false; 
+            }, 200);
+            // appContext.isEditorActive = false;
         }
     }
 

@@ -63,10 +63,19 @@ export type CulturesMap = Record<string, CultureInfo>;
 
 export type ValidationError = { message: string, detail?: string };
 
+export interface IMessageSender {
+    sendMessage(message: HtmlPageMessage): void;
+}
+
 export type HtmlPageMessage = {
     command: 'loadPage';
     element: Object;
     file: string;
     cultures: CultureInfo[];
     primaryLang: string;
+} | {
+    command: 'invalidData';
+    fullPath: string;
+    message: string;
+    field: string;
 };

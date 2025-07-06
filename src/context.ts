@@ -1,7 +1,8 @@
 import * as vscode from 'vscode';
-import { IVirtualLanguageElement } from './types';
+import { HtmlPageMessage, IMessageSender, IVirtualLanguageElement } from './types';
 import { ITreeElement } from '@lhq/lhq-generators';
 import { VirtualTreeElement } from './elements';
+import { logger } from './utils';
 
 const globalStateKeys = {
     languagesVisible: 'languagesVisible'
@@ -24,6 +25,7 @@ export class AppContext {
     private activeTheme = ''; // not supported yet
     private _selectedElements: ITreeElement[] = [];
     private _onSelectionChanged: CallableFunction | undefined;
+    // private _messageSender: IMessageSender | undefined;
 
     // private _emitter = new vscode.EventEmitter<void>();
     // public readonly onSelectionChanged: vscode.Event<void> = this._emitter.event;
@@ -85,9 +87,16 @@ export class AppContext {
         return this._selectedElements ?? [];
     }
 
+    // public sendMessageToWebview(webview: vscode.Webview, message: HtmlPageMessage): void {
+    //     if (webview) {
+    //         webview.postMessage(message);
+    //     }
+    // }
+
     public setTreeViewHasSelectedItem(selectedElements: ITreeElement[]): void {
         this._selectedElements = selectedElements;
         if (this._onSelectionChanged) {
+            logger().log('debug', `AppContext.setTreeViewHasSelectedItem, fire -> _onSelectionChanged (${selectedElements.length} items selected)`);
             // @ts-ignore
             this._onSelectionChanged.call(this);
         }

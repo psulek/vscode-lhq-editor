@@ -2,13 +2,12 @@ import * as vscode from 'vscode';
 import { LhqTreeDataProvider } from './treeDataProvider';
 import { findCulture, logger, showMessageBox } from './utils';
 import { appContext } from './context';
-import { HtmlPageMessage } from './types';
+import { HtmlPageMessage, IMessageSender } from './types';
 import debounce from 'lodash.debounce';
 import { CategoryLikeTreeElementToJsonOptions, ITreeElement } from '@lhq/lhq-generators';
 import { isVirtualTreeElement } from './elements';
 
-
-export class LhqEditorProvider implements vscode.CustomTextEditorProvider {
+export class LhqEditorProvider implements vscode.CustomTextEditorProvider, IMessageSender {
     public static readonly viewType = 'lhq.customEditor';
 
     private currentDocument: vscode.TextDocument | undefined;
@@ -20,6 +19,7 @@ export class LhqEditorProvider implements vscode.CustomTextEditorProvider {
     ) { }
 
     private onSelectionChanged(): void {
+        logger().log('debug', 'LhqEditorProvider.onSelectionChanged called');
         this.reflectSelectedElementToWebview();
     }
 
@@ -33,6 +33,8 @@ export class LhqEditorProvider implements vscode.CustomTextEditorProvider {
         this.currentDocument = document;
         this.currentWebviewPanel = webviewPanel;
 
+        this.treeDataProvider.setMessageSender(this);
+
         webviewPanel.webview.options = {
             enableScripts: true,
             localResourceRoots: [
@@ -45,10 +47,11 @@ export class LhqEditorProvider implements vscode.CustomTextEditorProvider {
         appContext.setSelectionChangedCallback(debouncedOnSelectionChanged);
 
         this.treeDataProvider.updateDocument(document);
+        // await this.treeDataProvider.selectRootElement();
+        // await this.updateWebviewContent(webviewPanel, document);
+        await this.updateWebviewContent(webviewPanel, document, false);
         await this.treeDataProvider.selectRootElement();
-        await this.updateWebviewContent(webviewPanel, document);
         appContext.isEditorActive = true;
-        // this.treeDataProvider.updateDocument(document);
 
         const didReceiveMessageSubscription = webviewPanel.webview.onDidReceiveMessage(async message => {
             //debugger;
@@ -134,12 +137,17 @@ export class LhqEditorProvider implements vscode.CustomTextEditorProvider {
         });
     }
 
-    private async updateWebviewContent(webviewPanel: vscode.WebviewPanel, document: vscode.TextDocument): Promise<void> {
+    private async updateWebviewContent(webviewPanel: vscode.WebviewPanel, document: vscode.TextDocument,
+        reflectSelection: boolean = true
+    ): Promise<void> {
         if (!webviewPanel || !webviewPanel.webview || !document) { return; }
+        logger().log('debug', `LhqEditorProvider.updateWebviewContent for: ${document.fileName ?? '-'}`);
 
         webviewPanel.webview.html = await this.getHtmlForWebview(webviewPanel.webview);
-        this.reflectSelectedElementToWebview();
-        logger().log('debug', `LhqEditorProvider.updateWebviewContent for: ${document.fileName ?? '-'}`);
+
+        if (reflectSelection) {
+            this.reflectSelectedElementToWebview();
+        }
     }
 
     // public reflectSelectedElementToWebview(webviewPanel: vscode.WebviewPanel, document: vscode.TextDocument): void {
@@ -166,7 +174,16 @@ export class LhqEditorProvider implements vscode.CustomTextEditorProvider {
             primaryLang: rootModel.primaryLanguage,
             element: element.toJson(toJsonOptions),
         };
-        this.currentWebviewPanel.webview.postMessage(message);
+
+        // this.currentWebviewPanel.webview.postMessage(message);
+        this.sendMessage(message);
+    }
+
+    public sendMessage(message: HtmlPageMessage): void {
+        if (this.currentWebviewPanel && this.currentWebviewPanel.webview) {
+            logger().log('debug', `LhqEditorProvider.sendMessage: ${message.command} ...`);
+            this.currentWebviewPanel.webview.postMessage(message);
+        }
     }
 
     private async getHtmlForWebview(webview: vscode.Webview): Promise<string> {
