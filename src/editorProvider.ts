@@ -45,6 +45,7 @@ export class LhqEditorProvider implements vscode.CustomTextEditorProvider {
         appContext.setSelectionChangedCallback(debouncedOnSelectionChanged);
 
         this.treeDataProvider.updateDocument(document);
+        await this.treeDataProvider.selectRootElement();
         await this.updateWebviewContent(webviewPanel, document);
         appContext.isEditorActive = true;
         // this.treeDataProvider.updateDocument(document);
@@ -72,7 +73,8 @@ export class LhqEditorProvider implements vscode.CustomTextEditorProvider {
             if (e.document.uri.toString() === document.uri.toString() && document.fileName.endsWith('.lhq')) {
                 this.currentDocument = e.document;
                 const hasChanges = e.contentChanges?.length > 0;
-                this.treeDataProvider.updateDocument(e.document, hasChanges);
+                // this.treeDataProvider.updateDocument(e.document, hasChanges);
+                this.treeDataProvider.updateDocument(e.document);
 
                 if (hasChanges) {
                     // this.reflectSelectedElementToWebview();
@@ -136,7 +138,6 @@ export class LhqEditorProvider implements vscode.CustomTextEditorProvider {
         if (!webviewPanel || !webviewPanel.webview || !document) { return; }
 
         webviewPanel.webview.html = await this.getHtmlForWebview(webviewPanel.webview);
-        // this.reflectSelectedElementToWebview(webviewPanel, document);
         this.reflectSelectedElementToWebview();
         logger().log('debug', `LhqEditorProvider.updateWebviewContent for: ${document.fileName ?? '-'}`);
     }
@@ -146,9 +147,10 @@ export class LhqEditorProvider implements vscode.CustomTextEditorProvider {
         if (!this.currentWebviewPanel || !this.currentWebviewPanel.webview || !this.currentDocument) { return; }
 
         const rootModel = this.treeDataProvider.currentRootModel!;
-        const element = (appContext.selectedElements.length > 0 ? appContext.selectedElements[0] : undefined) ?? rootModel;
+        // const element = (appContext.selectedElements.length > 0 ? appContext.selectedElements[0] : undefined) ?? rootModel;
+        const element = appContext.selectedElements.length > 0 ? appContext.selectedElements[0] : undefined;
 
-        if (isVirtualTreeElement(element)) {
+        if (element === undefined || isVirtualTreeElement(element)) {
             return;
         }
 

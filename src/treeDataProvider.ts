@@ -526,7 +526,7 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
         await vscode.commands.executeCommand('list.find', 'lhqTreeView');
     }
 
-    public async clearSelection(): Promise<void> {
+    public async clearSelection(reselect: boolean = false): Promise<void> {
         if (!this.view || this.view.selection.length === 0) {
             return;
         }
@@ -547,9 +547,19 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
                 // select/deselect trick
                 await this.view.reveal(itemToUse, { select: true, focus: false, expand: false });
                 await this.view.reveal(itemToUse, { select: false, focus: false, expand: false });
+
+                if (reselect) {
+                    await this.view.reveal(itemToUse, { select: true, focus: true, expand: false });
+                }
             } catch (error) {
                 console.error("Failed to clear selection using two-step reveal:", error);
             }
+        }
+    }
+
+    public async selectRootElement(): Promise<void> {
+        if (this._currentRootModel) {
+            await this.setSelectedItems([this._currentRootModel!], { focus: true, expand: false });
         }
     }
 
@@ -750,6 +760,12 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
         this._currentRootModel!.primaryLanguage = langElement.name;
 
         const success = await this.applyChangesToTextDocument();
+
+        if (success) {
+            //this.reflectSelectedElementToWebview();
+            await this.clearSelection(true);
+        }
+
         await showMessageBox(success ? 'info' : 'err', success
             ? `Successfully marked '${getCultureDesc(langElement.name)}' as primary language.`
             : `Failed to mark '${getCultureDesc(langElement.name)}' as primary language.`, { modal: !success });
@@ -1351,6 +1367,10 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
 
     public onActiveEditorChanged(e: vscode.TextEditor | undefined): void {
         this.updateDocument(e?.document);
+
+        // if (this.hasActiveDocument() && this._currentRootModel) {
+        //     void this.view.reveal(this._currentRootModel, { expand: true, select: true, focus: true });
+        // }
     }
 
     public hasActiveDocument(): boolean {
@@ -1445,6 +1465,10 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
         }
 
         this._onDidChangeTreeData.fire(undefined);
+
+        // if (this._currentRootModel) {
+        //     void this.view.reveal(this._currentRootModel, { expand: true, select: true, focus: true });
+        // }
     }
 
     getTreeItem(element: ITreeElement): vscode.TreeItem {

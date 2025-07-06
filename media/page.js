@@ -90,7 +90,7 @@
     });
 
     function setNewElement(element) {
-        debugger;
+        //debugger;
         if (!element) { return; }
 
         /** @type TranslationItem[] */
@@ -121,6 +121,7 @@
         });
 
         element.translations = translations;
+        console.log('Setting new element:', element);
         window.pageApp.item = element;
     }
 
