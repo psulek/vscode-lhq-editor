@@ -17,6 +17,7 @@ import {
     getMessageBoxText, createTreeElementPaths, findChildsByPaths, matchForSubstring,
     logger, getElementFullPath, showMessageBox, getCultureDesc, showConfirmBox, loadCultures, isValidDocument
 } from './utils';
+import { nextTick } from 'node:process';
 
 const actions = {
     refresh: 'lhqTreeView.refresh',
@@ -603,7 +604,7 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
         }
     }
 
-    private async setSelectedItems(itemsToSelect: ITreeElement[], options?: { focus?: boolean; expand?: boolean | number }): Promise<void> {
+    public async setSelectedItems(itemsToSelect: ITreeElement[], options?: { focus?: boolean; expand?: boolean | number }): Promise<void> {
         if (!this.view) {
             logger().log('warn', 'setSelectedItems: TreeView is not available.');
             return;
@@ -1425,33 +1426,39 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
         return this.currentDocument !== null && this.currentDocument.uri.toString() === document.uri.toString();
     }
 
-    public updateDocument(document: vscode.TextDocument | undefined, forceRefresh = false): void {
-        if (isValidDocument(document)) {
-            logger().log('debug', `LhqTreeDataProvider.updateDocument [VALID] with: ${document.uri.fsPath}`);
-            appContext.isEditorActive = true;
+    // public updateDocument(document: vscode.TextDocument | undefined, forceRefresh = false): void {
+    public updateDocument(document: vscode.TextDocument | undefined, afterRefresh?: () => void): void {
+        nextTick(() => {
+            if (isValidDocument(document)) {
+                logger().log('debug', `LhqTreeDataProvider.updateDocument [VALID] with: ${document.uri.fsPath}`);
+                appContext.isEditorActive = true;
 
-            const baseName = path.basename(document.uri.fsPath);
-            this.view.title = `${baseName} [LHQ Structure]`;
+                const baseName = path.basename(document.uri.fsPath);
+                this.view.title = `${baseName} [LHQ Structure]`;
 
-            if (this.currentDocument?.uri.toString() !== document.uri.toString() || !this._currentRootModel || forceRefresh === true) {
-                this.currentDocument = document;
+                // if (this.currentDocument?.uri.toString() !== document.uri.toString() || !this._currentRootModel || forceRefresh === true) {
+                if (this.currentDocument?.uri.toString() !== document.uri.toString() || !this._currentRootModel) {
+                    this.currentDocument = document;
+                    this.refresh();
+                    if (afterRefresh) {
+                        nextTick(afterRefresh);
+                    }
+                }
+            } else if (appContext.isEditorActive) {
+                // @ts-ignore
+                logger().log('debug', `LhqTreeDataProvider.updateDocument [INVALID] with: ${document?.uri?.fsPath}`);
+                this.view.title = `LHQ Structure`;
+                // appContext.isEditorActive = false;
+                this.currentDocument = null;
+                this._validationError = undefined;
+                void this.clearSelection();
                 this.refresh();
-            }
-        } else if (appContext.isEditorActive) {
-            // @ts-ignore
-            logger().log('debug', `LhqTreeDataProvider.updateDocument [INVALID] with: ${document?.uri?.fsPath}`);
-            this.view.title = `LHQ Structure`;
-            // appContext.isEditorActive = false;
-            this.currentDocument = null;
-            this._validationError = undefined;
-            void this.clearSelection();
-            this.refresh();
 
-            setTimeout(() => {
-               appContext.isEditorActive = false; 
-            }, 200);
-            // appContext.isEditorActive = false;
-        }
+                nextTick(() => {
+                    appContext.isEditorActive = false;
+                });
+            }
+        });
     }
 
     refresh(): void {
@@ -1511,10 +1518,6 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
         }
 
         this._onDidChangeTreeData.fire(undefined);
-
-        // if (this._currentRootModel) {
-        //     void this.view.reveal(this._currentRootModel, { expand: true, select: true, focus: true });
-        // }
     }
 
     getTreeItem(element: ITreeElement): vscode.TreeItem {

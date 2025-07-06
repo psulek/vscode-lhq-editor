@@ -79,3 +79,5 @@ export type HtmlPageMessage = {
     message: string;
     field: string;
 };
+
+export type SelectionChangedCallback = (selectedElements: ITreeElement[]) => void;

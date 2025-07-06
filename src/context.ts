@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { HtmlPageMessage, IMessageSender, IVirtualLanguageElement } from './types';
+import { HtmlPageMessage, IMessageSender, IVirtualLanguageElement, SelectionChangedCallback } from './types';
 import { ITreeElement } from '@lhq/lhq-generators';
 import { VirtualTreeElement } from './elements';
 import { logger } from './utils';
@@ -19,18 +19,19 @@ const contextKeys = {
     hasLanguagesVisible: 'lhqTreeHasLanguagesVisible',
 };
 
+
 export class AppContext {
     private _ctx!: vscode.ExtensionContext;
     private _isEditorActive = false;
     private activeTheme = ''; // not supported yet
     private _selectedElements: ITreeElement[] = [];
-    private _onSelectionChanged: CallableFunction | undefined;
+    private _onSelectionChanged:  SelectionChangedCallback | undefined;
     // private _messageSender: IMessageSender | undefined;
 
     // private _emitter = new vscode.EventEmitter<void>();
     // public readonly onSelectionChanged: vscode.Event<void> = this._emitter.event;
 
-    public setSelectionChangedCallback(callback: CallableFunction): void {
+    public setSelectionChangedCallback(callback:  SelectionChangedCallback): void {
         this._onSelectionChanged = callback;
     }
 
@@ -98,7 +99,8 @@ export class AppContext {
         if (this._onSelectionChanged) {
             logger().log('debug', `AppContext.setTreeViewHasSelectedItem, fire -> _onSelectionChanged (${selectedElements.length} items selected)`);
             // @ts-ignore
-            this._onSelectionChanged.call(this);
+            // this._onSelectionChanged.call(this);
+            this._onSelectionChanged(selectedElements);
         }
 
         // this._emitter.fire();

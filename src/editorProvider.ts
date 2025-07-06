@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { LhqTreeDataProvider } from './treeDataProvider';
 import { findCulture, logger, showMessageBox } from './utils';
 import { appContext } from './context';
-import { HtmlPageMessage, IMessageSender } from './types';
+import { HtmlPageMessage, IMessageSender, SelectionChangedCallback } from './types';
 import debounce from 'lodash.debounce';
 import { CategoryLikeTreeElementToJsonOptions, ITreeElement } from '@lhq/lhq-generators';
 import { isVirtualTreeElement } from './elements';
@@ -12,15 +12,24 @@ export class LhqEditorProvider implements vscode.CustomTextEditorProvider, IMess
 
     private currentDocument: vscode.TextDocument | undefined;
     private currentWebviewPanel: vscode.WebviewPanel | undefined;
+    private debouncedOnSelectionChanged: SelectionChangedCallback = undefined!;
+    private lastSelectedElements: ITreeElement[] | undefined;
 
     constructor(
         private readonly context: vscode.ExtensionContext,
         private readonly treeDataProvider: LhqTreeDataProvider
-    ) { }
+    ) {
+        this.debouncedOnSelectionChanged = debounce(this.onSelectionChanged.bind(this), 200, { leading: false, trailing: true });
+    }
 
-    private onSelectionChanged(): void {
-        logger().log('debug', 'LhqEditorProvider.onSelectionChanged called');
+    private onSelectionChanged(selectedElements: ITreeElement[]): void {
+        this.lastSelectedElements = selectedElements;
+        logger().log('debug', `LhqEditorProvider.onSelectionChanged called, ${selectedElements ? selectedElements.length : 0} elements selected.`);
         this.reflectSelectedElementToWebview();
+    }
+
+    private get documentFileName(): string {
+        return this.currentDocument ? this.currentDocument.fileName : '';
     }
 
     public async resolveCustomTextEditor(
@@ -43,8 +52,8 @@ export class LhqEditorProvider implements vscode.CustomTextEditorProvider, IMess
             ]
         };
 
-        const debouncedOnSelectionChanged = debounce(this.onSelectionChanged.bind(this), 200, { leading: false, trailing: true });
-        appContext.setSelectionChangedCallback(debouncedOnSelectionChanged);
+        //const debouncedOnSelectionChanged = debounce(this.onSelectionChanged.bind(this), 200, { leading: false, trailing: true });
+        appContext.setSelectionChangedCallback(this.debouncedOnSelectionChanged);
 
         this.treeDataProvider.updateDocument(document);
         // await this.treeDataProvider.selectRootElement();
@@ -93,7 +102,15 @@ export class LhqEditorProvider implements vscode.CustomTextEditorProvider, IMess
             if (changedPanel.active && document.fileName.endsWith('.lhq')) {
                 // This specific webview panel became active
                 logger().log('debug', `LhqEditorProvider.onDidChangeViewState for ${document.fileName} became active. Updating tree and context.`);
-                this.treeDataProvider.updateDocument(document);
+                appContext.setSelectionChangedCallback(this.debouncedOnSelectionChanged);
+                this.treeDataProvider.updateDocument(document, () => {
+                    // const lastSelected = this.lastSelectedElements && this.lastSelectedElements.length > 0 ? this.lastSelectedElements[0] : undefined;
+                    // if (lastSelected) {
+                    //     void this.treeDataProvider.setSelectedItems([lastSelected], { focus: true });
+                    // } else {
+                    //     void this.treeDataProvider.selectRootElement();
+                    // }
+                });
             }
         });
 
