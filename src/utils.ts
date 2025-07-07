@@ -67,7 +67,7 @@ export async function showConfirmBox(message: string, detail?: string, warn?: bo
     warn = warn ?? false;
     return (warn ?
         await vscode.window.showWarningMessage(msg, { modal: true, detail }, 'Yes', 'No') :
-        await vscode.window.showInformationMessage(msg, { modal: true, detail }, 'Yes', 'No')) 
+        await vscode.window.showInformationMessage(msg, { modal: true, detail }, 'Yes', 'No'))
         === 'Yes';
 }
 
@@ -259,15 +259,11 @@ export function getCultureDesc(name: string): string {
     return culture ? `${culture?.engName ?? ''} (${culture?.name ?? ''})` : name;
 }
 
-// export function treeElementToObject<T extends ITreeElement>(element: T): Object {
-//     const obj = instanceToPlain(element, {enableCircularCheck: true});
-//     // Remove prefix _ from property names
-//     for (const key of Object.keys(obj)) {
-//         if (key.startsWith('_')) {
-//             const newKey = key.substring(1);
-//             obj[newKey] = obj[key];
-//             delete obj[key];
-//         }
-//     }
-//     return obj;
-// }
+export function generateNonce(): string {
+    let text = '';
+    const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    for (let i = 0; i < 32; i++) {
+        text += possible.charAt(Math.floor(Math.random() * possible.length));
+    }
+    return text;
+}

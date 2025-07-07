@@ -21,6 +21,7 @@
      * @property {boolean} loading
      * @property {boolean} paramsEnabled
      * @property {boolean} invalidData
+     * @property {boolean} supressOnChange
      */
 
     /**
@@ -50,11 +51,15 @@
         return lang ?? '';
     }
 
+    function logMsg(...args) {
+        console.log(`%c[APP]`, 'background:silver;color:black;', ...args);
+    }
+
     const domBody = document.getElementsByTagName('body')[0];
 
     window.addEventListener('message', event => {
         message = event.data;
-        console.log('Received message:', message);
+        logMsg(`Received message '${message.command}'`, message);
         switch (message.command) {
             case 'invalidData': {
                 /*
@@ -64,13 +69,31 @@
                 field: string
                 */
 
-                debugger;
                 if (!window.pageApp.item || window.pageApp.fullPath !== message.fullPath) {
+                    debugger;
                     return;
                 }
 
                 const elem = document.getElementById(message.field) || domBody;
                 showTooltip(`${message.field}-invalid`, message.message, elem);
+
+                break;
+            }
+            case 'updatePaths': {
+                /*
+                command: 'updatePaths'
+                paths: string[];
+                */
+
+                debugger;
+                if (window.pageApp.item && message.paths) {
+                    window.pageApp.supressOnChange = true;
+
+                    window.pageApp.$nextTick(() => {
+                        window.pageApp.item.paths = message.paths;
+                        //window.pageApp.supressOnChange = undefined;
+                    });
+                }
 
                 break;
             }
@@ -100,14 +123,16 @@
 
                 window.pageApp.loading = true;
                 window.pageApp.item = undefined;
+                window.pageApp.paramsEnabled = false;
+                window.pageApp.supressOnChange = undefined;
 
                 window.pageApp.$nextTick(() => {
-                    //window.pageApp.item = element;
                     setNewElement(element);
                     window.pageApp.loading = false;
 
                     window.pageApp.$nextTick(() => {
                         window.pageApp.bindTagParameters(oldElement);
+                        window.pageApp.updateInvalidData();
                     });
                 });
                 delete domBody.dataset['loading'];
@@ -148,8 +173,15 @@
         });
 
         element.translations = translations;
-        console.log('Setting new element:', element);
+        logMsg(`Setting new element:  ${getFullPath(element)} (${element.elementType})`, element);
         window.pageApp.item = element;
+    }
+
+    function getFullPath(element) {
+        if (element && element.paths && element.paths.length > 0) {
+            return '/' + element.paths.join('/');
+        }
+        return '';
     }
 
     // Add the method to String prototype
@@ -183,7 +215,7 @@
             if (item.tooltip.isConnected) { item.tooltip.remove(); }
             if (tooltipsMap.has(item.uid)) {
                 tooltipsMap.delete(item.uid);
-                //console.log(`[Tooltip] Removed tooltip '${item.uid}'.`);
+                //logMsg(`[Tooltip] Removed tooltip '${item.uid}'.`);
             }
             item.tooltip = null;
         }
@@ -195,7 +227,7 @@
             if (item.hideTimeoutId) { clearTimeout(item.hideTimeoutId); }
             if (item.removeTimeoutId) { clearTimeout(item.removeTimeoutId); }
             item.tooltip.classList.remove('tooltip-fade-out');
-            //console.log(`[Tooltip] Cancel removal of tooltip '${item.uid}'.`);
+            //logMsg(`[Tooltip] Cancel removal of tooltip '${item.uid}'.`);
         }
     }
 
@@ -223,13 +255,13 @@
 
         const scheduleRemoval = () => {
             if (tooltipItem.tooltip) {
-                //console.log(`[Tooltip] scheduled hide timeout(${hideTimeout}) for tooltip '${tooltipItem.uid}'.`);
+                //logMsg(`[Tooltip] scheduled hide timeout(${hideTimeout}) for tooltip '${tooltipItem.uid}'.`);
                 tooltipItem.hideTimeoutId = window.setTimeout(() => {
                     if (tooltipItem.tooltip) {
                         tooltipItem.tooltip.classList.add('tooltip-fade-out');
                     }
 
-                    //console.log(`[Tooltip] scheduled remove timeout(${removeTimeout}) for tooltip '${tooltipItem.uid}'.`);
+                    //logMsg(`[Tooltip] scheduled remove timeout(${removeTimeout}) for tooltip '${tooltipItem.uid}'.`);
                     tooltipItem.removeTimeoutId = window.setTimeout(() => {
                         removeTooltip(tooltipItem);
                     }, removeTimeout);
@@ -243,7 +275,7 @@
                 const now = Date.now();
                 tooltipsMap.values().filter(x => (now - x.date) > 200).forEach(item => {
                     if (item.tooltip && !item.tooltip.contains(event.target)) {
-                        //console.log(`[Tooltip] click outside, remove/cancel tooltip '${item.uid}'.`);
+                        //logMsg(`[Tooltip] click outside, remove/cancel tooltip '${item.uid}'.`);
                         cancelRemoval(item);
                         removeTooltip(item);
                     }
@@ -257,7 +289,7 @@
         tooltip.addEventListener('mouseleave', scheduleRemoval);
         tooltip.addEventListener('click', (e) => {
             e.stopPropagation();
-            //console.log(`[Tooltip] click on tooltip, remove/cancel tooltip '${item.uid}'.`);
+            //logMsg(`[Tooltip] click on tooltip, remove/cancel tooltip '${item.uid}'.`);
             cancelRemoval(tooltipItem);
             removeTooltip(tooltipItem);
         });
@@ -271,7 +303,7 @@
             setTimeout(() => {
                 if (!handleClickOutsideInitialized && tooltipItem.tooltip) {
                     handleClickOutsideInitialized = true;
-                    //console.log(`[Tooltip] initialized click outside handler.`);
+                    //logMsg(`[Tooltip] initialized click outside handler.`);
                     document.addEventListener('click', handleClickOutside, true);
                 }
             }, 200);
@@ -294,7 +326,8 @@
         item: undefined,
         loading: true,
         paramsEnabled: false,
-        invalidData: false
+        invalidData: false,
+        supressOnChange: undefined
     };
 
     window.pageApp = createApp({
@@ -310,11 +343,12 @@
             },
 
             fullPath() {
-                if (this.item && this.item.paths) {
-                    return '/' + this.item.paths.join('/');
-                }
+                return getFullPath(this.item);
+                // if (this.item && this.item.paths) {
+                //     return '/' + this.item.paths.join('/');
+                // }
 
-                return '';
+                // return '';
             },
 
             isResource() {
@@ -331,7 +365,7 @@
         },
 
         mounted() {
-            console.log('Page app mounted');
+            logMsg('Page app mounted');
             // Use nextTick to ensure the DOM has been updated after the initial render.
             this.$nextTick(() => {
                 this.debouncedResize();
@@ -351,16 +385,17 @@
 
         methods: {
             onChange(value, oldValue) {
-                if (this.item && oldValue !== undefined) {
+                if (this.item && oldValue !== undefined && !this.loading && !this.supressOnChange) {
                     const data = toRaw(this.item);
 
-                    if (this.item.invalidData) {
-                        console.warn('Invalid data, will not send data!', data);
+                    // if (this.item.invalidData) {
+                    if (this.invalidData) {
+                        logMsg('Invalid data, will not send data!', data);
                         return;
                     }
 
                     if (data) {
-                        console.log('Data changed:', data);
+                        logMsg(`Data changed, sending message 'update' with data: `, data);
                         vscode.postMessage({ command: 'update', data: data });
                     }
                 }
@@ -390,22 +425,27 @@
 
             updateInvalidData(forceInvalid) {
                 if (forceInvalid === true) {
-                    this.item.invalidData = true;
-                } else {
+                    // this.item.invalidData = true;
+                    this.invalidData = true;
+                } else if (tagifyParams) {
                     // check invalid params
                     const invalidTagElm = tagifyParams.getTagElms().find(node => {
                         const tagData = tagifyParams.getSetTagData(node);
                         return tagData && tagData.__isValid !== true;
                     });
 
-                    if (invalidTagElm) {
-                        this.item.invalidData = true;
-                    }
+                    const newInvalidData = !!invalidTagElm;
 
-                    // showTooltip('params-invalid', tagData.__isValid, invalidTagElm);
+                    if (newInvalidData !== this.invalidData) {
+                        this.invalidData = newInvalidData;
+                    }
+                    // if (newInvalidData !== this.item.invalidData) {
+                    //     this.item.invalidData = newInvalidData;
+                    // }
                 }
 
-                return this.item.invalidData;
+                return this.invalidData;
+                // return this.item.invalidData;
             },
 
             editParameters(e) {
@@ -451,7 +491,7 @@
             },
 
             openResource() {
-                console.log('Open resource clicked');
+                logMsg('Open resource clicked');
             },
 
             lockTranslation(translation) {
@@ -519,7 +559,7 @@
                     },
 
                     transformTag: function (tagData, originalData) {
-                        console.log('Transforming tag:', tagData, originalData);
+                        //logMsg('Transforming tag:', tagData, originalData);
                         if (tagData.order === undefined) {
                             const maxOrder = Math.max(...this.value.map(x => x.order), -1);
                             tagData.order = maxOrder + 1;
@@ -576,6 +616,7 @@
                     if (isValid !== true) {
                         tagify.replaceTag(tag, { ...data, __isValid: isValid });
                     }
+                    self.updateInvalidData();
                 });
 
                 var dragsort = new DragSort(tagify.DOM.scope, {

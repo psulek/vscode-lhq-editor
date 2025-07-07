@@ -1,4 +1,5 @@
-import type { ITreeElement, TreeElementType } from '@lhq/lhq-generators';
+import type { IRootModelElement, ITreeElement, TreeElementType } from '@lhq/lhq-generators';
+import type { TextDocument, Uri, Webview } from 'vscode';
 
 export type SearchTreeKind = 'path' | 'name' | 'translation' | 'language';
 
@@ -63,10 +64,6 @@ export type CulturesMap = Record<string, CultureInfo>;
 
 export type ValidationError = { message: string, detail?: string };
 
-export interface IMessageSender {
-    sendMessage(message: HtmlPageMessage): void;
-}
-
 export type HtmlPageMessage = {
     command: 'loadPage';
     element: Object;
@@ -78,6 +75,39 @@ export type HtmlPageMessage = {
     fullPath: string;
     message: string;
     field: string;
-};
+} | {
+    command: 'updatePaths'
+    paths: string[];
+}
+
+
+export interface IAppContext {
+    get treeContext(): ITreeContext;
+
+    get isEditorActive(): boolean;
+    set isEditorActive(active: boolean);
+
+    get languagesVisible(): boolean;
+    set languagesVisible(visible: boolean);
+
+    getFileUri(...pathParts: string[]): Uri;
+    getPageHtml(): Promise<string>;
+    getMediaUri(webview: Webview, filename: string, themed?: boolean): Uri
+    setSelectionChangedCallback(callback: SelectionChangedCallback): void;
+    setTreeSelection(selectedElements: ITreeElement[]): void;
+    sendMessageToHtmlPage(message: HtmlPageMessage): void;
+}
+
+export interface ITreeContext {
+    get currentRootModel(): IRootModelElement | undefined;
+
+    updateElement(element: Record<string, unknown>): Promise<void>;
+
+    updateDocument(document: TextDocument | undefined): Promise<void>;
+}
+
+// export interface IDocumentContext {
+//     get isActive(): boolean;
+// }
 
 export type SelectionChangedCallback = (selectedElements: ITreeElement[]) => void;

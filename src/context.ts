@@ -1,8 +1,10 @@
 import * as vscode from 'vscode';
-import { HtmlPageMessage, IMessageSender, IVirtualLanguageElement, SelectionChangedCallback } from './types';
+import { HtmlPageMessage, IAppContext, ITreeContext, IVirtualLanguageElement, SelectionChangedCallback } from './types';
 import { ITreeElement } from '@lhq/lhq-generators';
 import { VirtualTreeElement } from './elements';
-import { logger } from './utils';
+import { getElementFullPath, initializeDebugMode, isValidDocument, loadCultures, logger, showMessageBox } from './utils';
+import { LhqEditorProvider } from './editorProvider';
+import { LhqTreeDataProvider } from './treeDataProvider';
 
 const globalStateKeys = {
     languagesVisible: 'languagesVisible'
@@ -20,28 +22,93 @@ const contextKeys = {
 };
 
 
-export class AppContext {
+export class AppContext implements IAppContext {
     private _ctx!: vscode.ExtensionContext;
     private _isEditorActive = false;
     private activeTheme = ''; // not supported yet
     private _selectedElements: ITreeElement[] = [];
-    private _onSelectionChanged:  SelectionChangedCallback | undefined;
-    // private _messageSender: IMessageSender | undefined;
+    private _onSelectionChanged: SelectionChangedCallback | undefined;
+    private _lhqTreeDataProvider: LhqTreeDataProvider = undefined!;
+    private _lhqEditorProvider: LhqEditorProvider = undefined!;
+    private _pageHtml: string = '';
 
-    // private _emitter = new vscode.EventEmitter<void>();
-    // public readonly onSelectionChanged: vscode.Event<void> = this._emitter.event;
-
-    public setSelectionChangedCallback(callback:  SelectionChangedCallback): void {
+    public setSelectionChangedCallback(callback: SelectionChangedCallback): void {
         this._onSelectionChanged = callback;
     }
 
-    public init(ctx: vscode.ExtensionContext) {
+    public async init(ctx: vscode.ExtensionContext): Promise<void> {
         this._ctx = ctx;
 
         // to trigger setContext calls
         this.languagesVisible = this.languagesVisible;
         this.isEditorActive = false;
-        this.setTreeViewHasSelectedItem([]);
+        this.setTreeSelection([]);
+
+        initializeDebugMode(ctx.extensionMode);
+        await loadCultures(ctx);
+
+        this._ctx.subscriptions.push(
+            vscode.workspace.onDidChangeTextDocument(async e => {
+                if (!e.reason) {
+                    logger().log('debug', `[AppContext] onDidChangeTextDocument -> No reason provided, ignoring change for document: ${e.document?.fileName ?? '-'}`);
+                    return;
+                }
+                logger().log('debug', `[AppContext] onDidChangeTextDocument -> document: ${e.document?.fileName ?? '-'}, reason: ${e.reason}`);
+
+                const docUri = e.document?.uri.toString() ?? '';
+                if (isValidDocument(e.document)) {
+                    const treeDocUri = this._lhqTreeDataProvider.documentUri;
+                    if (treeDocUri === docUri) {
+                        await this._lhqTreeDataProvider.updateDocument(e.document);
+                    } else {
+                        logger().log('debug', `[AppContext] onDidChangeTextDocument -> Document uri (${docUri}) is not the treeContext has (${treeDocUri}), ignoring change.`);
+                    }
+                } else {
+                    logger().log('debug', `[AppContext] onDidChangeTextDocument -> Document (${docUri}) is not valid, ignoring change.`);
+                }
+            }),
+
+            vscode.workspace.onWillSaveTextDocument(async (event: vscode.TextDocumentWillSaveEvent) => {
+                // if (event.document.uri.toString() === document.uri.toString()) {
+                if (event.document.uri.toString() === this._lhqTreeDataProvider.documentUri) {
+                    const validationError = this._lhqTreeDataProvider.lastValidationError;
+
+                    if (validationError) {
+                        await showMessageBox('warn', validationError.message, { detail: validationError.detail, modal: true });
+
+                        // event.waitUntil(
+                        //     new Promise<vscode.TextEdit[]>((_resolve, reject) => {
+                        //         throw new Error(validationError.message);
+                        //         //reject(new Error(validationError.message));
+                        //     })
+                        // );
+
+                    } else {
+                        //event.waitUntil(Promise.resolve([] as vscode.TextEdit[]));
+                    }
+                }
+            })
+        );
+
+
+        this._lhqTreeDataProvider = new LhqTreeDataProvider(this._ctx);
+        this._lhqEditorProvider = new LhqEditorProvider(this._ctx, this._lhqTreeDataProvider);
+        this._ctx.subscriptions.push(
+            vscode.window.registerCustomEditorProvider(LhqEditorProvider.viewType, this._lhqEditorProvider, {
+                webviewOptions: {
+                    retainContextWhenHidden: true,
+                },
+                supportsMultipleEditorsPerDocument: false,
+            })
+        );
+    }
+
+    public sendMessageToHtmlPage(message: HtmlPageMessage): void {
+        this._lhqEditorProvider.sendMessageToHtmlPage(message);
+    }
+
+    public get treeContext(): ITreeContext {
+        return this._lhqTreeDataProvider;
     }
 
     public get languagesVisible(): boolean {
@@ -64,20 +131,21 @@ export class AppContext {
         }
     }
 
-    public getNonce(): string {
-        let text = '';
-        const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-        for (let i = 0; i < 32; i++) {
-            text += possible.charAt(Math.floor(Math.random() * possible.length));
-        }
-        return text;
-    }
-
     public getFileUri = (...pathParts: string[]): vscode.Uri => {
         return vscode.Uri.joinPath(this._ctx.extensionUri, ...pathParts);
     };
 
-    public getMediaUri = (webview: vscode.Webview, filename: string, themed: boolean = false): vscode.Uri => {
+    public async getPageHtml(): Promise<string> {
+        if (this._pageHtml === '') {
+            const pageHtmlUri = this.getFileUri('media', 'page.html');
+            const pageHtmlRaw = await vscode.workspace.fs.readFile(pageHtmlUri);
+            this._pageHtml = new TextDecoder().decode(pageHtmlRaw);
+        }
+        return this._pageHtml;
+    }
+
+    public getMediaUri = (webview: vscode.Webview, filename: string, themed?: boolean): vscode.Uri => {
+        themed = themed ?? false;
         const diskPath = themed
             ? vscode.Uri.joinPath(this._ctx.extensionUri, 'media', this.activeTheme, filename)
             : vscode.Uri.joinPath(this._ctx.extensionUri, 'media', filename);
@@ -88,22 +156,17 @@ export class AppContext {
         return this._selectedElements ?? [];
     }
 
-    // public sendMessageToWebview(webview: vscode.Webview, message: HtmlPageMessage): void {
-    //     if (webview) {
-    //         webview.postMessage(message);
-    //     }
-    // }
-
-    public setTreeViewHasSelectedItem(selectedElements: ITreeElement[]): void {
+    public setTreeSelection(selectedElements: ITreeElement[]): void {
         this._selectedElements = selectedElements;
         if (this._onSelectionChanged) {
-            logger().log('debug', `AppContext.setTreeViewHasSelectedItem, fire -> _onSelectionChanged (${selectedElements.length} items selected)`);
-            // @ts-ignore
-            // this._onSelectionChanged.call(this);
+            let selInfo = '';
+            if (selectedElements.length === 1) {
+                const elem1 = selectedElements[0];
+                selInfo = `[${getElementFullPath(elem1)} (${elem1.elementType})]`;
+            }
+            logger().log('debug', `[AppContext] setTreeSelection -> fire _onSelectionChanged ${selInfo} (${selectedElements.length} items selected)`);
             this._onSelectionChanged(selectedElements);
         }
-
-        // this._emitter.fire();
 
         const hasSelectedItem = selectedElements.length === 1;
         const hasMultiSelection = selectedElements.length > 1;
@@ -132,4 +195,4 @@ export class AppContext {
     }
 }
 
-export const appContext = new AppContext();
+// export const appContext = new AppContext();
