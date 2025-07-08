@@ -64,7 +64,7 @@ export type CulturesMap = Record<string, CultureInfo>;
 
 export type ValidationError = { message: string, detail?: string };
 
-export type HtmlPageMessage = {
+export type AppToPageMessage = {
     command: 'loadPage';
     element: Object;
     file: string;
@@ -78,6 +78,15 @@ export type HtmlPageMessage = {
 } | {
     command: 'updatePaths'
     paths: string[];
+}
+
+export type PageToAppMessage = {
+    command: 'update',
+    data: Record<string, unknown>;
+} | {
+    command: 'select',
+    paths: string[];
+    elementType: TreeElementType
 }
 
 
@@ -95,7 +104,7 @@ export interface IAppContext {
     getMediaUri(webview: Webview, filename: string, themed?: boolean): Uri
     setSelectionChangedCallback(callback: SelectionChangedCallback): void;
     setTreeSelection(selectedElements: ITreeElement[]): void;
-    sendMessageToHtmlPage(message: HtmlPageMessage): void;
+    sendMessageToHtmlPage(message: AppToPageMessage): void;
 }
 
 export interface ITreeContext {
@@ -104,10 +113,8 @@ export interface ITreeContext {
     updateElement(element: Record<string, unknown>): Promise<void>;
 
     updateDocument(document: TextDocument | undefined): Promise<void>;
-}
 
-// export interface IDocumentContext {
-//     get isActive(): boolean;
-// }
+    selectElementByPath(elementType: TreeElementType, path: string[]): Promise<void>;
+}
 
 export type SelectionChangedCallback = (selectedElements: ITreeElement[]) => void;

@@ -1,13 +1,13 @@
 import * as vscode from 'vscode';
 import { findCulture, generateNonce, isValidDocument, logger, showMessageBox } from './utils';
-import { HtmlPageMessage } from './types';
+import { AppToPageMessage, PageToAppMessage } from './types';
 import { CategoryLikeTreeElementToJsonOptions, ITreeElement } from '@lhq/lhq-generators';
 import { isVirtualTreeElement } from './elements';
 
 export class DocumentContext /* implements IDocumentContext */ {
     private readonly _context: vscode.ExtensionContext;
     private readonly _document: vscode.TextDocument;
-    private readonly _webviewPanel: vscode.WebviewPanel;
+    private readonly _webviewPanel: vscode.WebviewPanel;// | undefined;
     private readonly _onDidDispose: () => void;
     private _selectedElements: ITreeElement[] = [];
 
@@ -43,12 +43,12 @@ export class DocumentContext /* implements IDocumentContext */ {
     }
 
     private setupEvents(): void {
-        const didReceiveMessageSubscription = this._webviewPanel.webview.onDidReceiveMessage(async message => {
+        const didReceiveMessageSubscription = this._webviewPanel!.webview.onDidReceiveMessage(async (message: PageToAppMessage) => {
             logger().log('debug', `[DocumentContext] webview.onDidReceiveMessage: ${message.command} for ${this.fileName}`);
             switch (message.command) {
                 case 'update':
                     try {
-                        const element = message.data as Record<string, unknown>;
+                        const element = message.data;
                         if (element) {
                             await appContext.treeContext.updateElement(element);
                         }
@@ -57,10 +57,18 @@ export class DocumentContext /* implements IDocumentContext */ {
                         return;
                     }
                     break;
+                case 'select':
+                    try {
+                        await appContext.treeContext.selectElementByPath(message.elementType, message.paths);
+                    } catch(e) {
+                        logger().log('error', `[DocumentContext] webview.onDidReceiveMessage: Error selecting element: ${e}`);
+                        return;
+                    }
+                    break;
             }
         });
 
-        const viewStateSubscription = this._webviewPanel.onDidChangeViewState(async e => {
+        const viewStateSubscription = this._webviewPanel!.onDidChangeViewState(async e => {
             const changedPanel = e.webviewPanel;
             logger().log('debug', `[DocumentContext] webviewPanel.onDidChangeViewState for ${this.fileName}. Active: ${changedPanel.active}, Visible: ${changedPanel.visible}`);
 
@@ -71,24 +79,18 @@ export class DocumentContext /* implements IDocumentContext */ {
             }
         });
 
-        this._webviewPanel.onDidDispose(() => {
-            logger().log('debug', `[DocumentContext] onDidDispose -> for: ${this.fileName}`);
-            viewStateSubscription.dispose();
-            didReceiveMessageSubscription.dispose();
 
-            this._onDidDispose();
+        this._context.subscriptions.push(
+            this._webviewPanel!.onDidDispose(() => {
+                logger().log('debug', `[DocumentContext] onDidDispose -> for: ${this.fileName}`);
+                viewStateSubscription.dispose();
+                didReceiveMessageSubscription.dispose();
+                //this._webviewPanel = undefined;
+                //this._disposed = true;
 
-            // // delayed a little..
-            // setTimeout(() => {
-            //     if (appContext.treeContext.hasActiveDocument() && !this.treeDataProvider.isSameDocument(this._document)) {
-            //         logger().log('debug', "LhqEditorProvider.onDidDispose: No active document or same document. Nothing to do.");
-            //     } else {
-            //         logger().log('debug', "LhqEditorProvider.onDidDispose: Triggering treeDataProvider.updateDocument");
-            //         this.treeDataProvider.updateDocument(vscode.window.activeTextEditor?.document);
-            //     }
-
-            // }, 100);
-        });
+                this._onDidDispose();
+            })
+        );
     }
 
     public get fileName(): string {
@@ -100,7 +102,7 @@ export class DocumentContext /* implements IDocumentContext */ {
     }
 
     public get isActive(): boolean {
-        return this._webviewPanel.active;
+        return this._webviewPanel?.active === true;
     }
 
     public onSelectionChanged(selectedElements: ITreeElement[]): void {
@@ -157,12 +159,19 @@ export class DocumentContext /* implements IDocumentContext */ {
 
     public async loadEmptyPage(): Promise<void> {
         logger().log('debug', `[DocumentContext] loadEmptyPage for: ${this.fileName}`);
+        // if (!this._webviewPanel) {
+        //     return false;
+        // }
+        
         this._webviewPanel.webview.html = await this.getHtmlForWebview(true);
+        // return true;
     }
 
     public async updateWebviewContent(): Promise<void> {
         logger().log('debug', `[DocumentContext] updateWebviewContent for: ${this.fileName}`);
-        this._webviewPanel.webview.html = await this.getHtmlForWebview(false);
+        //if (this._webviewPanel) {
+            this._webviewPanel.webview.html = await this.getHtmlForWebview(false);
+        //}
     }
 
     public reflectSelectedElementToWebview(): void {
@@ -170,7 +179,7 @@ export class DocumentContext /* implements IDocumentContext */ {
         if (!this._webviewPanel || !this._webviewPanel.webview || !this._document) { return; }
 
         const rootModel = appContext.treeContext.currentRootModel!;
-        const element = this._selectedElements.length > 0 ? this._selectedElements[0] : undefined;
+        const element = this._selectedElements.length > 0 ? this._selectedElements[0] : rootModel;
 
         if (element === undefined || isVirtualTreeElement(element)) {
             return;
@@ -181,7 +190,7 @@ export class DocumentContext /* implements IDocumentContext */ {
             includeCategories: false,
             includeResources: false
         };
-        const message: HtmlPageMessage = {
+        const message: AppToPageMessage = {
             command: 'loadPage',
             file: this.fileName,
             cultures: cultures,
@@ -201,6 +210,10 @@ export class DocumentContext /* implements IDocumentContext */ {
     // }
 
     private async getHtmlForWebview(emptyPage: boolean): Promise<string> {
+        // if (!this._webviewPanel) {
+        //     return '';
+        // }
+
         const webview = this._webviewPanel.webview;
         let pageHtml = await appContext.getPageHtml();
 
@@ -208,7 +221,7 @@ export class DocumentContext /* implements IDocumentContext */ {
         const content_end = `<!-- lhq_editor_content_end -->`;
 
         if (emptyPage) {
-            const startIdx = pageHtml.indexOf(content_begin); 
+            const startIdx = pageHtml.indexOf(content_begin);
             const endIdx = pageHtml.indexOf(content_end, startIdx + content_begin.length);
             if (startIdx > -1 && endIdx > -1) {
                 pageHtml = pageHtml.substring(0, startIdx) + pageHtml.substring(endIdx + content_end.length);
@@ -244,14 +257,18 @@ export class DocumentContext /* implements IDocumentContext */ {
         return pageHtml;
     }
 
-    public sendMessageToHtmlPage(message: HtmlPageMessage): void {
-        if (this._webviewPanel && this._webviewPanel.webview) {
-            if (this._webviewPanel.active) {
-                logger().log('debug', `[DocumentContext] sendMessage -> ${message.command} ...`);
-                this._webviewPanel.webview.postMessage(message);
-            } else {
-                logger().log('debug', `[DocumentContext] sendMessage -> WebviewPanel is not active. Skipping message: ${message.command}`);
+    public sendMessageToHtmlPage(message: AppToPageMessage): void {
+        try {
+            if (this._webviewPanel && this._webviewPanel.webview) {
+                if (this._webviewPanel.active) {
+                    logger().log('debug', `[DocumentContext] sendMessage -> ${message.command} ...`);
+                    this._webviewPanel.webview.postMessage(message);
+                } else {
+                    logger().log('debug', `[DocumentContext] sendMessage -> WebviewPanel is not active. Skipping message: ${message.command}`);
+                }
             }
+        } catch (error) {
+            logger().log('error', `[DocumentContext] sendMessageToHtmlPage: Error sending message '${message.command}': ${error}`);
         }
     }
 }

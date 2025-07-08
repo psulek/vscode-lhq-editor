@@ -340,6 +340,24 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
         this.refresh();
     }
 
+    public async selectElementByPath(elementType: TreeElementType, path: string[]): Promise<void> {
+        if (!this.currentDocument || !this._currentRootModel) {
+            return Promise.resolve();
+        }
+
+        const paths = createTreeElementPaths('/' + path.join('/'), true);
+        const elem = elementType === 'model'
+            ? this._currentRootModel
+            : this._currentRootModel.getElementByPath(paths, elementType as CategoryOrResourceType);
+
+        const elemFullPath = paths.getParentPath('/', true);
+        const found = !isNullOrEmpty(elem);
+        logger().log('debug', `[LhqTreeDataProvider] selectElementByPath -> elementType: ${elementType}, paths: ${elemFullPath} -> found: ${found}`);
+
+        if (elem) {
+            await this.setSelectedItems([elem!]);
+        }
+    }
 
     public async updateElement(element: Record<string, unknown>): Promise<void> {
         if (!element || !this._currentRootModel || !this.currentDocument) {
@@ -431,6 +449,9 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
                 const success = await this.applyChangesToTextDocument();
 
                 this._onDidChangeTreeData.fire([elem]);
+                // if (this.selectedElements.length === 0) {
+                //     await this.setSelectedItems([elem]);
+                // }
                 // await this.view.reveal(elem, { expand: true, select: true, focus: true });
 
                 const elemPath = getElementFullPath(elem);

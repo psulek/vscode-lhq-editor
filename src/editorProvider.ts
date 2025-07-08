@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { LhqTreeDataProvider } from './treeDataProvider';
 import { isValidDocument, logger, showMessageBox } from './utils';
-import { HtmlPageMessage, SelectionChangedCallback } from './types';
+import { AppToPageMessage, SelectionChangedCallback } from './types';
 import debounce from 'lodash.debounce';
 import { ITreeElement } from '@lhq/lhq-generators';
 import { DocumentContext } from './documentContext';
@@ -43,7 +43,7 @@ export class LhqEditorProvider implements vscode.CustomTextEditorProvider {
         //this.reflectSelectedElementToWebview();
     }
 
-    public sendMessageToHtmlPage(message: HtmlPageMessage): void {
+    public sendMessageToHtmlPage(message: AppToPageMessage): void {
         const ctx = this.activeDocumentContext;
         if (ctx) {
             logger().log('debug', `[LhqEditorProvider] sendMessageToHtmlPage -> Sending message '${message.command}' to webview for document ${ctx.documentUri}`);
@@ -90,17 +90,25 @@ export class LhqEditorProvider implements vscode.CustomTextEditorProvider {
         const docCtx = new DocumentContext(this.context, document, webviewPanel, onDocContextDisposed);
         this._editors.set(documentUri, docCtx);
 
-        // 1st - set html page to 'empty' , showing msg: loading $file ...
-        await docCtx.loadEmptyPage();
+        try {
+            
+            // 1st - set html page to 'empty' , showing msg: loading $file ...
+            await docCtx.loadEmptyPage();
 
-        // 2nd - update tree data provider with the document
-        await this.treeDataProvider.updateDocument(document);
+            // 2nd - update tree data provider with the document
+            await this.treeDataProvider.updateDocument(document);
 
-        // 3rd - update webview content with the document
-        await docCtx.updateWebviewContent();
+            // 3rd - update webview content with the document
+            await docCtx.updateWebviewContent();
 
-        // 4th - select root element in the tree , this will reflect the selection to the webview
-        await this.treeDataProvider.selectRootElement();
-        appContext.isEditorActive = true;
+            // 4th - select root element in the tree , this will reflect the selection to the webview
+            await this.treeDataProvider.selectRootElement();
+            appContext.isEditorActive = true;
+        } catch (error) {
+            logger().log('error', `[LhqEditorProvider] resolveCustomTextEditor -> Error while resolving custom text editor: ${error}`);
+            
+            // clear and hide the tree if error occurs
+            await this.treeDataProvider.updateDocument(undefined);
+        }
     }
 }

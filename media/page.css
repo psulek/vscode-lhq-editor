@@ -75,7 +75,7 @@ select {
   width: 100%;
   padding: 3px;
   box-sizing: border-box;
-  resize: none;
+  resize: vertical;
   /* border: rgb(221, 221, 221) solid 1px; */
   background-color: var(--vscode-input-background);
   color: var(--vscode-input-foreground);
@@ -92,6 +92,13 @@ button:focus {
   outline-offset: -1px;
   outline-style: solid;
   outline-width: 1px;
+}
+
+input[readonly]:focus,
+textarea[readonly]:focus,
+select[readonly]:focus,
+button[readonly]:focus {
+  outline-style: none;
 }
 
 button {
@@ -116,12 +123,17 @@ input:-webkit-autofill:active {
 }
 
 textarea {
+  min-height: min-content;
   max-height: 4.5em;
   overflow-y: auto;
 }
 
 textarea[readonly] {
-  background-color: var(--vscode-editor-background);
+  /* background-color: var(--vscode-editor-background); */
+  background-color: rgb(
+    from var(--vscode-input-placeholderForeground) r g b / 0.1
+  );
+
   /* color: var(--vscode-editor-foreground); */
   color: var(--vscode-input-placeholderForeground);
 }

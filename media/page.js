@@ -85,7 +85,7 @@
                 paths: string[];
                 */
 
-                debugger;
+                //debugger;
                 if (window.pageApp.item && message.paths) {
                     window.pageApp.supressOnChange = true;
 
@@ -133,6 +133,8 @@
                     window.pageApp.$nextTick(() => {
                         window.pageApp.bindTagParameters(oldElement);
                         window.pageApp.updateInvalidData();
+
+                        window.pageApp.debouncedResize();
                     });
                 });
                 delete domBody.dataset['loading'];
@@ -142,7 +144,6 @@
     });
 
     function setNewElement(element) {
-        //debugger;
         if (!element) { return; }
 
         /** @type TranslationItem[] */
@@ -359,8 +360,6 @@
         created() {
             this.debouncedOnChange = _.debounce(this.onChange, debounceWait, debounceOpts);
             this.$watch('item', this.debouncedOnChange, { deep: true, immediate: false });
-            // this.$watch('item.name', (value, oldvalue) => { this.debouncedOnChange('name', value, oldvalue) }, { immediate: false });
-            // this.$watch('item.description', (value, oldvalue) => { this.debouncedOnChange('description', value, oldvalue) }, { immediate: false });
             this.debouncedResize = _.debounce(this.resizeAllTextAreas, 100, debounceOpts);
         },
 
@@ -369,10 +368,6 @@
             // Use nextTick to ensure the DOM has been updated after the initial render.
             this.$nextTick(() => {
                 this.debouncedResize();
-
-                if (this.isResource) {
-                    // this.createParametersTags();
-                }
             });
             window.addEventListener('resize', this.debouncedResize);
         },
@@ -385,18 +380,25 @@
 
         methods: {
             onChange(value, oldValue) {
-                if (this.item && oldValue !== undefined && !this.loading && !this.supressOnChange) {
-                    const data = toRaw(this.item);
+                const supressed = this.supressOnChange !== undefined;
+                try {
+                    if (this.item && oldValue !== undefined && !this.loading && !supressed) {
+                        const data = toRaw(this.item);
 
-                    // if (this.item.invalidData) {
-                    if (this.invalidData) {
-                        logMsg('Invalid data, will not send data!', data);
-                        return;
+                        // if (this.item.invalidData) {
+                        if (this.invalidData) {
+                            logMsg('Invalid data, will not send data!', data);
+                            return;
+                        }
+
+                        if (data) {
+                            logMsg(`Data changed, sending message 'update' with data: `, data);
+                            vscode.postMessage({ command: 'update', data: data });
+                        }
                     }
-
-                    if (data) {
-                        logMsg(`Data changed, sending message 'update' with data: `, data);
-                        vscode.postMessage({ command: 'update', data: data });
+                } finally {
+                    if (supressed) {
+                        this.supressOnChange = undefined;
                     }
                 }
             },
@@ -491,7 +493,9 @@
             },
 
             openResource() {
-                logMsg('Open resource clicked');
+                const data = { elementType: this.item.elementType, paths: toRaw(this.item.paths) };
+                logMsg(`Click on ${this.item.elementType} (${this.fullPath}), sending message 'select' with data: `, data);
+                vscode.postMessage({ command: 'select', ...data });
             },
 
             lockTranslation(translation) {

@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { HtmlPageMessage, IAppContext, ITreeContext, IVirtualLanguageElement, SelectionChangedCallback } from './types';
+import { AppToPageMessage, IAppContext, ITreeContext, IVirtualLanguageElement, SelectionChangedCallback } from './types';
 import { ITreeElement } from '@lhq/lhq-generators';
 import { VirtualTreeElement } from './elements';
 import { getElementFullPath, initializeDebugMode, isValidDocument, loadCultures, logger, showMessageBox } from './utils';
@@ -53,7 +53,8 @@ export class AppContext implements IAppContext {
                     logger().log('debug', `[AppContext] onDidChangeTextDocument -> No reason provided, ignoring change for document: ${e.document?.fileName ?? '-'}`);
                     return;
                 }
-                logger().log('debug', `[AppContext] onDidChangeTextDocument -> document: ${e.document?.fileName ?? '-'}, reason: ${e.reason}`);
+                const reason = e.reason === vscode.TextDocumentChangeReason.Undo ? 'Undo' : 'Redo';
+                logger().log('debug', `[AppContext] onDidChangeTextDocument -> document: ${e.document?.fileName ?? '-'}, reason: ${reason}`);
 
                 const docUri = e.document?.uri.toString() ?? '';
                 if (isValidDocument(e.document)) {
@@ -103,7 +104,7 @@ export class AppContext implements IAppContext {
         );
     }
 
-    public sendMessageToHtmlPage(message: HtmlPageMessage): void {
+    public sendMessageToHtmlPage(message: AppToPageMessage): void {
         this._lhqEditorProvider.sendMessageToHtmlPage(message);
     }
 
