@@ -94,11 +94,20 @@ button:focus {
   outline-width: 1px;
 }
 
+.focus-border {
+  opacity: 1;
+  outline-color: var(--vscode-focusBorder);
+  outline-offset: -1px;
+  outline-style: solid;
+  outline-width: 1px;
+}
+
 input[readonly]:focus,
 textarea[readonly]:focus,
 select[readonly]:focus,
 button[readonly]:focus {
-  outline-style: none;
+  /* outline-style: none; */
+  outline-color: var(--vscode-editor-selectionBackground);
 }
 
 button {
@@ -217,6 +226,12 @@ table#layout td:first-child > label {
   text-align: right;
 }
 
+table#translations td:first-child {
+  padding-left: 0;
+  vertical-align: baseline;
+  padding-right: 5px;
+}
+
 tags.tagify {
   width: 100%;
 }
@@ -276,4 +291,20 @@ tags.tagify {
   to {
     opacity: 0;
   }
+}
+
+#translation-text-locked {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.3em;
+  justify-content: space-between;
+}
+
+div#translation-text-locked > div.codicon {
+  padding-left: 5px;
+}
+
+div#translation-text-locked > div.codicon:hover {
+    color: var(--vscode-focusBorder);
 }

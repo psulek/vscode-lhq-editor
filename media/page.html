@@ -10,6 +10,7 @@
     <link href="tagify/tagify.css" rel="stylesheet" />
     <link href="tagify/dragsort.css" rel="stylesheet" />
     <link href="page.css" rel="stylesheet" />
+    <link href="codicon.css" rel="stylesheet" />
 
     <script nonce="" src="vue/vue.global.js"></script>
     <script nonce="" src="lodash.min.js"></script>
@@ -88,7 +89,7 @@
             <template v-if="isResource">
                 <tr>
                     <td>
-                        <label for="parameters">Parameters:</label>
+                        <label for="parameters" @click="focusParameters">Parameters:</label>
                     </td>
                     <td>
                         <table style="width: 100%;">
@@ -123,25 +124,26 @@
                     <td>
                         <table id="translations" v-if="item.translations.length > 0">
                             <tr v-for="(translation, index) in item.translations" :key="translation.culture">
-                                <td style="padding-left: 0; vertical-align: baseline;">
-                                    <label :class="{ 'bold': translation.isPrimary }" class="no-wrap"
-                                        style="text-align: left;"
-                                        :title="translation.culture + (translation.isPrimary ? ' [primary]' : '')">
-                                        {{ translation.culture }}
-                                    </label>
+                                <td >
+                                    <div id="translation-text-locked">
+                                        <label :class="{ 'bold': translation.isPrimary }" class="no-wrap"
+                                            style="text-align: left;"
+                                            :title="'Language: ' + translation.culture + (translation.isPrimary ? ' [primary]' : '')"
+                                            @click="focusTranslation(translation)">
+                                            {{ translation.culture }}
+                                        </label>
+                                        <div 
+                                        :class="'codicon codicon-' + (translation.valueRef.locked ? 'lock' : 'unlock')"
+                                        :title="translation.valueRef.locked ? 'Locked (click to unlock)' : 'Unlocked (Click to lock)'"
+                                        @click="lockTranslation(translation)"></div>
+                                    </div>
                                 </td>
                                 <td>
-                                    <textarea v-model="translation.valueRef.value" rows="1" @input="autoResizeTextarea"
+                                    <textarea ref="translationTextArea" v-model="translation.valueRef.value" rows="1" @input="autoResizeTextarea"
                                         :placeholder="'Translation for ' + translation.culture"
                                         :readonly="translation.valueRef.locked"
                                         :class="{ 'locked': translation.valueRef.locked }"
                                         :title="translation.valueRef.locked ? 'Editing of translation is locked.':''"></textarea>
-                                </td>
-                                <td style="vertical-align: baseline; padding-left: 5px;">
-                                    <button @click="lockTranslation(translation)"
-                                        :title="translation.valueRef.locked ? 'Unlock translation' : 'Lock translation'">
-                                        {{ translation.valueRef.locked ? 'U' : 'L' }}
-                                    </button>
                                 </td>
                             </tr>
                         </table>

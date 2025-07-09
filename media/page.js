@@ -489,6 +489,8 @@
                             }));
                         this.item.parameters = tags;
                     }
+                } else {
+                    this.focusParameters();
                 }
             },
 
@@ -498,8 +500,26 @@
                 vscode.postMessage({ command: 'select', ...data });
             },
 
+            focusParameters() {
+                const input = tagifyParams.DOM.input;
+                if (input) {
+                    input.focus();
+                }
+            },
+
+            focusTranslation(translation) {
+                //debugger;
+                if (translation && translation.valueRef) {
+                    const index = this.item.translations.findIndex(t => t === translation);
+                    if (index !== -1 && this.$refs.translationTextArea && this.$refs.translationTextArea[index]) {
+                        const textarea = this.$refs.translationTextArea[index];
+                        textarea.focus();
+                    }
+                }
+            },
+
             lockTranslation(translation) {
-                debugger;
+                //    debugger;
                 if (translation && translation.valueRef) {
                     translation.valueRef.locked = !translation.valueRef.locked;
                     this.debouncedOnChange();
@@ -536,7 +556,7 @@
                         enabled: false
                     },
 
-                    placeholder: 'Enter parameters for resource (optional)',
+                    //placeholder: 'Enter parameters for resource (optional)',
 
                     templates: {
                         tag: function (tagData) {
@@ -574,6 +594,22 @@
                 const tagify = new Tagify(input, options);
                 tagify.setDisabled(true);
 
+                tagify.DOM.input.addEventListener('focus', function () {
+                    const tagsElem = this.parentNode;
+                    if (tagsElem) {
+                        logMsg('Tagify input focused');
+                        tagsElem.classList.add('focus-border');
+                    }
+                });
+
+                tagify.DOM.input.addEventListener('blur', function () {
+                    const tagsElem = this.parentNode;
+                    if (tagsElem) {
+                        logMsg('Tagify input blured');
+                        tagsElem.classList.remove('focus-border');
+                    }
+                });
+
                 tagifyParams = tagify;
 
                 const tags = this.item.parameters
@@ -583,6 +619,17 @@
                         order: param.order
                     }));
                 tagify.addTags(tags);
+
+                tagify.on('keydown', function (e) {
+                    const event = e.detail.event;
+                    console.log('Tagify keydown event:', event);
+                    if (event.ctrlKey === true && event.keyCode === 13) {
+                        //debugger;
+                        e.preventDefault();
+                        e.stopPropagation();
+                        self.editParameters({ target: { dataset: { cancel: 'false' } } });
+                    }
+                });
 
                 tagify.on('edit:start', function ({ detail: { tag, data } }) {
                     tagify.setTagTextNode(tag, data.value);
@@ -632,17 +679,6 @@
 
                 function onDragEnd(elm) {
                     reflectChanges();
-                    // const tags = [];
-                    // tagify.getTagElms().forEach((node, idx) => {
-                    //     const tagData = tagify.getSetTagData(node);
-                    //     if (tagData) {
-                    //         tagData.order = idx;
-                    //         tagify.getSetTagData(node, tagData);
-                    //         tags.push(tagData);
-                    //     }
-                    // });
-                    // tagify.updateValueByDOMTags();
-                    // tagify.loadOriginalValues(tags);
                 }
 
                 function reflectChanges() {
