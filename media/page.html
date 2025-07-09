@@ -63,7 +63,8 @@
                 </td>
                 <td>
                     <div style="display: flex; flex-direction: row; align-items: center; gap: 1em; width: 100%;">
-                        <input type="text" id="name" v-model="item.name" autocomplete="off" style="flex-basis: 60%;">
+                        <input type="text" id="name" v-model="item.name" ref="name" autocomplete="off" style="flex-basis: 60%;"
+                        @focus="focusOnName">
 
                         <template v-if="isResource">
                             <label for="state">State:</label>
@@ -143,6 +144,8 @@
                                         :placeholder="'Translation for ' + translation.culture"
                                         :readonly="translation.valueRef.locked"
                                         :class="{ 'locked': translation.valueRef.locked }"
+                                        @focus="focusOnTranslation"
+                                        @blur="blurOnTranslation"
                                         :title="translation.valueRef.locked ? 'Editing of translation is locked.':''"></textarea>
                                 </td>
                             </tr>

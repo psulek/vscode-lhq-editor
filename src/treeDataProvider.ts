@@ -11,7 +11,7 @@ import { detectFormatting, generatorUtils, isNullOrEmpty, ModelUtils } from '@lh
 import { LhqTreeItem } from './treeItem';
 import { validateName } from './validator';
 import { filterTreeElements, filterVirtualTreeElements, isVirtualTreeElement, VirtualRootElement } from './elements';
-import type { SearchTreeOptions, MatchingElement, CultureInfo, IVirtualLanguageElement, ValidationError, ITreeContext } from './types';
+import type { SearchTreeOptions, MatchingElement, CultureInfo, IVirtualLanguageElement, ValidationError, ITreeContext, ClientPageError } from './types';
 import {
     getMessageBoxText, createTreeElementPaths, findChildsByPaths, matchForSubstring,
     logger, getElementFullPath, showMessageBox, getCultureDesc, showConfirmBox, loadCultures, isValidDocument
@@ -99,7 +99,7 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
     private selectedElements: ITreeElement[] = [];
     private view: vscode.TreeView<any>;
     private _validationError: ValidationError | undefined;
-    //private _messageSender: IMessageSender = undefined!;
+    private _pageErrors: ClientPageError[] = [];
 
     constructor(private context: vscode.ExtensionContext) {
 
@@ -359,6 +359,38 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
         }
     }
 
+    public clearPageErrors(): void {
+        this._pageErrors = [];
+    }
+
+    private setPageError(element: ITreeElement, field: string, message: string): void {
+        const elemFullPath = getElementFullPath(element);
+        const item = this._pageErrors.find(x => x.fullPath === elemFullPath && x.field === field);
+        if (item) {
+            item.message = message;
+        } else {
+            this._pageErrors.push({
+                fullPath: elemFullPath,
+                field,
+                message
+            });
+        }
+    }
+
+    private hasPageError(element: ITreeElement, field: string): boolean {
+        const elemFullPath = getElementFullPath(element);
+        return this._pageErrors.some(x => x.fullPath === elemFullPath && x.field === field);
+    }
+
+    private removePageError(element: ITreeElement, field: string): boolean {
+        const elemFullPath = getElementFullPath(element);
+        const index = this._pageErrors.findIndex(x => x.fullPath === elemFullPath && x.field === field);
+        if (index >= 0) {
+            this._pageErrors.splice(index, 1);
+        }
+        return index >= 0;
+    }
+
     public async updateElement(element: Record<string, unknown>): Promise<void> {
         if (!element || !this._currentRootModel || !this.currentDocument) {
             return;
@@ -383,16 +415,47 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
         if (elem && !isVirtualTreeElement(elem)) {
             const newName = (element.name as string ?? '').trim();
 
-            if (newName !== elem.name) {
-                const validationError = this.validateElementName(elementType, newName, elem.parent);
-                if (validationError) {
+            // if (newName !== elem.name) {
+            //     const validationError = this.validateElementName(elementType, newName, elem.parent);
+            //     if (validationError) {
+            //         const elemFullPath = getElementFullPath(elem);
+            //         this.addPageError(elem, 'name', validationError);
+
+            //         appContext.sendMessageToHtmlPage({
+            //             command: 'invalidData',
+            //             fullPath: elemFullPath,
+            //             message: validationError,
+            //             action: 'add',
+            //             field: 'name'
+            //         });
+            //         return;
+            //     }
+            // }
+
+
+            const elemFullPath = getElementFullPath(elem);
+            // always validate name
+            const validationError = this.validateElementName(elementType, newName, elem.parent, elemFullPath);
+            if (validationError) {
+                this.setPageError(elem, 'name', validationError);
+
+                appContext.sendMessageToHtmlPage({
+                    command: 'invalidData',
+                    fullPath: elemFullPath,
+                    message: validationError,
+                    action: 'add',
+                    field: 'name'
+                });
+                return;
+            } else {
+                if (this.removePageError(elem, 'name')) {
                     appContext.sendMessageToHtmlPage({
                         command: 'invalidData',
-                        fullPath: getElementFullPath(elem),
-                        message: validationError,
+                        fullPath: elemFullPath,
+                        message: '',
+                        action: 'remove',
                         field: 'name'
                     });
-                    return;
                 }
             }
 
@@ -948,7 +1011,8 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
             if (parentElement && !isNullOrEmpty(name)) {
                 const found = parentElement.find(name, elementType as CategoryOrResourceType);
                 if (found && (!ignoreElementPath || getElementFullPath(found) !== ignoreElementPath)) {
-                    const root = parentElement.elementType === 'model' ? '/' : getElementFullPath(parentElement);
+                    // const root = parentElement.elementType === 'model' ? '/' : getElementFullPath(parentElement);
+                    const root = getElementFullPath(parentElement);
                     return `${elementType} '${name}' already exists in ${root}`;
                 }
             }
@@ -1488,6 +1552,7 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
     }
 
     refresh(): void {
+        this.clearPageErrors();
         if (this.currentDocument) {
             this.currentJsonModel = null;
 

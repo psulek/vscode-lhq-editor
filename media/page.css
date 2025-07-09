@@ -83,25 +83,48 @@ select {
     var(--vscode-input-border, var(--vscode-editorWidget-border));
 }
 
-input:focus,
-textarea:focus,
-select:focus,
-button:focus {
-  opacity: 1;
+input:not([data-error]):focus,
+textarea:not([data-error]):focus,
+select:not([data-error]):focus,
+button:not([data-error]):focus {
   outline-color: var(--vscode-focusBorder);
+  opacity: 1;
   outline-offset: -1px;
   outline-style: solid;
   outline-width: 1px;
 }
 
-.focus-border {
+button:not([data-error]):focus {
+  outline-offset: 2px !important;
+}
+
+input[data-error],
+textarea[data-error],
+select[data-error],
+button[data-error] {
+  outline-color: var(--vscode-inputValidation-errorBorder);
   opacity: 1;
-  outline-color: var(--vscode-focusBorder);
   outline-offset: -1px;
   outline-style: solid;
   outline-width: 1px;
 }
 
+tags.focus-border {
+  outline-color: var(--vscode-focusBorder);
+  opacity: 1;
+  outline-offset: -1px;
+  outline-style: solid;
+  outline-width: 1px;
+}
+
+tags[data-error].focus-border {
+  outline-color: var(--vscode-inputValidation-errorBorder);
+}
+
+/* .focus-border:not([data-error]) {
+  outline-color: var(--vscode-focusBorder);
+}
+ */
 input[readonly]:focus,
 textarea[readonly]:focus,
 select[readonly]:focus,
@@ -227,9 +250,14 @@ table#layout td:first-child > label {
 }
 
 table#translations td:first-child {
-  padding-left: 0;
+  padding-left: 10px;
   vertical-align: baseline;
   padding-right: 5px;
+  border: 0;
+}
+
+table#translations td[data-focused]:first-child {
+    border-left: 1px solid var(--vscode-focusBorder);
 }
 
 tags.tagify {
@@ -296,7 +324,7 @@ tags.tagify {
 #translation-text-locked {
   display: flex;
   flex-direction: row;
-  align-items: center;
+  align-items: baseline;
   gap: 0.3em;
   justify-content: space-between;
 }
@@ -306,5 +334,5 @@ div#translation-text-locked > div.codicon {
 }
 
 div#translation-text-locked > div.codicon:hover {
-    color: var(--vscode-focusBorder);
+  color: var(--vscode-focusBorder);
 }

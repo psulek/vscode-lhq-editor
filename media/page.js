@@ -16,11 +16,24 @@
     let usedCultures = [];
 
     /**
+     * @typedef {Object} InvalidDataError
+     * @property {string} uid
+     * @property {string} message
+     * @property {'server' | 'tags'} type
+     * @property {HTMLElement} element
+     */
+
+    /**
+     * @typedef {Object} InvalidDataInfo
+     * @property {InvalidDataError[]} errors
+     */
+
+    /**
      * @typedef {Object} PageData
      * @property {Object} item
      * @property {boolean} loading
      * @property {boolean} paramsEnabled
-     * @property {boolean} invalidData
+     * @property {InvalidDataInfo} invalidData
      * @property {boolean} supressOnChange
      */
 
@@ -59,14 +72,15 @@
 
     window.addEventListener('message', event => {
         message = event.data;
-        logMsg(`Received message '${message.command}'`, message);
+        logMsg(`Received message '${message.command}', action: '${message.action}'`, message);
         switch (message.command) {
             case 'invalidData': {
                 /*
                 command: 'invalidData';
+                field: string
                 fullPath: string;
                 message: string;
-                field: string
+                action: 'add' | 'remove';
                 */
 
                 if (!window.pageApp.item || window.pageApp.fullPath !== message.fullPath) {
@@ -75,7 +89,22 @@
                 }
 
                 const elem = document.getElementById(message.field) || domBody;
-                showTooltip(`${message.field}-invalid`, message.message, elem);
+                const uid = `${message.field}-invalid`;
+
+                if (message.action === 'add') {
+                    // showTooltip(`${message.field}-invalid`, message.message, elem);
+
+                    /** @type {InvalidDataError} */
+                    const error = {
+                        uid: uid,
+                        message: message.message,
+                        type: 'server',
+                        element: elem
+                    };
+                    window.pageApp.updateInvalidData(error);
+                } else if (message.action === 'remove') {
+                    window.pageApp.removeInvalidData(uid, 'server', elem);
+                }
 
                 break;
             }
@@ -85,7 +114,6 @@
                 paths: string[];
                 */
 
-                //debugger;
                 if (window.pageApp.item && message.paths) {
                     window.pageApp.supressOnChange = true;
 
@@ -132,7 +160,7 @@
 
                     window.pageApp.$nextTick(() => {
                         window.pageApp.bindTagParameters(oldElement);
-                        window.pageApp.updateInvalidData();
+                        window.pageApp.recheckInvalidData();
 
                         window.pageApp.debouncedResize();
                     });
@@ -208,6 +236,10 @@
 
     let handleClickOutsideInitialized = false;
 
+    function isAnyTooltipVisible() {
+        return tooltipsMap.size > 0;
+    }
+
     /** @param {TooltipItem} item */
     function removeTooltip(item) {
         if (item && item.tooltip) {
@@ -231,6 +263,54 @@
             //logMsg(`[Tooltip] Cancel removal of tooltip '${item.uid}'.`);
         }
     }
+
+    function hideTooltip(uid) {
+        const item = tooltipsMap.get(uid);
+        if (item) {
+            //logMsg(`[Tooltip] Hiding tooltip '${item.uid}'.`);
+            cancelRemoval(item);
+            removeTooltip(item);
+        }
+    }
+
+
+    function handleClickOutside(event) {
+        const translations = document.getElementById('translations');
+        if (translations) {
+            const focusedElem = document.activeElement;
+            translations.querySelectorAll('tr>td[data-focused]').forEach(td => {
+                // find next sibling to td
+                const next = td.nextElementSibling;
+                if (next) {
+                    const textArea = next.querySelector('textarea');
+                    if (textArea === focusedElem) {
+                        return;
+                    }
+                }
+
+                delete td.dataset['focused'];
+            });
+        }
+
+        if (!handleClickOutsideInitialized) {
+            return;
+        }
+
+        // remove all tooltipList
+        if (tooltipsMap.size > 0) {
+            const now = Date.now();
+            tooltipsMap.values().filter(x => (now - x.date) > 200).forEach(item => {
+                if (item.tooltip && !item.tooltip.contains(event.target)) {
+                    //logMsg(`[Tooltip] click outside, remove/cancel tooltip '${item.uid}'.`);
+                    cancelRemoval(item);
+                    removeTooltip(item);
+                }
+            });
+        }
+    }
+
+    const debouncedHandleClickOutside = _.debounce(handleClickOutside, 200, { leading: false, trailing: true });
+    document.addEventListener('click', debouncedHandleClickOutside, true);
 
     function showTooltip(uid, message, anchorEl) {
         const removeTimeout = 3000;
@@ -270,22 +350,6 @@
             }
         };
 
-        const handleClickOutside = (event) => {
-            // remove all tooltipList
-            if (tooltipsMap.size > 0) {
-                const now = Date.now();
-                tooltipsMap.values().filter(x => (now - x.date) > 200).forEach(item => {
-                    if (item.tooltip && !item.tooltip.contains(event.target)) {
-                        //logMsg(`[Tooltip] click outside, remove/cancel tooltip '${item.uid}'.`);
-                        cancelRemoval(item);
-                        removeTooltip(item);
-                    }
-                });
-            }
-
-            //document.removeEventListener('click', handleClickOutside, true);
-        };
-
         tooltip.addEventListener('mouseenter', () => { cancelRemoval(tooltipItem); });
         tooltip.addEventListener('mouseleave', scheduleRemoval);
         tooltip.addEventListener('click', (e) => {
@@ -304,8 +368,7 @@
             setTimeout(() => {
                 if (!handleClickOutsideInitialized && tooltipItem.tooltip) {
                     handleClickOutsideInitialized = true;
-                    //logMsg(`[Tooltip] initialized click outside handler.`);
-                    document.addEventListener('click', handleClickOutside, true);
+                    // document.addEventListener('click', handleClickOutside, true);
                 }
             }, 200);
         }
@@ -327,7 +390,10 @@
         item: undefined,
         loading: true,
         paramsEnabled: false,
-        invalidData: false,
+        invalidData: {
+            /** @type InvalidDataError[] */
+            errors: []
+        },
         supressOnChange: undefined
     };
 
@@ -385,10 +451,21 @@
                     if (this.item && oldValue !== undefined && !this.loading && !supressed) {
                         const data = toRaw(this.item);
 
-                        // if (this.item.invalidData) {
-                        if (this.invalidData) {
-                            logMsg('Invalid data, will not send data!', data);
-                            return;
+                        /** @type {InvalidDataInfo} */
+                        const invalidData = this.invalidData;
+                        if (invalidData.errors.length > 0) {
+                            this.recheckInvalidData();
+
+                            const nonServerError = invalidData.errors.find(x => x.type !== 'server');
+
+                            if (nonServerError) {
+                                if (!isAnyTooltipVisible()) {
+                                    showTooltip(nonServerError.uid, nonServerError.message, nonServerError.element);
+                                }
+
+                                logMsg('Invalid data (non server error found), will not send data!', data);
+                                return;
+                            }
                         }
 
                         if (data) {
@@ -400,6 +477,20 @@
                     if (supressed) {
                         this.supressOnChange = undefined;
                     }
+                }
+            },
+
+            focusOnName() {
+                if (!this.$refs.name) {
+                    return;
+                }
+
+                /** @type {InvalidDataInfo} */
+                const invalidData = this.invalidData;
+                const error = invalidData.errors.find(x => x.element === this.$refs.name);
+                if (error) {
+                    logMsg(`Focusing on name input, found error: `, error);
+                    showTooltip(error.uid, error.message, this.$refs.name);
                 }
             },
 
@@ -425,29 +516,71 @@
                 }
             },
 
-            updateInvalidData(forceInvalid) {
-                if (forceInvalid === true) {
-                    // this.item.invalidData = true;
-                    this.invalidData = true;
-                } else if (tagifyParams) {
-                    // check invalid params
-                    const invalidTagElm = tagifyParams.getTagElms().find(node => {
-                        const tagData = tagifyParams.getSetTagData(node);
-                        return tagData && tagData.__isValid !== true;
-                    });
+            removeInvalidData(uid, type, elem) {
+                logMsg(`Remove invalid data for uid '${uid}' of type '${type}'`);
 
-                    const newInvalidData = !!invalidTagElm;
-
-                    if (newInvalidData !== this.invalidData) {
-                        this.invalidData = newInvalidData;
-                    }
-                    // if (newInvalidData !== this.item.invalidData) {
-                    //     this.item.invalidData = newInvalidData;
-                    // }
+                /** @type {InvalidDataInfo} */
+                const invalidData = this.invalidData;
+                if (invalidData.errors.length > 0) {
+                    invalidData.errors = invalidData.errors.filter(x => x.uid !== uid && x.type !== 'server');
                 }
 
-                return this.invalidData;
-                // return this.item.invalidData;
+                hideTooltip(uid);
+
+                if (elem) {
+                    delete elem.dataset['error'];
+                }
+            },
+
+            /** @param {InvalidDataError} error */
+            updateInvalidData(error) {
+                logMsg(`Update invalid data: `, error);
+                if (error === undefined || error === null) {
+                    throw new Error('InvalidDataError is undefined or null');
+                }
+
+                /** @type {InvalidDataInfo} */
+                const invalidData = this.invalidData;
+                let item = invalidData.errors.find(x => x.uid === error.uid);
+                if (item === undefined) {
+                    item = error;
+                    invalidData.errors.push(item);
+                    logMsg(`Adding new invalid data error: `, item);
+                } else {
+                    item.message = error.message;
+                    item.type = error.type;
+                    item.element = error.element;
+                    logMsg(`Updating existing invalid data error: `, item);
+                }
+
+                item.element.dataset['error'] = 'true';
+
+                showTooltip(item.uid, item.message, item.element);
+            },
+
+            recheckInvalidData() {
+                logMsg(`Rechecking invalid data`);
+                /** @type {InvalidDataInfo} */
+                const invalidData = this.invalidData;
+
+                if (tagifyParams) {
+                    // Remove all errors of type 'tags'
+                    invalidData.errors = invalidData.errors.filter(x => x.type !== 'tags');
+
+                    // scan all tags for invalid data and add them to the invalidData.errors
+                    tagifyParams.getTagElms().forEach(node => {
+                        const tagData = tagifyParams.getSetTagData(node);
+                        if (tagData && tagData.__isValid !== true) {
+                            const error = {
+                                uid: `params-invalid`,
+                                message: tagData.__isValid,
+                                type: 'tags',
+                                element: node
+                            };
+                            this.updateInvalidData(error);
+                        }
+                    });
+                }
             },
 
             editParameters(e) {
@@ -456,6 +589,8 @@
                 tagifyParams.setDisabled(!this.paramsEnabled);
 
                 if (!this.paramsEnabled) {
+                    tagifyParams.DOM.input?.parentNode?.classList.remove('focus-border');
+
                     if (isCancel) {
                         const tags = this.item.parameters
                             .sort((a, b) => a.order - b.order)
@@ -465,19 +600,12 @@
                             }));
                         tagifyParams.loadOriginalValues(tags);
                     } else {
-                        const invalidTagElm = tagifyParams.getTagElms().find(node => {
-                            const tagData = tagifyParams.getSetTagData(node);
-                            return tagData && tagData.__isValid !== true;
-                        });
-
-                        if (invalidTagElm) {
+                        this.recheckInvalidData(true);
+                        /** @type {InvalidDataInfo} */
+                        const invalidData = this.invalidData;
+                        if (invalidData.errors.some(x => x.type === 'tags')) {
                             this.paramsEnabled = true;
                             tagifyParams.setDisabled(false);
-                            // this.paramsEnabled = !this.paramsEnabled;
-                            // tagifyParams.setDisabled(!this.paramsEnabled);
-
-                            const tagData = tagifyParams.getSetTagData(invalidTagElm);
-                            showTooltip('params-invalid', tagData.__isValid, invalidTagElm);
                             return;
                         }
 
@@ -508,7 +636,6 @@
             },
 
             focusTranslation(translation) {
-                //debugger;
                 if (translation && translation.valueRef) {
                     const index = this.item.translations.findIndex(t => t === translation);
                     if (index !== -1 && this.$refs.translationTextArea && this.$refs.translationTextArea[index]) {
@@ -519,17 +646,38 @@
             },
 
             lockTranslation(translation) {
-                //    debugger;
                 if (translation && translation.valueRef) {
                     translation.valueRef.locked = !translation.valueRef.locked;
                     this.debouncedOnChange();
-                    // no need to debounce here..
-                    //this.onChange();
                 }
             },
 
             autoResizeTextarea(event) {
                 this.resizeTextarea(event.target);
+            },
+
+            focusOnTranslation(event) {
+                if (!event.target) {
+                    return;
+                }
+
+                const row = event.target.closest('tr');
+                const cell = row?.querySelector('td:first-child');
+                if (cell) {
+                    cell.dataset['focused'] = 'true';
+                }
+            },
+
+            blurOnTranslation(event) {
+                if (!event.target) {
+                    return;
+                }
+
+                const row = event.target.closest('tr');
+                const cell = row?.querySelector('td:first-child');
+                if (cell) {
+                    delete cell.dataset['focused'];
+                }
             },
 
             createParametersTags() {
@@ -597,7 +745,7 @@
                 tagify.DOM.input.addEventListener('focus', function () {
                     const tagsElem = this.parentNode;
                     if (tagsElem) {
-                        logMsg('Tagify input focused');
+                        // logMsg('Tagify input focused');
                         tagsElem.classList.add('focus-border');
                     }
                 });
@@ -605,7 +753,7 @@
                 tagify.DOM.input.addEventListener('blur', function () {
                     const tagsElem = this.parentNode;
                     if (tagsElem) {
-                        logMsg('Tagify input blured');
+                        // logMsg('Tagify input blured');
                         tagsElem.classList.remove('focus-border');
                     }
                 });
@@ -622,12 +770,13 @@
 
                 tagify.on('keydown', function (e) {
                     const event = e.detail.event;
-                    console.log('Tagify keydown event:', event);
-                    if (event.ctrlKey === true && event.keyCode === 13) {
-                        //debugger;
-                        e.preventDefault();
-                        e.stopPropagation();
-                        self.editParameters({ target: { dataset: { cancel: 'false' } } });
+                    if (event.ctrlKey === true && event.keyCode === 13 &&
+                        !tagify.state.inputText && // assuming user is not in the middle or adding a tag
+                        !tagify.state.editing      // user not editing a tag     
+                    ) {
+                        self.$nextTick(() => {
+                            self.editParameters({ target: { dataset: { cancel: 'false' } } });
+                        });
                     }
                 });
 
@@ -640,8 +789,17 @@
                 });
 
                 tagify.on('invalid', function ({ detail }) {
-                    showTooltip('params-invalid', detail.message, tagify.DOM.input);
-                    self.updateInvalidData(true);
+                    //showTooltip('params-invalid', detail.message, tagify.DOM.input);
+                    //self.recheckInvalidData(true);
+
+                    /** @type {InvalidDataError} */
+                    const error = {
+                        uid: `params-invalid`,
+                        message: detail.message,
+                        type: 'tags',
+                        element: tagify.DOM.input ?? domBody
+                    };
+                    self.updateInvalidData(error);
                 });
 
                 tagify.on('edit:updated', function ({ detail: { data, tag } }) {
@@ -649,8 +807,18 @@
                     tag = tagify.getTagElmByValue(data.value);
                     if (isValid !== true) {
                         tagify.replaceTag(tag, { ...data, __isValid: isValid });
-                        showTooltip('params-invalid', isValid, tagify.DOM.input);
-                        self.updateInvalidData(true);
+                        //showTooltip('params-invalid', isValid, tagify.DOM.input);
+                        //self.recheckInvalidData(true);
+
+                        /** @type {InvalidDataError} */
+                        const error = {
+                            uid: `params-invalid`,
+                            message: isValid,
+                            type: 'tags',
+                            element: tagify.DOM.input ?? domBody
+                        };
+                        self.updateInvalidData(error);
+
                     } else {
                         const newTagData = { ...data, __isValid: true };
                         delete newTagData.title;
@@ -658,7 +826,7 @@
                         delete newTagData.class;
                         delete newTagData.__tagId;
                         tagify.replaceTag(tag, newTagData);
-                        self.updateInvalidData();
+                        self.recheckInvalidData();
                     }
                 });
 
@@ -667,7 +835,7 @@
                     if (isValid !== true) {
                         tagify.replaceTag(tag, { ...data, __isValid: isValid });
                     }
-                    self.updateInvalidData();
+                    self.recheckInvalidData();
                 });
 
                 var dragsort = new DragSort(tagify.DOM.scope, {

@@ -185,6 +185,8 @@ export class DocumentContext /* implements IDocumentContext */ {
             return;
         }
 
+        appContext.treeContext.clearPageErrors();
+
         const cultures = rootModel.languages.map(lang => findCulture(lang)).filter(c => !!c);
         const toJsonOptions: CategoryLikeTreeElementToJsonOptions = {
             includeCategories: false,

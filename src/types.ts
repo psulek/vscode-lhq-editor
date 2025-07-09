@@ -64,6 +64,12 @@ export type CulturesMap = Record<string, CultureInfo>;
 
 export type ValidationError = { message: string, detail?: string };
 
+export type ClientPageError = {
+    field: string;
+    fullPath: string;
+    message: string;
+};
+
 export type AppToPageMessage = {
     command: 'loadPage';
     element: Object;
@@ -72,10 +78,9 @@ export type AppToPageMessage = {
     primaryLang: string;
 } | {
     command: 'invalidData';
-    fullPath: string;
-    message: string;
-    field: string;
-} | {
+    action: 'add' | 'remove';
+} & ClientPageError
+ | {
     command: 'updatePaths'
     paths: string[];
 }
@@ -115,6 +120,8 @@ export interface ITreeContext {
     updateDocument(document: TextDocument | undefined): Promise<void>;
 
     selectElementByPath(elementType: TreeElementType, path: string[]): Promise<void>;
+
+    clearPageErrors(): void;
 }
 
 export type SelectionChangedCallback = (selectedElements: ITreeElement[]) => void;
