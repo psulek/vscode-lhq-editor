@@ -1,13 +1,33 @@
 import * as vscode from 'vscode';
+import fse from 'fs-extra';
 import { AppToPageMessage, IAppContext, ITreeContext, IVirtualLanguageElement, SelectionChangedCallback } from './types';
-import { ITreeElement } from '@lhq/lhq-generators';
+import { BuildinTemplateId, ICodeGeneratorElement, ITreeElement, LhqModelDataNode, ModelUtils, TemplateSettings, getHbsMetadata, modelConst } from '@lhq/lhq-generators';
 import { VirtualTreeElement } from './elements';
-import { getElementFullPath, initializeDebugMode, isValidDocument, loadCultures, logger, showMessageBox } from './utils';
+import { DefaultFormattingOptions, getElementFullPath, initializeDebugMode, isValidDocument, loadCultures, logger, showMessageBox } from './utils';
 import { LhqEditorProvider } from './editorProvider';
 import { LhqTreeDataProvider } from './treeDataProvider';
+import path from 'path';
 
 const globalStateKeys = {
     languagesVisible: 'languagesVisible'
+};
+
+export const Commands = {
+    // refresh: 'lhqTreeView.refresh',
+    addElement: 'lhqTreeView.addElement',
+    renameElement: 'lhqTreeView.renameElement',
+    deleteElement: 'lhqTreeView.deleteElement',
+    findInTreeView: 'lhqTreeView.findInTreeView',
+    advancedFind: 'lhqTreeView.advancedFind',
+    addCategory: 'lhqTreeView.addCategory',
+    addResource: 'lhqTreeView.addResource',
+    addLanguage: 'lhqTreeView.addLanguage',
+    deleteLanguage: 'lhqTreeView.deleteLanguage',
+    markLanguageAsPrimary: 'lhqTreeView.markLanguageAsPrimary',
+    showLanguages: 'lhqTreeView.showLanguages',
+    hideLanguages: 'lhqTreeView.hideLanguages',
+    projectProperties: 'lhqTreeView.projectProperties',
+    createNewLhqFile: 'lhqTreeView.createNewLhqFile'
 };
 
 const contextKeys = {
@@ -54,13 +74,21 @@ export class AppContext implements IAppContext {
                     return;
                 }
                 const reason = e.reason === vscode.TextDocumentChangeReason.Undo ? 'Undo' : 'Redo';
+                const hasReason = e.reason !== undefined;
                 logger().log('debug', `[AppContext] onDidChangeTextDocument -> document: ${e.document?.fileName ?? '-'}, reason: ${reason}`);
 
                 const docUri = e.document?.uri.toString() ?? '';
                 if (isValidDocument(e.document)) {
                     const treeDocUri = this._lhqTreeDataProvider.documentUri;
                     if (treeDocUri === docUri) {
-                        await this._lhqTreeDataProvider.updateDocument(e.document);
+                        const selectionBackup = hasReason ? this._lhqTreeDataProvider.backupSelection() : undefined;
+                        await this._lhqTreeDataProvider.clearSelection();
+
+                        await this._lhqTreeDataProvider.updateDocument(e.document, hasReason);
+
+                        // if (selectionBackup && this._lhqTreeDataProvider.currentRootModel) {
+                        //     await this._lhqTreeDataProvider.restoreSelection(selectionBackup);
+                        // }
                     } else {
                         logger().log('debug', `[AppContext] onDidChangeTextDocument -> Document uri (${docUri}) is not the treeContext has (${treeDocUri}), ignoring change.`);
                     }
@@ -102,6 +130,106 @@ export class AppContext implements IAppContext {
                 supportsMultipleEditorsPerDocument: false,
             })
         );
+
+        // commands
+        vscode.commands.registerCommand(Commands.createNewLhqFile, () => this.createNewLhqFile());
+    }
+
+    private async createNewLhqFile(): Promise<void> {
+        try {
+            const folder = getCurrentFolder();
+            if (!folder) {
+                await showMessageBox('err', 'No folder selected. Please select a folder in the Explorer view.');
+                return;
+            }
+
+            const defaultValue = 'Strings';
+            const fileName = await vscode.window.showInputBox({
+                prompt: `Enter name for new LHQ file (without .lhq extension)`,
+                ignoreFocusOut: true,
+                title: 'Create new LHQ file',
+                placeHolder: 'File name (without .lhq extension)',
+                value: defaultValue,
+                valueSelection: [0, defaultValue.length],
+                validateInput: value => {
+                    // validate file name only a--z, A-Z, 0-9, _, - without any . or space
+                    const regex = /^[a-zA-Z0-9_-]+$/;
+                    if (!value) {
+                        return 'File name cannot be empty.';
+                    }
+                    if (!regex.test(value)) {
+                        return 'File name can only contain letters, numbers, underscores, and dashes.';
+                    }
+
+                    return null;
+                }
+            });
+
+            if (!fileName) {
+                return;
+            }
+
+            const hbsMetadata = getHbsMetadata();
+
+            interface TemplateQuickPickItem extends vscode.QuickPickItem {
+                templateId: string;
+            }
+
+            const items: TemplateQuickPickItem[] = hbsMetadata.templates.map(template => ({
+                templateId: template.id,
+                label: template.id,
+                detail: template.name,
+                alwaysShow: true
+            }));
+
+            const template = await vscode.window.showQuickPick(items, {
+                placeHolder: `Select generator template`,
+                ignoreFocusOut: true,
+                matchOnDetail: true,
+                title: 'Select generator template for new LHQ file'
+            });
+
+            if (!template) {
+                return;
+            }
+
+            const root = ModelUtils.createRootElement();
+            root.name = path.basename(fileName, '.lhq');
+            root.primaryLanguage = 'en';
+            root.languages = ['en'];
+            root.options = {
+                categories: true,
+                resources: 'All',
+            };
+
+            // if (template.templateId === 'NetCoreResxCsharp01') {
+            //     const csharp: Partial<CodeGeneratorCsharpSettings> = {};
+            //     const resx: Partial<CodeGeneratorResXSettings> = {};
+            //     codeGenSettings = templates.TemplateSettings_NetCoreResxCsharp01.createModelSettings(csharp, resx);
+            // } else {
+            //     throw new Error(`Unsupported template: ${template.templateId}`);
+            // }
+
+            const codeGenSettings = TemplateSettings.create({ id: template.templateId as BuildinTemplateId });
+
+            const codeGenerator: ICodeGeneratorElement = {
+                templateId: template.templateId,
+                version: modelConst.ModelVersions.codeGenerator,
+                settings: codeGenSettings
+            };
+
+            root.codeGenerator = codeGenerator;
+
+            const fileContent = ModelUtils.serializeTreeElement(root, DefaultFormattingOptions);
+            const filePath = path.join(folder.fsPath, fileName + '.lhq');
+            await fse.writeFile(filePath, fileContent, { encoding: 'utf8' });
+
+            const fileUri = vscode.Uri.file(filePath);
+            await vscode.commands.executeCommand('vscode.openWith', fileUri, 'lhq.customEditor');
+        } catch (error) {
+            console.error('Error creating new LHQ file:', error);
+            await showMessageBox('err', `Error creating new LHQ file: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
     }
 
     public sendMessageToHtmlPage(message: AppToPageMessage): void {
@@ -194,6 +322,48 @@ export class AppContext implements IAppContext {
         vscode.commands.executeCommand('setContext', contextKeys.hasPrimaryLanguageSelected, hasPrimaryLanguageSelected);
         vscode.commands.executeCommand('setContext', contextKeys.hasSelectedResource, hasSelectedResource);
     }
+
+    public clearContextValues() {
+        for (const key of Object.values(contextKeys)) {
+            if (key !== contextKeys.isEditorActive) {
+                vscode.commands.executeCommand('setContext', key, false);
+            }
+        }
+    }
 }
 
-// export const appContext = new AppContext();
+/**
+ * Returns the URI of the currently selected folder in the VS Code explorer, or undefined if none is selected.
+ */
+export function getCurrentFolder(): vscode.Uri | undefined {
+    let folder = vscode.window.activeTextEditor
+        ? vscode.workspace.getWorkspaceFolder(vscode.window.activeTextEditor.document.uri)?.uri
+        : undefined;
+
+    if (!folder) {
+        const tabInput = vscode.window.tabGroups.activeTabGroup?.activeTab?.input;
+        if (tabInput && (tabInput as any).uri) {
+            folder = vscode.workspace.getWorkspaceFolder((tabInput as any).uri)?.uri;
+        }
+    }
+
+    if (!folder) {
+        if (vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.length > 0) {
+            const uri = vscode.workspace.workspaceFolders[0].uri;
+            folder = uri.scheme === 'file' ? vscode.workspace.getWorkspaceFolder(uri)?.uri : undefined;
+        }
+    }
+
+
+    // // Try to get from the explorer context menu selection (if available)
+    // const selected = vscode.window.activeTextEditor?.document.uri;
+    // if (selected) {
+    //     const stat = vscode.workspace.fs.stat(selected);
+    //     // If it's a folder, return it
+    //     if (stat && stat.then && typeof stat.then === 'function') {
+    //         return stat.then(info => info.type === vscode.FileType.Directory ? selected : undefined);
+    //     }
+    // }
+
+    return folder;
+}

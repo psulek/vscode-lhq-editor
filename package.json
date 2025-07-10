@@ -52,11 +52,6 @@
         "icon": "$(settings-gear)"
       },
       {
-        "command": "lhqTreeView.refresh",
-        "title": "Refresh",
-        "icon": "$(refresh)"
-      },
-      {
         "command": "lhqTreeView.addElement",
         "title": "Add element",
         "icon": "$(new-file)"
@@ -110,20 +105,15 @@
         "icon": "$(layers-active)"
       },
       {
-        "command": "lhqTreeView.editTranslations",
-        "title": "Edit Translations",
-        "icon": "$(pencil)"
+        "command": "lhqTreeView.createNewLhqFile",
+        "title": "Create strings localization file (LHQ Editor)",
+        "icon": "$(new-file)"
       }
     ],
     "menus": {
       "view/title": [
         {
           "command": "lhqTreeView.projectProperties",
-          "when": "view == lhqTreeView",
-          "group": "navigation"
-        },
-        {
-          "command": "lhqTreeView.refresh",
           "when": "view == lhqTreeView",
           "group": "navigation"
         },
@@ -170,11 +160,6 @@
           "when": "view == lhqTreeView && lhqTreeHasSelectedItem && !lhqTreeHasLanguageSelection"
         },
         {
-          "command": "lhqTreeView.editTranslations",
-          "when": "view == lhqTreeView && lhqTreeHasSelectedItem && !lhqTreeHasLanguageSelection && viewItem == resource",
-          "group": "inline@1"
-        },
-        {
           "command": "lhqTreeView.deleteElement",
           "when": "view == lhqTreeView && (viewItem == category || viewItem == resource) && !lhqTreeHasSelectedDiffParents && !lhqTreeHasLanguageSelection"
         },
@@ -203,11 +188,6 @@
         "command": "lhqTreeView.addResource",
         "key": "insert",
         "when": "lhqEditorIsActive && !lhqTreeHasMultiSelection && !lhqTreeHasLanguageSelection"
-      },
-      {
-        "command": "lhqTreeView.editTranslations",
-        "key": "ctrl+enter",
-        "when": "focusedView == lhqTreeView && lhqEditorIsActive && lhqTreeHasSelectedResource"
       }
     ]
   },
@@ -244,7 +224,7 @@
     "typescript": "^5.8.3"
   },
   "dependencies": {
-    "@lhq/lhq-generators": "1.0.0-rc.52",
+    "@lhq/lhq-generators": "1.0.0-rc.63",
     "class-transformer": "^0.5.1",
     "fs-extra": "11.3.0",
     "lodash.debounce": "4.0.8",

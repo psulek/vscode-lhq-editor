@@ -60,7 +60,7 @@ export class DocumentContext /* implements IDocumentContext */ {
                 case 'select':
                     try {
                         await appContext.treeContext.selectElementByPath(message.elementType, message.paths);
-                    } catch(e) {
+                    } catch (e) {
                         logger().log('error', `[DocumentContext] webview.onDidReceiveMessage: Error selecting element: ${e}`);
                         return;
                     }
@@ -111,67 +111,14 @@ export class DocumentContext /* implements IDocumentContext */ {
         this.reflectSelectedElementToWebview();
     }
 
-    // private getEmptyHtml(fileName: string): string {
-    //     return `<!DOCTYPE html>
-    //         <html lang="en">
-
-    //         <head>
-    //             <meta charset="UTF-8">
-    //             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    //             <title>LHQ Editor</title>
-    //             <style>
-    //                 #loading {
-    //                     display: flex;
-    //                     flex-direction: row;
-    //                     align-items: center;
-    //                     gap: 1em;
-    //                     width: 100%;
-    //                 }
-    //             </style>
-    //         </head>
-
-    //         <body>
-    //             <div id="loading">
-    //                 <div style="width: 16px;height: 16px;">
-    //                     <svg fill="#6495ed" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-    //                         <style>
-    //                             @keyframes spinner_MGfb {
-    //                                 93.75% {
-    //                                     opacity: .2
-    //                                 }
-    //                             }
-
-    //                             .spinner_S1WN {
-    //                                 animation: spinner_MGfb .8s linear infinite;
-    //                                 animation-delay: -.8s
-    //                             }
-    //                         </style>
-    //                         <circle cx="4" cy="12" r="3" class="spinner_S1WN" />
-    //                         <circle cx="12" cy="12" r="3" class="spinner_S1WN" style="animation-delay:-.65s" />
-    //                         <circle cx="20" cy="12" r="3" class="spinner_S1WN" style="animation-delay:-.5s" />
-    //                     </svg>
-    //                 </div>
-    //                 <span>Loading ${fileName} ...</span>
-    //             </div>
-    //         </body>
-    //     </html>`;
-    // }
-
     public async loadEmptyPage(): Promise<void> {
         logger().log('debug', `[DocumentContext] loadEmptyPage for: ${this.fileName}`);
-        // if (!this._webviewPanel) {
-        //     return false;
-        // }
-        
         this._webviewPanel.webview.html = await this.getHtmlForWebview(true);
-        // return true;
     }
 
     public async updateWebviewContent(): Promise<void> {
         logger().log('debug', `[DocumentContext] updateWebviewContent for: ${this.fileName}`);
-        //if (this._webviewPanel) {
-            this._webviewPanel.webview.html = await this.getHtmlForWebview(false);
-        //}
+        this._webviewPanel.webview.html = await this.getHtmlForWebview(false);
     }
 
     public reflectSelectedElementToWebview(): void {

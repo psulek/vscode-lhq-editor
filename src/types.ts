@@ -104,6 +104,7 @@ export interface IAppContext {
     get languagesVisible(): boolean;
     set languagesVisible(visible: boolean);
 
+    clearContextValues(): void;
     getFileUri(...pathParts: string[]): Uri;
     getPageHtml(): Promise<string>;
     getMediaUri(webview: Webview, filename: string, themed?: boolean): Uri
@@ -125,3 +126,8 @@ export interface ITreeContext {
 }
 
 export type SelectionChangedCallback = (selectedElements: ITreeElement[]) => void;
+
+export type SelectionBackup = Array<{
+    type: TreeElementType;
+    fullPath: string;
+}>;

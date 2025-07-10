@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import path from 'path';
 import fse from 'fs-extra';
-import type { FileInfo, ReadFileInfoOptions, ITreeElementPaths, ITreeElement, IRootModelElement, ICategoryLikeTreeElement } from '@lhq/lhq-generators';
+import type { FileInfo, ReadFileInfoOptions, ITreeElementPaths, ITreeElement, IRootModelElement, ICategoryLikeTreeElement, FormattingOptions } from '@lhq/lhq-generators';
 import { fileUtils, isNullOrEmpty, ModelUtils, strCompare } from '@lhq/lhq-generators';
 
 import { ILogger, VsCodeLogger } from './logger';
@@ -267,3 +267,9 @@ export function generateNonce(): string {
     }
     return text;
 }
+
+
+export const DefaultFormattingOptions: FormattingOptions = {
+    indentation: { amount: 2, type: 'space', indent: '  ' },
+    eol: '\n'
+};
