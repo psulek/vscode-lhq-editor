@@ -29,12 +29,23 @@
      */
 
     /**
+     * @typedef {Object} ModelProperties
+     * @property {'All' | 'Categories'} resources
+     * @property {boolean} categories
+     * @property {number} modelVersion
+     * @property {string} templateId
+     * @property {boolean} visible
+     */
+
+    /**
      * @typedef {Object} PageData
      * @property {Object} item
      * @property {boolean} loading
      * @property {boolean} paramsEnabled
      * @property {InvalidDataInfo} invalidData
      * @property {boolean} supressOnChange
+     * @property {ModelProperties} modelProperties
+     * @property {ModelProperties} modelPropertiesBackup
      */
 
     /**
@@ -74,6 +85,10 @@
         message = event.data;
         logMsg(`Received message '${message.command}', action: '${message.action}'`, message);
         switch (message.command) {
+            case 'showProperties': {
+                window.pageApp.showProperties();
+                break;
+            }
             case 'invalidData': {
                 /*
                 command: 'invalidData';
@@ -132,9 +147,11 @@
                 file: string;
                 cultures: CultureInfo[];
                 primaryLang: string;
+                modelProperties: PageModelProperties;
                 */
                 domBody.dataset['loading'] = 'true';
                 const element = message.element;
+                const modelProperties = message.modelProperties;
                 //const file = message.file;
                 usedCultures = message.cultures || [];
                 if (usedCultures.length === 0) {
@@ -153,9 +170,11 @@
                 window.pageApp.item = undefined;
                 window.pageApp.paramsEnabled = false;
                 window.pageApp.supressOnChange = undefined;
+                window.pageApp.modelProperties = { visible: false };
+                window.pageApp.modelPropertiesBackup = { visible: false };
 
                 window.pageApp.$nextTick(() => {
-                    setNewElement(element);
+                    setNewElement(element, modelProperties);
                     window.pageApp.loading = false;
 
                     window.pageApp.$nextTick(() => {
@@ -171,7 +190,7 @@
         }
     });
 
-    function setNewElement(element) {
+    function setNewElement(element, modelProperties) {
         if (!element) { return; }
 
         /** @type TranslationItem[] */
@@ -202,8 +221,10 @@
         });
 
         element.translations = translations;
-        logMsg(`Setting new element:  ${getFullPath(element)} (${element.elementType})`, element);
+        logMsg(`Setting new element:  ${getFullPath(element)} (${element.elementType})`, element, ' and modelProperties: ', modelProperties);
         window.pageApp.item = element;
+        window.pageApp.modelProperties = modelProperties ?? { visible: false };
+        window.pageApp.modelPropertiesBackup = modelProperties ? Object.assign({}, modelProperties) : { visible: false };
     }
 
     function getFullPath(element) {
@@ -394,7 +415,13 @@
             /** @type InvalidDataError[] */
             errors: []
         },
-        supressOnChange: undefined
+        supressOnChange: undefined,
+        modelProperties: {
+            visible: false
+        }, 
+        modelPropertiesBackup: {
+            visible: false
+        }
     };
 
     window.pageApp = createApp({
@@ -884,7 +911,24 @@
                     textarea.style.height = `${newHeight}px`;
                     textarea.style.overflowY = 'hidden';
                 }
-            }
+            },
+
+            showProperties() {
+                this.modelProperties.visible = true;
+            },
+
+            cancelProperties() {
+                this.modelProperties = Object.assign({}, this.modelPropertiesBackup);
+                this.modelProperties.visible = false;
+            },
+
+            saveProperties() {
+                this.modelProperties.visible = false;
+
+                const msg = { command: 'updateProperties', modelProperties: toRaw(this.modelProperties) };
+                logMsg('Saving model properties and sending message.. ', msg);
+                vscode.postMessage(msg);
+            },
         }
     }).mount('#app');
 

@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { findCulture, generateNonce, isValidDocument, logger, showMessageBox } from './utils';
-import { AppToPageMessage, PageToAppMessage } from './types';
+import { AppToPageMessage, ClientPageModelProperties, PageToAppMessage } from './types';
 import { CategoryLikeTreeElementToJsonOptions, ITreeElement } from '@lhq/lhq-generators';
 import { isVirtualTreeElement } from './elements';
 
@@ -65,6 +65,10 @@ export class DocumentContext /* implements IDocumentContext */ {
                         return;
                     }
                     break;
+                case 'updateProperties': {
+                    await appContext.treeContext.saveModelProperties(message.modelProperties);
+                    break;
+                }
             }
         });
 
@@ -145,6 +149,13 @@ export class DocumentContext /* implements IDocumentContext */ {
             cultures: cultures,
             primaryLang: rootModel.primaryLanguage,
             element: element.toJson(toJsonOptions),
+            modelProperties: {
+                resources: rootModel.options.resources,
+                categories: rootModel.options.categories,
+                modelVersion: rootModel.version,
+                templateId: rootModel.codeGenerator!.templateId,
+                visible: false
+            }
         };
 
         // this.currentWebviewPanel.webview.postMessage(message);

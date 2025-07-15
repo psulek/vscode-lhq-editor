@@ -1,4 +1,4 @@
-import type { IRootModelElement, ITreeElement, TreeElementType } from '@lhq/lhq-generators';
+import type { IRootModelElement, ITreeElement, LhqModelOptionsResources, TreeElementType } from '@lhq/lhq-generators';
 import type { TextDocument, Uri, Webview } from 'vscode';
 
 export type SearchTreeKind = 'path' | 'name' | 'translation' | 'language';
@@ -70,20 +70,31 @@ export type ClientPageError = {
     message: string;
 };
 
+export type ClientPageModelProperties = {
+    resources: LhqModelOptionsResources;
+    categories: boolean;
+    modelVersion: number;
+    templateId: string;
+    visible: boolean;
+}
+
 export type AppToPageMessage = {
     command: 'loadPage';
     element: Object;
     file: string;
     cultures: CultureInfo[];
     primaryLang: string;
+    modelProperties: ClientPageModelProperties;
 } | {
     command: 'invalidData';
     action: 'add' | 'remove';
 } & ClientPageError
- | {
-    command: 'updatePaths'
-    paths: string[];
-}
+    | {
+        command: 'updatePaths'
+        paths: string[];
+    } | {
+        command: 'showProperties';
+    };
 
 export type PageToAppMessage = {
     command: 'update',
@@ -92,7 +103,10 @@ export type PageToAppMessage = {
     command: 'select',
     paths: string[];
     elementType: TreeElementType
-}
+} | {
+    command: 'updateProperties',
+    modelProperties: ClientPageModelProperties;
+};
 
 
 export interface IAppContext {
@@ -121,6 +135,8 @@ export interface ITreeContext {
     updateDocument(document: TextDocument | undefined): Promise<void>;
 
     selectElementByPath(elementType: TreeElementType, path: string[]): Promise<void>;
+
+    saveModelProperties(modelProperties: ClientPageModelProperties): Promise<void>;
 
     clearPageErrors(): void;
 }

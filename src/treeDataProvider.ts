@@ -11,7 +11,7 @@ import { detectFormatting, generatorUtils, isNullOrEmpty, ModelUtils } from '@lh
 import { LhqTreeItem } from './treeItem';
 import { validateName } from './validator';
 import { filterTreeElements, filterVirtualTreeElements, isVirtualTreeElement, VirtualRootElement } from './elements';
-import type { SearchTreeOptions, MatchingElement, CultureInfo, IVirtualLanguageElement, ValidationError, ITreeContext, ClientPageError, SelectionBackup } from './types';
+import type { SearchTreeOptions, MatchingElement, CultureInfo, IVirtualLanguageElement, ValidationError, ITreeContext, ClientPageError, SelectionBackup, ClientPageModelProperties } from './types';
 import {
     getMessageBoxText, createTreeElementPaths, findChildsByPaths, matchForSubstring,
     logger, getElementFullPath, showMessageBox, getCultureDesc, showConfirmBox, loadCultures, isValidDocument,
@@ -145,180 +145,199 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
         return this._currentRootModel;
     }
 
+    public async saveModelProperties(modelProperties: ClientPageModelProperties): Promise<void> {
+        if (!this._currentRootModel || !modelProperties) {
+            return;
+        }
+
+        const root = this._currentRootModel;
+
+        root.options.categories = modelProperties.categories;
+        root.options.resources = modelProperties.categories ? modelProperties.resources : 'All';
+
+        const success = await this.applyChangesToTextDocument();
+        await showMessageBox(success ? 'info' : 'err',
+            success
+                ? 'Project properties changes was applied.'
+                : `Failed to apply project properties changes.`);
+    }
+
     private async projectProperties(): Promise<void> {
         if (!this.currentDocument) {
             return;
         }
 
-        interface PropsQuickPickItem extends vscode.QuickPickItem {
-            value: boolean;
-        }
+        appContext.sendMessageToHtmlPage({ command: 'showProperties' });
 
-        const treeStructure = this.isTreeStructure;
-        const resourcesUnderRoot = this.resourcesUnderRoot;
+        // interface PropsQuickPickItem extends vscode.QuickPickItem {
+        //     value: boolean;
+        // }
 
-        const items = [
-            {
-                label: 'Layout', description: treeStructure ? 'Categories and resources' : 'Resources only',
-                value: true,
-                detail: treeStructure ? 'Hierarchical tree structure' : 'Flat structure',
-                iconPath: new vscode.ThemeIcon(treeStructure ? 'list-tree' : 'list-flat')
-            },
-            {
-                kind: QuickPickItemKind.Separator
-            },
-            {
-                label: 'Close',
-                iconPath: new vscode.ThemeIcon('close')
-            }
+        // const treeStructure = this.isTreeStructure;
+        // const resourcesUnderRoot = this.resourcesUnderRoot;
 
-        ] as PropsQuickPickItem[];
+        // const items = [
+        //     {
+        //         label: 'Layout', description: treeStructure ? 'Categories and resources' : 'Resources only',
+        //         value: true,
+        //         detail: treeStructure ? 'Hierarchical tree structure' : 'Flat structure',
+        //         iconPath: new vscode.ThemeIcon(treeStructure ? 'list-tree' : 'list-flat')
+        //     },
+        //     {
+        //         kind: QuickPickItemKind.Separator
+        //     },
+        //     {
+        //         label: 'Close',
+        //         iconPath: new vscode.ThemeIcon('close')
+        //     }
 
-        if (treeStructure) {
+        // ] as PropsQuickPickItem[];
 
-            const item: PropsQuickPickItem = {
-                label: 'Resources under root', description: resourcesUnderRoot ? 'Enabled' : 'Disabled',
-                value: false,
-                detail: resourcesUnderRoot ? 'Allows resources under root element' : 'Resources can only be placed under categories',
-            };
+        // if (treeStructure) {
 
-            items.splice(1, 0, item);
-        }
+        //     const item: PropsQuickPickItem = {
+        //         label: 'Resources under root', description: resourcesUnderRoot ? 'Enabled' : 'Disabled',
+        //         value: false,
+        //         detail: resourcesUnderRoot ? 'Allows resources under root element' : 'Resources can only be placed under categories',
+        //     };
 
-        const result = await vscode.window.showQuickPick(items, {
-            ignoreFocusOut: true, placeHolder: 'Project properties', title: 'Change project properties',
-            matchOnDescription: true, matchOnDetail: true
-        });
+        //     items.splice(1, 0, item);
+        // }
 
-        if (!result || result.value === undefined) {
-            return;
-        }
+        // const result = await vscode.window.showQuickPick(items, {
+        //     ignoreFocusOut: true, placeHolder: 'Project properties', title: 'Change project properties',
+        //     matchOnDescription: true, matchOnDetail: true
+        // });
 
-        if (!this.currentDocument) {
-            return;
-        }
+        // if (!result || result.value === undefined) {
+        //     return;
+        // }
 
-        const backToProperies = () => {
-            setTimeout(() => {
-                void this.projectProperties();
-            }, 100);
-        };
+        // if (!this.currentDocument) {
+        //     return;
+        // }
 
-        const saveChanges = async () => {
-            // after previous await, document can be closed now...
-            if (!this.currentDocument) {
-                return;
-            }
-            const success = await this.applyChangesToTextDocument();
-            if (success) {
-                backToProperies();
-            }
-            await showMessageBox(success ? 'info' : 'err',
-                success
-                    ? 'Project properties changes was applied.'
-                    : `Failed to apply project properties changes.`);
-        };
+        // const backToProperies = () => {
+        //     setTimeout(() => {
+        //         void this.projectProperties();
+        //     }, 100);
+        // };
 
-        const changeLayout = async () => {
-            const layoutItems = [
-                {
-                    label: 'Categories and resources', detail: 'Hierarchical tree structure',
-                    value: true,
-                    description: treeStructure ? '(Current)' : '',
-                    iconPath: new vscode.ThemeIcon('list-tree'),
-                    picked: treeStructure
-                },
-                {
-                    label: 'Resources only', detail: 'Flat structure',
-                    value: false,
-                    description: !treeStructure ? '(Current)' : '',
-                    iconPath: new vscode.ThemeIcon('list-flat'),
-                    picked: !treeStructure
-                },
-                {
-                    kind: QuickPickItemKind.Separator,
-                },
-                {
-                    label: 'Back to project properties',
-                    //iconPath: new vscode.ThemeIcon('chevron-left')
-                }
-            ] as PropsQuickPickItem[];
+        // const saveChanges = async () => {
+        //     // after previous await, document can be closed now...
+        //     if (!this.currentDocument) {
+        //         return;
+        //     }
+        //     const success = await this.applyChangesToTextDocument();
+        //     if (success) {
+        //         backToProperies();
+        //     }
+        //     await showMessageBox(success ? 'info' : 'err',
+        //         success
+        //             ? 'Project properties changes was applied.'
+        //             : `Failed to apply project properties changes.`);
+        // };
 
-            const layout = await vscode.window.showQuickPick(layoutItems, {
-                ignoreFocusOut: true,
-                placeHolder: 'Layout',
-                title: 'Change layout of LHQ structure',
-                matchOnDescription: true,
-                matchOnDetail: true
-            });
+        // const changeLayout = async () => {
+        //     const layoutItems = [
+        //         {
+        //             label: 'Categories and resources', detail: 'Hierarchical tree structure',
+        //             value: true,
+        //             description: treeStructure ? '(Current)' : '',
+        //             iconPath: new vscode.ThemeIcon('list-tree'),
+        //             picked: treeStructure
+        //         },
+        //         {
+        //             label: 'Resources only', detail: 'Flat structure',
+        //             value: false,
+        //             description: !treeStructure ? '(Current)' : '',
+        //             iconPath: new vscode.ThemeIcon('list-flat'),
+        //             picked: !treeStructure
+        //         },
+        //         {
+        //             kind: QuickPickItemKind.Separator,
+        //         },
+        //         {
+        //             label: 'Back to project properties',
+        //             //iconPath: new vscode.ThemeIcon('chevron-left')
+        //         }
+        //     ] as PropsQuickPickItem[];
 
-            if (!layout || layout.value === undefined) {
-                return backToProperies();
-            }
+        //     const layout = await vscode.window.showQuickPick(layoutItems, {
+        //         ignoreFocusOut: true,
+        //         placeHolder: 'Layout',
+        //         title: 'Change layout of LHQ structure',
+        //         matchOnDescription: true,
+        //         matchOnDetail: true
+        //     });
 
-            // after previous await, document can be closed now...
-            if (!this.currentDocument) {
-                return;
-            }
+        //     if (!layout || layout.value === undefined) {
+        //         return backToProperies();
+        //     }
 
-            this._currentRootModel!.options.categories = layout.value;
-            if (!layout.value) {
-                this._currentRootModel!.options.resources = 'All';
-            }
-            await saveChanges();
-        };
+        //     // after previous await, document can be closed now...
+        //     if (!this.currentDocument) {
+        //         return;
+        //     }
 
-        const changeResourcesUnderRoot = async () => {
-            const items = [
-                {
-                    label: 'Enabled', detail: 'Resources can be placed under root element',
-                    value: true,
-                    description: resourcesUnderRoot ? '(Current)' : '',
-                },
-                {
-                    label: 'Disabled', detail: 'Resources can only be placed under categories',
-                    value: false,
-                    description: !resourcesUnderRoot ? '(Current)' : '',
-                },
-                {
-                    kind: QuickPickItemKind.Separator
-                },
-                {
-                    label: 'Back to project properties',
-                    //iconPath: new vscode.ThemeIcon('chevron-left')
-                }
-            ] as PropsQuickPickItem[];
+        //     this._currentRootModel!.options.categories = layout.value;
+        //     if (!layout.value) {
+        //         this._currentRootModel!.options.resources = 'All';
+        //     }
+        //     await saveChanges();
+        // };
 
-            const selected = await vscode.window.showQuickPick(items, {
-                ignoreFocusOut: true, placeHolder: 'Resources under root', title: 'Change resources under root',
-                matchOnDescription: true, matchOnDetail: true
-            });
+        // const changeResourcesUnderRoot = async () => {
+        //     const items = [
+        //         {
+        //             label: 'Enabled', detail: 'Resources can be placed under root element',
+        //             value: true,
+        //             description: resourcesUnderRoot ? '(Current)' : '',
+        //         },
+        //         {
+        //             label: 'Disabled', detail: 'Resources can only be placed under categories',
+        //             value: false,
+        //             description: !resourcesUnderRoot ? '(Current)' : '',
+        //         },
+        //         {
+        //             kind: QuickPickItemKind.Separator
+        //         },
+        //         {
+        //             label: 'Back to project properties',
+        //             //iconPath: new vscode.ThemeIcon('chevron-left')
+        //         }
+        //     ] as PropsQuickPickItem[];
 
-            if (!selected || selected.value === undefined) {
-                return backToProperies();
-            }
+        //     const selected = await vscode.window.showQuickPick(items, {
+        //         ignoreFocusOut: true, placeHolder: 'Resources under root', title: 'Change resources under root',
+        //         matchOnDescription: true, matchOnDetail: true
+        //     });
 
-            if (!this.currentDocument) {
-                return;
-            }
+        //     if (!selected || selected.value === undefined) {
+        //         return backToProperies();
+        //     }
 
-            this._currentRootModel!.options.resources = selected.value ? 'All' : 'Categories';
-            await saveChanges();
-        };
+        //     if (!this.currentDocument) {
+        //         return;
+        //     }
+
+        //     this._currentRootModel!.options.resources = selected.value ? 'All' : 'Categories';
+        //     await saveChanges();
+        // };
 
 
-        setTimeout(() => {
-            // after previous await, document can be closed now...
-            if (!this.currentDocument) {
-                return;
-            }
+        // setTimeout(() => {
+        //     // after previous await, document can be closed now...
+        //     if (!this.currentDocument) {
+        //         return;
+        //     }
 
-            if (result.value) {
-                void changeLayout();
-            } else {
-                void changeResourcesUnderRoot();
-            }
-        }, 100);
+        //     if (result.value) {
+        //         void changeLayout();
+        //     } else {
+        //         void changeResourcesUnderRoot();
+        //     }
+        // }, 100);
     }
 
     private toggleLanguages(visible: boolean): void {
@@ -978,9 +997,13 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
             return;
         }
 
+        let parentToSelect: ICategoryLikeTreeElement | undefined;
         elemsToDelete.forEach(elem => {
             const parent = this.getCategoryLikeParent(elem);
             if (parent) {
+                if (elemsToDelete.length === 1) {
+                    parentToSelect = parent;
+                }
                 parent.removeElement(elem);
                 logger().log('debug', `[LhqTreeDataProvider] deleteItem -> ${elem.elementType} '${getElementFullPath(elem)}' deleted.`);
             } else {
@@ -989,6 +1012,12 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
         });
 
         const success = await this.applyChangesToTextDocument();
+
+        this._onDidChangeTreeData.fire([parentToSelect]);
+        if (parentToSelect) {
+            await this.revealElement(parentToSelect, { expand: true, select: true });
+        }
+
         await showMessageBox(success ? 'info' : 'err', success ? `Successfully deleted ${elemIdent}.` : `Failed to delete ${elemIdent}.`, { modal: !success });
     }
 

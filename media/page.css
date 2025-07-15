@@ -46,7 +46,6 @@ div.row > div[class^='col-'] {
 }
 
 .highlight-row {
-  /* background-color: var(--vscode-tab-inactiveBackground); */
   color: var(--vscode-list-hoverForeground);
   background-color: var(--vscode-list-hoverBackground);
 
@@ -137,7 +136,17 @@ button {
   color: var(--vscode-button-foreground);
   background-color: var(--vscode-button-background);
   border: 0;
+  height: 28px;
 }
+
+button.big-btn {
+  height: 35px;
+}
+
+/* button[type='button'] {
+  padding: 5 0 5 0;
+  height: 28px;
+} */
 
 button:hover {
   background-color: var(--vscode-button-hoverBackground);
@@ -257,7 +266,7 @@ table#translations td:first-child {
 }
 
 table#translations td[data-focused]:first-child {
-    border-left: 1px solid var(--vscode-focusBorder);
+  border-left: 1px solid var(--vscode-focusBorder);
 }
 
 tags.tagify {
@@ -335,4 +344,112 @@ div#translation-text-locked > div.codicon {
 
 div#translation-text-locked > div.codicon:hover {
   color: var(--vscode-focusBorder);
+}
+
+/* properties dialog related */
+
+.modal-dialog-block {
+  align-items: center;
+  display: flex;
+  height: 100%;
+  justify-content: center;
+  left: 0;
+  position: fixed;
+  top: 0;
+  width: 100%;
+  z-index: 2575;
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.modal-dialog {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  /* background: #fff; */
+  box-shadow: 0 0px 8px var(--vscode-widget-shadow);
+
+  color: var(--vscode-editorWidget-foreground);
+  background-color: var(--vscode-editorWidget-background);
+  /* border: 1px solid var(--vscode-contrastBorder); */
+  border: 1px solid var(--vscode-editorWidget-border);
+
+  border-radius: 6px;
+  min-width: 600px;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+}
+
+.modal-dialog > div:first-child {
+  padding: 16px;
+  border-bottom: 1px solid var(--vscode-editorWidget-border);
+  font-weight: bold;
+  font-size: 1.1em;
+  /* background: #f5f5f5; */
+}
+
+.modal-dialog > div:nth-child(2) {
+  padding: 16px;
+  flex: 1;
+  overflow-y: auto;
+}
+
+.modal-dialog > div:last-child {
+  padding: 12px 16px;
+  border-top: 1px solid var(--vscode-editorWidget-border);
+  /* background: #f5f5f5; */
+  text-align: right;
+}
+
+.modal-dialog > div:last-child > button {
+  height: 28px;
+}
+
+table#properties {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0 5px;
+}
+
+table#properties td {
+  padding: 5px;
+}
+
+table#properties .section-row {
+  color: var(--vscode-list-hoverForeground);
+  background-color: var(--vscode-list-hoverBackground);
+}
+
+table#properties .layout-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+table#properties .layout-row > label:first-child {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+table#properties .layout-row > label:first-child > input {
+  width: auto;
+  outline: none;
+  margin: 0 5px 0 5px;
+  vertical-align: middle;
+}
+
+table#properties .layout-row > label:nth-child(2) {
+  color: var(--vscode-input-placeholderForeground);
+  font-style: italic;
+  padding-left: 30px;
+}
+
+table#properties .layout-row > label > input[type='checkbox'] {
+  width: auto;
+}
+
+table#properties .layout-row > label:nth-child(3) {
+  padding-left: 30px;
 }
