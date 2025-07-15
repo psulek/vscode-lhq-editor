@@ -226,6 +226,7 @@ export function matchForSubstring(value: string, searchString: string, ignoreCas
 export async function loadCultures(context?: vscode.ExtensionContext): Promise<CulturesMap> {
     if (Object.keys(_cultures).length === 0) {
         if (context === undefined) {
+            logger().log('error', 'Failed to load list of cultures. Context is undefined.');
             await showMessageBox('err', 'Failed to load list of cultures. Context is undefined. Please report this issue.');
             return {};
         }

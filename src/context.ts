@@ -1,12 +1,14 @@
 import * as vscode from 'vscode';
 import fse from 'fs-extra';
+import { glob } from 'glob';
 import { AppToPageMessage, IAppContext, ITreeContext, IVirtualLanguageElement, SelectionChangedCallback } from './types';
-import { BuildinTemplateId, ICodeGeneratorElement, ITreeElement, LhqModelDataNode, ModelUtils, TemplateSettings, getHbsMetadata, modelConst } from '@lhq/lhq-generators';
+import { Generator, GeneratorInitialization, HbsTemplateManager, ICodeGeneratorElement, ITreeElement, ModelUtils, generatorUtils, modelConst } from '@lhq/lhq-generators';
 import { VirtualTreeElement } from './elements';
-import { DefaultFormattingOptions, getElementFullPath, initializeDebugMode, isValidDocument, loadCultures, logger, showMessageBox } from './utils';
+import { DefaultFormattingOptions, getElementFullPath, initializeDebugMode, isValidDocument, loadCultures, logger, safeReadFile, showConfirmBox, showMessageBox } from './utils';
 import { LhqEditorProvider } from './editorProvider';
 import { LhqTreeDataProvider } from './treeDataProvider';
 import path from 'path';
+import { HostEnvironmentCli } from './hostEnv';
 
 const globalStateKeys = {
     languagesVisible: 'languagesVisible'
@@ -58,6 +60,8 @@ export class AppContext implements IAppContext {
 
     public async init(ctx: vscode.ExtensionContext): Promise<void> {
         this._ctx = ctx;
+
+        await this.initGenerator(ctx);
 
         // to trigger setContext calls
         this.languagesVisible = this.languagesVisible;
@@ -135,6 +139,42 @@ export class AppContext implements IAppContext {
         vscode.commands.registerCommand(Commands.createNewLhqFile, () => this.createNewLhqFile());
     }
 
+    private async initGenerator(context: vscode.ExtensionContext): Promise<void> {
+        try {
+            const hbsTemplatesDir = vscode.Uri.joinPath(context.extensionUri, 'node_modules', '@lhq/lhq-generators/hbs').fsPath;
+
+            const metadataFile = path.join(hbsTemplatesDir, 'metadata.json');
+            const metadataContent = await fse.readFile(metadataFile, { encoding: 'utf-8' });
+            const result = generatorUtils.validateTemplateMetadata(metadataContent);
+            if (!result.success) {
+                logger().log('error', `Validation of  ${metadataFile} failed: ${result.error}`);
+                await showMessageBox('err', `Validation of lhq templates metadata file failed: ${result.error}`);
+            }
+
+            const generatorInit: GeneratorInitialization = {
+                hbsTemplates: {},
+                templatesMetadata: result.metadata!,
+                hostEnvironment: new HostEnvironmentCli()
+            };
+
+
+            const hbsFiles = await glob('*.hbs', { cwd: hbsTemplatesDir, nodir: true });
+
+            const templateLoaders = hbsFiles.map(async (hbsFile) => {
+                const templateId = path.basename(hbsFile, path.extname(hbsFile));
+                const fullFilePath = path.join(hbsTemplatesDir, hbsFile);
+                generatorInit.hbsTemplates[templateId] = await safeReadFile(fullFilePath);
+            });
+
+            await Promise.all(templateLoaders);
+
+            Generator.initialize(generatorInit);
+        } catch (error) {
+            logger().log('error', `Failed to initialize generator: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            await showMessageBox('err', `Failed to initialize lhq generator! Please report this issue.`);
+        }
+    }
+
     private async createNewLhqFile(): Promise<void> {
         try {
             const folder = getCurrentFolder();
@@ -169,16 +209,18 @@ export class AppContext implements IAppContext {
                 return;
             }
 
-            const hbsMetadata = getHbsMetadata();
+            //const hbsMetadata = getHbsMetadata();
+            const templates = Object.values(HbsTemplateManager.getTemplateDefinitions());
 
             interface TemplateQuickPickItem extends vscode.QuickPickItem {
                 templateId: string;
             }
 
-            const items: TemplateQuickPickItem[] = hbsMetadata.templates.map(template => ({
+            const items: TemplateQuickPickItem[] = templates.map(template => ({
                 templateId: template.id,
-                label: template.id,
-                detail: template.name,
+                label: template.displayName,
+                detail: template.description,
+                description: template.id,
                 alwaysShow: true
             }));
 
@@ -186,6 +228,7 @@ export class AppContext implements IAppContext {
                 placeHolder: `Select generator template`,
                 ignoreFocusOut: true,
                 matchOnDetail: true,
+                matchOnDescription: true,
                 title: 'Select generator template for new LHQ file'
             });
 
@@ -202,33 +245,26 @@ export class AppContext implements IAppContext {
                 resources: 'All',
             };
 
-            // if (template.templateId === 'NetCoreResxCsharp01') {
-            //     const csharp: Partial<CodeGeneratorCsharpSettings> = {};
-            //     const resx: Partial<CodeGeneratorResXSettings> = {};
-            //     codeGenSettings = templates.TemplateSettings_NetCoreResxCsharp01.createModelSettings(csharp, resx);
-            // } else {
-            //     throw new Error(`Unsupported template: ${template.templateId}`);
-            // }
-
-            const codeGenSettings = TemplateSettings.create({ id: template.templateId as BuildinTemplateId });
-
-            const codeGenerator: ICodeGeneratorElement = {
-                templateId: template.templateId,
-                version: modelConst.ModelVersions.codeGenerator,
-                settings: codeGenSettings
-            };
-
-            root.codeGenerator = codeGenerator;
+            root.codeGenerator = ModelUtils.createCodeGeneratorElement(template.templateId);
 
             const fileContent = ModelUtils.serializeTreeElement(root, DefaultFormattingOptions);
             const filePath = path.join(folder.fsPath, fileName + '.lhq');
+
+            if (await fse.pathExists(filePath)) {
+                if (!await showConfirmBox(`File ${filePath} already exists. Do you want to overwrite it?`)) {
+                    return;
+                }
+            }
+
             await fse.writeFile(filePath, fileContent, { encoding: 'utf8' });
 
             const fileUri = vscode.Uri.file(filePath);
             await vscode.commands.executeCommand('vscode.openWith', fileUri, 'lhq.customEditor');
+
+            await showMessageBox('info', `Successfully created file: ${filePath}`);
         } catch (error) {
-            console.error('Error creating new LHQ file:', error);
-            await showMessageBox('err', `Error creating new LHQ file: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            logger().log('error', `Error creating new LHQ file: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            await showMessageBox('err', `Error creating new LHQ file.`);
         }
     }
 

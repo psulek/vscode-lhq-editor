@@ -225,13 +225,15 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
                     label: 'Categories and resources', detail: 'Hierarchical tree structure',
                     value: true,
                     description: treeStructure ? '(Current)' : '',
-                    iconPath: new vscode.ThemeIcon('list-tree'), picked: treeStructure
+                    iconPath: new vscode.ThemeIcon('list-tree'),
+                    picked: treeStructure
                 },
                 {
                     label: 'Resources only', detail: 'Flat structure',
                     value: false,
                     description: !treeStructure ? '(Current)' : '',
-                    iconPath: new vscode.ThemeIcon('list-flat'), picked: !treeStructure
+                    iconPath: new vscode.ThemeIcon('list-flat'),
+                    picked: !treeStructure
                 },
                 {
                     kind: QuickPickItemKind.Separator,
@@ -243,8 +245,11 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
             ] as PropsQuickPickItem[];
 
             const layout = await vscode.window.showQuickPick(layoutItems, {
-                ignoreFocusOut: true, placeHolder: 'Layout', title: 'Change layout of LHQ structure',
-                matchOnDescription: true, matchOnDetail: true
+                ignoreFocusOut: true,
+                placeHolder: 'Layout',
+                title: 'Change layout of LHQ structure',
+                matchOnDescription: true,
+                matchOnDetail: true
             });
 
             if (!layout || layout.value === undefined) {
@@ -1117,8 +1122,30 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
     }
 
     private async addItem(element: ITreeElement, newItemType?: CategoryOrResourceType): Promise<any> {
+        if (!this._currentRootModel) {
+            return;
+        }
+
         const selectedCount = this.selectedElements.length;
         if (selectedCount > 1) {
+            return;
+        }
+
+        const rootModel = this._currentRootModel;
+
+        function canCreateCategory(): boolean {
+            if (!rootModel.options.categories) {
+                void showMessageBox('info', `Cannot add new category!`, {
+                    detail: `Categories are disabled in project properties. \nPlease enable 'Categories' in project properties to add new categories.`,
+                    modal: true
+                });
+                return false;
+            }
+
+            return true;
+        }
+
+        if (newItemType === 'category' && !canCreateCategory()) {
             return;
         }
 
@@ -1127,7 +1154,7 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
         }
 
         element = element || (this.selectedElements.length > 0 ? this.selectedElements[0] : undefined);
-        element = element ?? this._currentRootModel!;
+        element = element ?? rootModel!;
 
         if (!this.currentDocument || !element) {
             return;
@@ -1135,6 +1162,24 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
 
         if (element.elementType === 'resource') {
             element = element.parent || element.root;
+        }
+
+        function canCreateResource(): boolean {
+            if (rootModel.options.resources === 'Categories' && element.isRoot) {
+                void showMessageBox('info', `Cannot add new resource!`, {
+                    detail: `Resources are under root are not allowed (only under category).\n` +
+                        `Please enable 'Resources under root' in project properties.`,
+                    modal: true
+                });
+
+                return false;
+            }
+
+            return true;
+        }
+
+        if (newItemType === 'resource' && !canCreateResource()) {
+            return;
         }
 
         const elemPath = getElementFullPath(element);
@@ -1154,6 +1199,13 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
             : { elementType: newItemType };
 
         if (!itemType) {
+            return;
+        }
+
+        if (showSelector && (
+            (itemType.elementType === 'category' && !canCreateCategory()) ||
+            (itemType.elementType === 'resource' && !canCreateResource())
+        )) {
             return;
         }
 
@@ -1451,7 +1503,7 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
         // setTimeout(() => {
         //     this._onDidChangeTreeData.fire(undefined);
         // }, 100);
-        
+
         this._onDidChangeTreeData.fire(undefined);
     }
 
