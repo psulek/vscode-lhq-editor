@@ -55,8 +55,6 @@
                         :title="'Click to locate ' + item.elementType + ' in tree view...'">
                         {{ fullPath }}
                     </a>
-
-                    <!-- <button @click="showProperties">Show Properties</button> -->
                 </td>
             </tr>
             <tr>
@@ -162,68 +160,92 @@
         <div class="modal-dialog-block" v-if="modelProperties.visible">
             <div class="modal-dialog">
                 <div>
-                    Properties
+                    <table style="width: 100%;">
+                        <tr>
+                            <td>Model properties</td>
+                            <td style="text-align: right;">
+                                <label style="font-size: smaller;font-weight: lighter;">
+                                    Model version: v{{ modelProperties.modelVersion }}
+                                </label>
+                            </td>
+                        </tr>
+                    </table>
                 </div>
                 <div>
                     <table id="properties">
                         <tr>
-                            <td colspan="2" class="section-row">Layout</td>
-                        </tr>
-                        <!-- <span class="codicon codicon-list-tree"></span> -->
-                        <!-- <span class="codicon codicon-list-flat"></span> -->
-                        <tr>
-                            <td colspan="2">
-                                <div class="layout-row">
-                                    <label>
-                                        <input type="radio" v-model="modelProperties.categories" :value="true">
-                                        Categories and resources
-                                    </label>
-                                    <label>
-                                        Hierarchical view of categories and resources.
-                                    </label>
-                                    <label v-if="modelProperties.categories">
-                                        <input type="checkbox" v-model="modelProperties.resources" :true-value="'All'"
-                                            :false-value="'Categories'">
-                                        Allow resources under root
-                                    </label>
-                                </div>
+                            <td>
+                                <label for="layoutMode">Layout:</label>
+                            </td>
+                            <td>
+                                <select id="layoutMode" v-model="modelProperties.categories">
+                                    <option disabled value="">Please select layout</option>
+                                    <option v-for="mode in modelProperties.layoutModes" :key="mode.name"
+                                        :value="mode.value">
+                                        {{ mode.name }}
+                                    </option>
+                                </select>
                             </td>
                         </tr>
-                        <tr>
-                            <td colspan="2">
-                                <div class="layout-row">
-                                    <label>
-                                        <input type="radio" v-model="modelProperties.categories" :value="false">
-                                        Resources only
-                                    </label>
-                                    <label>
-                                        Flat view of resources without categories.
-                                    </label>
-                                </div>
-                            </td>
-
-                        </tr>
-                        <tr>
-                            <td colspan="2" class="section-row">Model version</td>
-                        </tr>
-                        <tr>
-                            <td colspan="2">
-                                <div class="layout-row">
-                                    <label>
-                                        v{{ modelProperties.modelVersion }}
-                                    </label>
-                                </div>
+                        <tr v-if="modelProperties.categories">
+                            <td>&nbsp;</td>
+                            <td style="padding-top: 0;">
+                                <label>
+                                    <input type="checkbox" v-model="modelProperties.resources" style="width: auto;"
+                                        :true-value="'All'" :false-value="'Categories'">
+                                    Allow resources under root
+                                </label>
                             </td>
                         </tr>
+                        <tr class="template">
+                            <td>Code Generator Template:</td>
+                            <td>{{ modelProperties.templateId }}</td>
+                        </tr>
                         <tr>
-                            <td colspan="2" class="section-row">Code Generator Template</td>
+                            <td colspan="2"><strong>{{ templateDefinition.description }}</strong></td>
                         </tr>
                         <tr>
                             <td colspan="2">
-                                <div class="layout-row">
-                                    <label>
-                                        {{ modelProperties.templateId }}
-                                    </label>
+                                <div style="height: 150px;overflow-y: scroll;">
+                                    <table id="settings-table">
+                                        <tbody>
+                                            <template v-for="(settings, group) in templateDefinition.settings">
+                                                <tr>
+                                                    <td colspan="2" class="group">{{group }}</td>
+                                                </tr>
+                                                <tr v-for="setting in settings" :key="setting.name"
+                                                    class="settingValue">
+                                                    <td>
+                                                        <label :title="setting.description">
+                                                            {{ setting.displayName }}
+                                                        </label>
+                                                    </td>
+                                                    <td>
+                                                        <template v-if="setting.type === 'boolean'">
+                                                            <input type="checkbox" v-model="setting.value"
+                                                                :true-value="true" :false-value="false">
+                                                        </template>
+                                                        <template v-else-if="setting.type === 'string'">
+                                                            <input type="text" v-model="setting.value"
+                                                                :placeholder="setting.placeholder || ''">
+                                                        </template>
+                                                        <template v-else-if="setting.type === 'number'">
+                                                            <input type="number" v-model="setting.value"
+                                                                :placeholder="setting.placeholder || ''">
+                                                        </template>
+                                                        <template v-else-if="setting.type === 'list'">
+                                                            <select v-model="setting.value">
+                                                                <option v-for="option in setting.values"
+                                                                    :key="option.value" :value="option.value">
+                                                                    {{ option.name }}
+                                                                </option>
+                                                            </select>
+                                                        </template>
+                                                    </td>
+                                                </tr>
+                                            </template>
+                                        </tbody>
+                                    </table>
                                 </div>
                             </td>
                         </tr>

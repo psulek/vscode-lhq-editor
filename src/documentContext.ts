@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { findCulture, generateNonce, isValidDocument, logger, showMessageBox } from './utils';
 import { AppToPageMessage, ClientPageModelProperties, PageToAppMessage } from './types';
-import { CategoryLikeTreeElementToJsonOptions, ITreeElement } from '@lhq/lhq-generators';
+import { CategoryLikeTreeElementToJsonOptions, HbsTemplateManager, ITreeElement } from '@lhq/lhq-generators';
 import { isVirtualTreeElement } from './elements';
 
 export class DocumentContext /* implements IDocumentContext */ {
@@ -123,6 +123,12 @@ export class DocumentContext /* implements IDocumentContext */ {
     public async updateWebviewContent(): Promise<void> {
         logger().log('debug', `[DocumentContext] updateWebviewContent for: ${this.fileName}`);
         this._webviewPanel.webview.html = await this.getHtmlForWebview(false);
+
+        // const rootModel = appContext.treeContext.currentRootModel!;
+        // const templateId = rootModel.codeGenerator?.templateId;
+        const templatesMetadata = HbsTemplateManager.getTemplateDefinitions();
+
+        this.sendMessageToHtmlPage({ command: 'init', templatesMetadata });
     }
 
     public reflectSelectedElementToWebview(): void {

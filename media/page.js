@@ -35,6 +35,7 @@
      * @property {number} modelVersion
      * @property {string} templateId
      * @property {boolean} visible
+     * @property {CodeGeneratorGroupSettings} templateSettings
      */
 
     /**
@@ -46,6 +47,7 @@
      * @property {boolean} supressOnChange
      * @property {ModelProperties} modelProperties
      * @property {ModelProperties} modelPropertiesBackup
+     * @property {TemplateMetadataDefinition} templateDefinition
      */
 
     /**
@@ -66,6 +68,7 @@
     const regexValidCharacters = /^[a-zA-Z]+[a-zA-Z0-9_]*$/;
 
     let currentPrimaryLang = 'en';
+    let templatesMetadata = {};
 
     function getCultureName(lang) {
         if (lang && lang !== '') {
@@ -85,6 +88,15 @@
         message = event.data;
         logMsg(`Received message '${message.command}', action: '${message.action}'`, message);
         switch (message.command) {
+            case 'init': {
+                /*
+                command: 'init';
+                templatesMetadata: Record<string, TemplateMetadataDefinition>;
+                */
+                templatesMetadata = message.templatesMetadata || {};
+
+                break;
+            }
             case 'showProperties': {
                 window.pageApp.showProperties();
                 break;
@@ -172,6 +184,7 @@
                 window.pageApp.supressOnChange = undefined;
                 window.pageApp.modelProperties = { visible: false };
                 window.pageApp.modelPropertiesBackup = { visible: false };
+                window.pageApp.templateDefinition = {};
 
                 window.pageApp.$nextTick(() => {
                     setNewElement(element, modelProperties);
@@ -224,7 +237,14 @@
         logMsg(`Setting new element:  ${getFullPath(element)} (${element.elementType})`, element, ' and modelProperties: ', modelProperties);
         window.pageApp.item = element;
         window.pageApp.modelProperties = modelProperties ?? { visible: false };
+        window.pageApp.modelProperties.layoutModes = [{ name: 'Hierarchical tree', value: true }, { 'name': 'Flat list', value: false }];
         window.pageApp.modelPropertiesBackup = modelProperties ? Object.assign({}, modelProperties) : { visible: false };
+
+        const templateId = modelProperties.templateId ?? '';
+
+        window.pageApp.templateDefinition = Object.prototype.hasOwnProperty.call(templatesMetadata, templateId)
+            ? templatesMetadata[templateId]
+            : {};
     }
 
     function getFullPath(element) {
@@ -418,10 +438,11 @@
         supressOnChange: undefined,
         modelProperties: {
             visible: false
-        }, 
+        },
         modelPropertiesBackup: {
             visible: false
-        }
+        },
+        templateDefinition: {}
     };
 
     window.pageApp = createApp({
@@ -928,7 +949,7 @@
                 const msg = { command: 'updateProperties', modelProperties: toRaw(this.modelProperties) };
                 logMsg('Saving model properties and sending message.. ', msg);
                 vscode.postMessage(msg);
-            },
+            }
         }
     }).mount('#app');
 

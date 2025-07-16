@@ -1,4 +1,4 @@
-import type { IRootModelElement, ITreeElement, LhqModelOptionsResources, TreeElementType } from '@lhq/lhq-generators';
+import type { CodeGeneratorGroupSettings, ICodeGeneratorElement, IRootModelElement, ITreeElement, LhqModelOptionsResources, TemplateMetadataDefinition, TreeElementType } from '@lhq/lhq-generators';
 import type { TextDocument, Uri, Webview } from 'vscode';
 
 export type SearchTreeKind = 'path' | 'name' | 'translation' | 'language';
@@ -73,12 +73,17 @@ export type ClientPageError = {
 export type ClientPageModelProperties = {
     resources: LhqModelOptionsResources;
     categories: boolean;
-    modelVersion: number;
-    templateId: string;
+    //modelVersion: number;
+    //templateId: string;
     visible: boolean;
+    //templateSettings: CodeGeneratorGroupSettings;
+    codeGenerator: ICodeGeneratorElement;
 }
 
 export type AppToPageMessage = {
+    command: 'init';
+    templatesMetadata: Record<string, TemplateMetadataDefinition>;
+} | {
     command: 'loadPage';
     element: Object;
     file: string;
@@ -88,13 +93,14 @@ export type AppToPageMessage = {
 } | {
     command: 'invalidData';
     action: 'add' | 'remove';
-} & ClientPageError
-    | {
-        command: 'updatePaths'
-        paths: string[];
-    } | {
-        command: 'showProperties';
-    };
+} & ClientPageError |
+{
+    command: 'updatePaths'
+    paths: string[];
+} |
+{
+    command: 'showProperties';
+};
 
 export type PageToAppMessage = {
     command: 'update',
