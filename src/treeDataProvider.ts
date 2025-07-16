@@ -155,6 +155,9 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
         root.options.categories = modelProperties.categories;
         root.options.resources = modelProperties.categories ? modelProperties.resources : 'All';
 
+        const codeGenerator = ModelUtils.createCodeGeneratorElement(modelProperties.codeGenerator.templateId, modelProperties.codeGenerator.settings);
+        root.codeGenerator = codeGenerator;
+
         const success = await this.applyChangesToTextDocument();
         await showMessageBox(success ? 'info' : 'err',
             success

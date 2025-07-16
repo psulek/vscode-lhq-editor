@@ -73,7 +73,7 @@ export type ClientPageError = {
 export type ClientPageModelProperties = {
     resources: LhqModelOptionsResources;
     categories: boolean;
-    //modelVersion: number;
+    modelVersion: number;
     //templateId: string;
     visible: boolean;
     //templateSettings: CodeGeneratorGroupSettings;

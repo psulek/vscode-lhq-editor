@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { findCulture, generateNonce, isValidDocument, logger, showMessageBox } from './utils';
 import { AppToPageMessage, ClientPageModelProperties, PageToAppMessage } from './types';
-import { CategoryLikeTreeElementToJsonOptions, HbsTemplateManager, ITreeElement } from '@lhq/lhq-generators';
+import { CategoryLikeTreeElementToJsonOptions, CodeGeneratorGroupSettings, HbsTemplateManager, ITreeElement, modelConst } from '@lhq/lhq-generators';
 import { isVirtualTreeElement } from './elements';
 
 export class DocumentContext /* implements IDocumentContext */ {
@@ -159,8 +159,9 @@ export class DocumentContext /* implements IDocumentContext */ {
                 resources: rootModel.options.resources,
                 categories: rootModel.options.categories,
                 modelVersion: rootModel.version,
-                templateId: rootModel.codeGenerator!.templateId,
-                visible: false
+                //templateId: rootModel.codeGenerator!.templateId,
+                visible: false,
+                codeGenerator: rootModel.codeGenerator ?? { templateId: '', settings: {} as CodeGeneratorGroupSettings, version: modelConst.ModelVersions.codeGenerator }
             }
         };
 

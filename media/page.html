@@ -199,7 +199,7 @@
                         </tr>
                         <tr class="template">
                             <td>Code Generator Template:</td>
-                            <td>{{ modelProperties.templateId }}</td>
+                            <td>{{ templateDefinition.id }}</td>
                         </tr>
                         <tr>
                             <td colspan="2"><strong>{{ templateDefinition.description }}</strong></td>
@@ -222,19 +222,25 @@
                                                     </td>
                                                     <td>
                                                         <template v-if="setting.type === 'boolean'">
-                                                            <input type="checkbox" v-model="setting.value"
+                                                            <input type="checkbox"
+                                                                :checked="getCodeGeneratorPropertyValue(group, setting.name)"
+                                                                @change="setCodeGeneratorPropertyValue(group, setting.name, $event.target.checked)"
                                                                 :true-value="true" :false-value="false">
                                                         </template>
                                                         <template v-else-if="setting.type === 'string'">
-                                                            <input type="text" v-model="setting.value"
-                                                                :placeholder="setting.placeholder || ''">
+                                                            <input type="text"
+                                                                :value="getCodeGeneratorPropertyValue(group, setting.name)"
+                                                                @input="setCodeGeneratorPropertyValue(group, setting.name, $event.target.value)">
                                                         </template>
                                                         <template v-else-if="setting.type === 'number'">
-                                                            <input type="number" v-model="setting.value"
-                                                                :placeholder="setting.placeholder || ''">
+                                                            <input type="number"
+                                                                :value="getCodeGeneratorPropertyValue(group, setting.name)"
+                                                                @input="setCodeGeneratorPropertyValue(group, setting.name, $event.target.value)">
                                                         </template>
                                                         <template v-else-if="setting.type === 'list'">
-                                                            <select v-model="setting.value">
+                                                            <select
+                                                                :value="getCodeGeneratorPropertyValue(group, setting.name)"
+                                                                @change="setCodeGeneratorPropertyValue(group, setting.name, $event.target.value)">
                                                                 <option v-for="option in setting.values"
                                                                     :key="option.value" :value="option.value">
                                                                     {{ option.name }}

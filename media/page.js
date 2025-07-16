@@ -32,10 +32,9 @@
      * @typedef {Object} ModelProperties
      * @property {'All' | 'Categories'} resources
      * @property {boolean} categories
-     * @property {number} modelVersion
-     * @property {string} templateId
      * @property {boolean} visible
-     * @property {CodeGeneratorGroupSettings} templateSettings
+     * @property {number} modelVersion
+     * @property {ICodeGeneratorElement} codeGenerator
      */
 
     /**
@@ -182,7 +181,7 @@
                 window.pageApp.item = undefined;
                 window.pageApp.paramsEnabled = false;
                 window.pageApp.supressOnChange = undefined;
-                window.pageApp.modelProperties = { visible: false };
+                window.pageApp.modelProperties = { visible: false, codeGenerator: { templateId: '' } };
                 window.pageApp.modelPropertiesBackup = { visible: false };
                 window.pageApp.templateDefinition = {};
 
@@ -236,15 +235,32 @@
         element.translations = translations;
         logMsg(`Setting new element:  ${getFullPath(element)} (${element.elementType})`, element, ' and modelProperties: ', modelProperties);
         window.pageApp.item = element;
-        window.pageApp.modelProperties = modelProperties ?? { visible: false };
+        window.pageApp.modelProperties = modelProperties ?? { visible: false, codeGenerator: { templateId: '' } };
         window.pageApp.modelProperties.layoutModes = [{ name: 'Hierarchical tree', value: true }, { 'name': 'Flat list', value: false }];
         window.pageApp.modelPropertiesBackup = modelProperties ? Object.assign({}, modelProperties) : { visible: false };
 
-        const templateId = modelProperties.templateId ?? '';
+        const templateId = modelProperties.codeGenerator?.templateId ?? '';
 
-        window.pageApp.templateDefinition = Object.prototype.hasOwnProperty.call(templatesMetadata, templateId)
+
+        const templateDefinition = Object.prototype.hasOwnProperty.call(templatesMetadata, templateId)
             ? templatesMetadata[templateId]
-            : {};
+            : undefined;
+
+        if (templateDefinition) {
+            const settingsObj = {};
+            for (const [group, settings] of Object.entries(templateDefinition.settings)) {
+                settingsObj[group] = {};
+                if (settings && Array.isArray(settings)) {
+                    settings.forEach(setting => {
+                        settingsObj[group][setting.name] = setting;
+                    });
+                }
+            }
+
+            templateDefinition.settings = settingsObj;
+        }
+
+        window.pageApp.templateDefinition = templateDefinition;
     }
 
     function getFullPath(element) {
@@ -353,6 +369,54 @@
     const debouncedHandleClickOutside = _.debounce(handleClickOutside, 200, { leading: false, trailing: true });
     document.addEventListener('click', debouncedHandleClickOutside, true);
 
+    // property - @TemplateMetadataSettings
+    function convertValueForProperty(value, property) {
+        if (value === undefined || value === null) {
+            return property.default;
+        }
+
+        const valueType = typeof value;
+        switch (property.type) {
+            case 'boolean':
+                {
+                    //return valueType === 'string' ? (value === 'true') : value;
+                    switch (valueType) {
+                        case 'string':
+                            if (value === 'true') {
+                                return true;
+                            } else if (value === 'false') {
+                                return false;
+                            }
+                            break;
+                        case 'boolean':
+                            return value;
+                        case 'number':
+                            return value !== 0;
+                        default:
+                            return property.default;
+                    }
+
+                    break;
+                }
+            case 'string':
+                // eslint-disable-next-line @typescript-eslint/no-base-to-string
+                return valueType === 'string' ? value : String(value);
+            case 'list':
+                {
+                    if (Array.isArray(property.values)) {
+                        const found = property.values.find(pv => typeof pv.value === valueType && pv.value === value);
+                        return found ? found.value : property.default;
+                    }
+
+                    return property.default;
+                }
+            case 'number':
+                return valueType === 'number' ? value : Number(value);
+            default:
+                throw new Error(`Unsupported setting type!`);
+        }
+    }
+
     function showTooltip(uid, message, anchorEl) {
         const removeTimeout = 3000;
         const hideTimeout = 1000;
@@ -437,7 +501,10 @@
         },
         supressOnChange: undefined,
         modelProperties: {
-            visible: false
+            visible: false,
+            codeGenerator: {
+                templateId: ''
+            }
         },
         modelPropertiesBackup: {
             visible: false
@@ -451,23 +518,42 @@
         computed: {
             translationCount() {
                 return usedCultures.length;
-                // if (this.item && this.item.values) {
-                //     return this.item.values.length;
-                // }
-                // return 0;
             },
 
             fullPath() {
                 return getFullPath(this.item);
-                // if (this.item && this.item.paths) {
-                //     return '/' + this.item.paths.join('/');
-                // }
-
-                // return '';
             },
 
             isResource() {
                 return this.item && this.item.elementType === 'resource';
+            },
+
+            getCodeGeneratorPropertyValue() {
+                return (group, name) => {
+                    const settings = this.modelProperties.codeGenerator?.settings;
+                    const groupSettings = settings ? settings[group] : undefined;
+
+                    return groupSettings ? groupSettings[name] : undefined;
+                };
+            },
+
+            setCodeGeneratorPropertyValue() {
+                return (group, name, value) => {
+                    debugger;
+                    const settings = this.modelProperties.codeGenerator?.settings;
+                    const groupSettings = settings ? settings[group] : undefined;
+
+                    if (groupSettings) {
+                        const templateGroup = this.templateDefinition.settings[group];
+                        if (templateGroup && templateGroup[name]) {
+                            const property = templateGroup[name];
+
+                            groupSettings[name] = convertValueForProperty(value, property);
+                        }
+                    } else {
+                        console.warn(`Group '${group}' not found in code generator settings.`);
+                    }
+                };
             }
         },
 
@@ -949,7 +1035,12 @@
                 const msg = { command: 'updateProperties', modelProperties: toRaw(this.modelProperties) };
                 logMsg('Saving model properties and sending message.. ', msg);
                 vscode.postMessage(msg);
-            }
+            },
+
+            // updateCodeGenerator(group, name, value) {
+            //     logMsg(`Updating code generator property: group=${group}, name=${name}, value=${value}`);
+            //     this.modelProperties.codeGenerator[group][name] = value;
+            // }
         }
     }).mount('#app');
 
