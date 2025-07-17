@@ -65,8 +65,12 @@ export class DocumentContext /* implements IDocumentContext */ {
                         return;
                     }
                     break;
-                case 'updateProperties': {
-                    await appContext.treeContext.saveModelProperties(message.modelProperties);
+                case 'saveProperties': {
+                    const error = await appContext.treeContext.saveModelProperties(message.modelProperties);
+                    if (error) {
+                        logger().log('error', `[DocumentContext] webview.onDidReceiveMessage: Error saving properties: ${error}`);
+                    }
+                    this.sendMessageToHtmlPage({ command: 'savePropertiesResult', error });
                     break;
                 }
             }

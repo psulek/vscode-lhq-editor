@@ -49,17 +49,6 @@ export type CultureInfo = {
     isNeutral: boolean;
 }
 
-// export const ContextKeys = {
-//     isEditorActive: 'lhqEditorIsActive',
-//     hasSelectedItem: 'lhqTreeHasSelectedItem',
-//     hasMultiSelection: 'lhqTreeHasMultiSelection',
-//     hasSelectedDiffParents: 'lhqTreeHasSelectedDiffParents',
-//     hasLanguageSelection: 'lhqTreeHasLanguageSelection',
-//     hasPrimaryLanguageSelected: 'lhqTreeHasPrimaryLanguageSelected',
-//     hasLanguagesVisible: 'lhqTreeHasLanguagesVisible',
-// };
-
-//export type CulturesMap = Map<string, CultureInfo>;
 export type CulturesMap = Record<string, CultureInfo>;
 
 export type ValidationError = { message: string, detail?: string };
@@ -74,10 +63,14 @@ export type ClientPageModelProperties = {
     resources: LhqModelOptionsResources;
     categories: boolean;
     modelVersion: number;
-    //templateId: string;
     visible: boolean;
-    //templateSettings: CodeGeneratorGroupSettings;
     codeGenerator: ICodeGeneratorElement;
+}
+
+export type ClientPageSettingsError = {
+    group: string;
+    name: string;
+    message: string;
 }
 
 export type AppToPageMessage = {
@@ -100,6 +93,10 @@ export type AppToPageMessage = {
 } |
 {
     command: 'showProperties';
+} |
+{
+    command: 'savePropertiesResult';
+    error?: ClientPageSettingsError | undefined;
 };
 
 export type PageToAppMessage = {
@@ -110,7 +107,7 @@ export type PageToAppMessage = {
     paths: string[];
     elementType: TreeElementType
 } | {
-    command: 'updateProperties',
+    command: 'saveProperties',
     modelProperties: ClientPageModelProperties;
 };
 
@@ -142,7 +139,7 @@ export interface ITreeContext {
 
     selectElementByPath(elementType: TreeElementType, path: string[]): Promise<void>;
 
-    saveModelProperties(modelProperties: ClientPageModelProperties): Promise<void>;
+    saveModelProperties(modelProperties: ClientPageModelProperties): Promise<ClientPageSettingsError | undefined>;
 
     clearPageErrors(): void;
 }

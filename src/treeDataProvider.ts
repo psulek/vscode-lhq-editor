@@ -11,7 +11,7 @@ import { detectFormatting, generatorUtils, isNullOrEmpty, ModelUtils } from '@lh
 import { LhqTreeItem } from './treeItem';
 import { validateName } from './validator';
 import { filterTreeElements, filterVirtualTreeElements, isVirtualTreeElement, VirtualRootElement } from './elements';
-import type { SearchTreeOptions, MatchingElement, CultureInfo, IVirtualLanguageElement, ValidationError, ITreeContext, ClientPageError, SelectionBackup, ClientPageModelProperties } from './types';
+import type { SearchTreeOptions, MatchingElement, CultureInfo, IVirtualLanguageElement, ValidationError, ITreeContext, ClientPageError, SelectionBackup, ClientPageModelProperties, ClientPageSettingsError } from './types';
 import {
     getMessageBoxText, createTreeElementPaths, findChildsByPaths, matchForSubstring,
     logger, getElementFullPath, showMessageBox, getCultureDesc, showConfirmBox, loadCultures, isValidDocument,
@@ -145,7 +145,7 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
         return this._currentRootModel;
     }
 
-    public async saveModelProperties(modelProperties: ClientPageModelProperties): Promise<void> {
+    public async saveModelProperties(modelProperties: ClientPageModelProperties): Promise<ClientPageSettingsError | undefined> {
         if (!this._currentRootModel || !modelProperties) {
             return;
         }
@@ -156,13 +156,23 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
         root.options.resources = modelProperties.categories ? modelProperties.resources : 'All';
 
         const codeGenerator = ModelUtils.createCodeGeneratorElement(modelProperties.codeGenerator.templateId, modelProperties.codeGenerator.settings);
+
+        const ns = codeGenerator.settings["CSharp"]['Namespace'];
+        if (isNullOrEmpty(ns)) {
+            return {
+                group: 'CSharp',
+                name: 'Namespace',
+                message: 'Namespace cannot be empty.';
+            };
+        }
+
         root.codeGenerator = codeGenerator;
 
         const success = await this.applyChangesToTextDocument();
-        await showMessageBox(success ? 'info' : 'err',
-            success
-                ? 'Project properties changes was applied.'
-                : `Failed to apply project properties changes.`);
+
+        if (success) {
+            await showMessageBox('info', 'Project properties changes was applied.');
+        }
     }
 
     private async projectProperties(): Promise<void> {

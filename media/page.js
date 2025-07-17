@@ -29,12 +29,21 @@
      */
 
     /**
+     * @typedef {Object} SettingsError
+     * @property {string} group
+     * @property {string} name
+     * @property {string} message
+     */
+
+    /**
      * @typedef {Object} ModelProperties
      * @property {'All' | 'Categories'} resources
      * @property {boolean} categories
      * @property {boolean} visible
+     * @property {boolean} saving
      * @property {number} modelVersion
      * @property {ICodeGeneratorElement} codeGenerator
+     * @property {SettingsError | undefined} codeGeneratorError
      */
 
     /**
@@ -68,6 +77,7 @@
 
     let currentPrimaryLang = 'en';
     let templatesMetadata = {};
+    let savePropertiesTimer = undefined;
 
     function getCultureName(lang) {
         if (lang && lang !== '') {
@@ -181,8 +191,13 @@
                 window.pageApp.item = undefined;
                 window.pageApp.paramsEnabled = false;
                 window.pageApp.supressOnChange = undefined;
-                window.pageApp.modelProperties = { visible: false, codeGenerator: { templateId: '' } };
-                window.pageApp.modelPropertiesBackup = { visible: false };
+                window.pageApp.modelProperties = {
+                    visible: false,
+                    saving: false,
+                    codeGenerator: { templateId: '' },
+                    codeGeneratorError: undefined
+                };
+                window.pageApp.modelPropertiesBackup = Object.assign({}, window.pageApp.modelProperties);
                 window.pageApp.templateDefinition = {};
 
                 window.pageApp.$nextTick(() => {
@@ -197,6 +212,20 @@
                     });
                 });
                 delete domBody.dataset['loading'];
+                break;
+            }
+
+            case 'savePropertiesResult': {
+                /*
+                command: 'savePropertiesResult';
+                success: boolean;
+                error: string | undefined;
+                */
+
+                if (window.pageApp) {
+                    window.pageApp.handleSavePropertiesResult(message.error);
+                }
+
                 break;
             }
         }
@@ -235,9 +264,19 @@
         element.translations = translations;
         logMsg(`Setting new element:  ${getFullPath(element)} (${element.elementType})`, element, ' and modelProperties: ', modelProperties);
         window.pageApp.item = element;
-        window.pageApp.modelProperties = modelProperties ?? { visible: false, codeGenerator: { templateId: '' } };
+
+        const getDefaultModelProperties = () => ({
+            visible: false,
+            saving: false,
+            codeGenerator: { templateId: '' },
+            codeGeneratorError: undefined
+        });
+
+        window.pageApp.modelProperties = modelProperties ?? getDefaultModelProperties();
         window.pageApp.modelProperties.layoutModes = [{ name: 'Hierarchical tree', value: true }, { 'name': 'Flat list', value: false }];
-        window.pageApp.modelPropertiesBackup = modelProperties ? Object.assign({}, modelProperties) : { visible: false };
+        window.pageApp.modelPropertiesBackup = modelProperties
+            ? Object.assign({}, modelProperties)
+            : getDefaultModelProperties();
 
         const templateId = modelProperties.codeGenerator?.templateId ?? '';
 
@@ -417,9 +456,10 @@
         }
     }
 
-    function showTooltip(uid, message, anchorEl) {
+    function showTooltip(uid, message, anchorEl, useTopAnchor, zIndex) {
         const removeTimeout = 3000;
         const hideTimeout = 1000;
+        useTopAnchor = useTopAnchor ?? false;
         const oldTooltipItem = tooltipsMap.get(uid);
         if (oldTooltipItem) {
             removeTooltip(oldTooltipItem);
@@ -467,7 +507,11 @@
         document.body.appendChild(tooltip);
         const rect = anchorEl.getBoundingClientRect();
         tooltip.style.left = `${rect.left + window.scrollX}px`;
-        tooltip.style.top = `${rect.bottom + window.scrollY + 5}px`;
+        const anchorX = useTopAnchor ? rect.top : rect.bottom;
+        tooltip.style.top = `${anchorX + window.scrollY + 5}px`;
+        if (zIndex) {
+            tooltip.style.zIndex = zIndex;
+        }
 
         if (!handleClickOutsideInitialized) {
             setTimeout(() => {
@@ -502,12 +546,19 @@
         supressOnChange: undefined,
         modelProperties: {
             visible: false,
+            saving: false,
             codeGenerator: {
                 templateId: ''
-            }
+            },
+            codeGeneratorError: undefined
         },
         modelPropertiesBackup: {
-            visible: false
+            visible: false,
+            saving: false,
+            codeGenerator: {
+                templateId: ''
+            },
+            codeGeneratorError: undefined
         },
         templateDefinition: {}
     };
@@ -554,6 +605,12 @@
                         console.warn(`Group '${group}' not found in code generator settings.`);
                     }
                 };
+            },
+
+            settingsError() {
+                /** @type SettingsError | undefined */
+                const error = this.modelProperties.codeGeneratorError;
+                return error ? `${error.group} / ${error.name} / ${error.message}` : '';
             }
         },
 
@@ -1030,17 +1087,48 @@
             },
 
             saveProperties() {
-                this.modelProperties.visible = false;
+                // this.modelProperties.visible = false;
+                this.modelProperties.saving = true;
+                this.modelProperties.codeGeneratorError = undefined;
 
-                const msg = { command: 'updateProperties', modelProperties: toRaw(this.modelProperties) };
+                const msg = { command: 'saveProperties', modelProperties: toRaw(this.modelProperties) };
                 logMsg('Saving model properties and sending message.. ', msg);
+
+                savePropertiesTimer = setTimeout(() => {
+                    this.modelProperties.saving = false;
+                    this.handleSavePropertiesResult(undefined, false);
+                }, 5000);
+
                 vscode.postMessage(msg);
             },
 
-            // updateCodeGenerator(group, name, value) {
-            //     logMsg(`Updating code generator property: group=${group}, name=${name}, value=${value}`);
-            //     this.modelProperties.codeGenerator[group][name] = value;
-            // }
+            handleSavePropertiesResult(error, closeDialog) {
+                this.modelProperties.codeGeneratorError = error;
+                if (savePropertiesTimer) {
+                    clearTimeout(savePropertiesTimer);
+                    savePropertiesTimer = undefined;
+                }
+
+                closeDialog = closeDialog ?? true;
+                if (error) {
+                    closeDialog = false;
+                }
+
+                this.modelProperties.saving = false;
+                if (closeDialog) {
+                    this.modelProperties.visible = false;
+                } else if (error) {
+                    //showTooltip('save-properties-error', error, document.getElementById('settings-table'), true, 20000);
+                }
+            },
+
+            focusOnSettingsError() {
+                console.warn(`Focus on settings error is not implemented!`);
+            },
+
+            changeTemplate() {
+                console.warn(`Change template is not implemented!`);
+            }
         }
     }).mount('#app');
 

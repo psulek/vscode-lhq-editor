@@ -198,25 +198,41 @@
                             </td>
                         </tr>
                         <tr class="template">
-                            <td>Code Generator Template:</td>
-                            <td>{{ templateDefinition.id }}</td>
+                            <td>
+                                <strong>Code Generator Template:</strong>
+                            </td>
+                            <td>
+                                <a href="#" @click="changeTemplate" title="Change code generator template">
+                                    {{ templateDefinition.id }}
+                                </a>
+                            </td>
                         </tr>
                         <tr>
-                            <td colspan="2"><strong>{{ templateDefinition.description }}</strong></td>
+                            <td colspan="2" style="padding: 0 0 0 5px; font-size: smaller">
+                                <label class="small-2lines-trim">
+                                    {{templateDefinition.description }}
+                                </label>
+                            </td>
                         </tr>
                         <tr>
                             <td colspan="2">
-                                <div style="height: 150px;overflow-y: scroll;">
+                                <div style="overflow-y: auto;">
                                     <table id="settings-table">
                                         <tbody>
                                             <template v-for="(settings, group) in templateDefinition.settings">
                                                 <tr>
-                                                    <td colspan="2" class="group">{{group }}</td>
+                                                    <td colspan="2" style="padding-top: 8px;">
+                                                        <label class="bold"
+                                                            :class="{ 'error-text': modelProperties.codeGeneratorError && modelProperties.codeGeneratorError.group === group }">
+                                                            {{ group }}
+                                                        </label>
+                                                    </td>
                                                 </tr>
                                                 <tr v-for="setting in settings" :key="setting.name"
                                                     class="settingValue">
                                                     <td>
-                                                        <label :title="setting.description">
+                                                        <label :title="setting.description"
+                                                            :class="{ 'error-text': modelProperties.codeGeneratorError && modelProperties.codeGeneratorError.name === setting.name }">
                                                             {{ setting.displayName }}
                                                         </label>
                                                     </td>
@@ -258,8 +274,17 @@
                     </table>
                 </div>
                 <div>
-                    <button type="button" style="margin-right: 8px;" @click="saveProperties">OK</button>
-                    <button type="button" @click="cancelProperties">Cancel</button>
+                    <div>
+                        <label v-if="modelProperties.codeGeneratorError" class="error-text small-2lines-trim"
+                            :title="settingsError" @click="focusOnSettingsError">
+                            {{ settingsError }}
+                        </label>
+                    </div>
+                    <div>
+                        <button type="button" style="margin-right: 8px;" @click="saveProperties"
+                            :disabled="modelProperties.saving">OK</button>
+                        <button type="button" @click="cancelProperties">Cancel</button>
+                    </div>
                 </div>
             </div>
         </div>
