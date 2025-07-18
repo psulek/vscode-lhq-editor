@@ -496,6 +496,14 @@ table#settings-table tr.settingValue td label {
   white-space: normal;
 }
 
+table#settings-table tr.settingValue:hover {
+  background-color: var(--vscode-settings-rowHoverBackground);
+}
+
+table#settings-table tr.settingValue[data-focused] {
+  background-color: var(--vscode-settings-focusedRowBackground);
+}
+
 div.icon-text {
   display: flex;
   flex-direction: row;

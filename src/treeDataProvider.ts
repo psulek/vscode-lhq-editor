@@ -89,11 +89,6 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
     constructor(private context: vscode.ExtensionContext) {
 
         context.subscriptions.push(
-            // NOTE: moved into appContext
-            // vscode.window.onDidChangeActiveTextEditor(e => this.onActiveEditorChanged(e)),
-            //vscode.workspace.onDidChangeTextDocument(e => this.onDidChangeTextDocument(e)),
-
-            //vscode.commands.registerCommand(actions.refresh, () => this.refresh()),
             vscode.commands.registerCommand(Commands.addElement, args => this.addItem(args)),
             vscode.commands.registerCommand(Commands.renameElement, args => this.renameItem(args)),
             vscode.commands.registerCommand(Commands.deleteElement, args => this.deleteElement(args)),
@@ -107,11 +102,7 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
             vscode.commands.registerCommand(Commands.showLanguages, () => this.toggleLanguages(true)),
             vscode.commands.registerCommand(Commands.hideLanguages, () => this.toggleLanguages(false)),
             vscode.commands.registerCommand(Commands.projectProperties, () => this.projectProperties()),
-            //vscode.commands.registerCommand(actions.editTranslations, args => this.editTranslations(args))
         );
-
-
-        //this.onActiveEditorChanged(vscode.window.activeTextEditor);
 
         this.view = vscode.window.createTreeView('lhqTreeView', {
             treeDataProvider: this,
@@ -128,10 +119,6 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
             })
         );
     }
-
-    // public setMessageSender(sender: IMessageSender): void {
-    //     this._messageSender = sender;
-    // }
 
     private get resourcesUnderRoot(): boolean {
         return this._currentRootModel?.options.resources === 'All';
@@ -155,24 +142,30 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
         root.options.categories = modelProperties.categories;
         root.options.resources = modelProperties.categories ? modelProperties.resources : 'All';
 
-        const codeGenerator = ModelUtils.createCodeGeneratorElement(modelProperties.codeGenerator.templateId, modelProperties.codeGenerator.settings);
+        const templateId = modelProperties.codeGenerator.templateId;
 
-        const ns = codeGenerator.settings["CSharp"]['Namespace'];
-        if (isNullOrEmpty(ns)) {
+        const validateResult = ModelUtils
+            .getCodeGeneratorSettingsConvertor()
+            .validateSettings(templateId, modelProperties.codeGenerator.settings);
+
+        if (!isNullOrEmpty(validateResult.error)) {
             return {
-                group: 'CSharp',
-                name: 'Namespace',
-                message: 'Namespace cannot be empty.';
+                group: validateResult.group,
+                name: validateResult.property,
+                message: validateResult.error
             };
         }
 
+        const codeGenerator = ModelUtils.createCodeGeneratorElement(templateId, modelProperties.codeGenerator.settings);
         root.codeGenerator = codeGenerator;
 
         const success = await this.applyChangesToTextDocument();
 
         if (success) {
-            await showMessageBox('info', 'Project properties changes was applied.');
+            showMessageBox('info', 'Project properties changes was applied.');
         }
+
+        return undefined;
     }
 
     private async projectProperties(): Promise<void> {
@@ -181,176 +174,6 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
         }
 
         appContext.sendMessageToHtmlPage({ command: 'showProperties' });
-
-        // interface PropsQuickPickItem extends vscode.QuickPickItem {
-        //     value: boolean;
-        // }
-
-        // const treeStructure = this.isTreeStructure;
-        // const resourcesUnderRoot = this.resourcesUnderRoot;
-
-        // const items = [
-        //     {
-        //         label: 'Layout', description: treeStructure ? 'Categories and resources' : 'Resources only',
-        //         value: true,
-        //         detail: treeStructure ? 'Hierarchical tree structure' : 'Flat structure',
-        //         iconPath: new vscode.ThemeIcon(treeStructure ? 'list-tree' : 'list-flat')
-        //     },
-        //     {
-        //         kind: QuickPickItemKind.Separator
-        //     },
-        //     {
-        //         label: 'Close',
-        //         iconPath: new vscode.ThemeIcon('close')
-        //     }
-
-        // ] as PropsQuickPickItem[];
-
-        // if (treeStructure) {
-
-        //     const item: PropsQuickPickItem = {
-        //         label: 'Resources under root', description: resourcesUnderRoot ? 'Enabled' : 'Disabled',
-        //         value: false,
-        //         detail: resourcesUnderRoot ? 'Allows resources under root element' : 'Resources can only be placed under categories',
-        //     };
-
-        //     items.splice(1, 0, item);
-        // }
-
-        // const result = await vscode.window.showQuickPick(items, {
-        //     ignoreFocusOut: true, placeHolder: 'Project properties', title: 'Change project properties',
-        //     matchOnDescription: true, matchOnDetail: true
-        // });
-
-        // if (!result || result.value === undefined) {
-        //     return;
-        // }
-
-        // if (!this.currentDocument) {
-        //     return;
-        // }
-
-        // const backToProperies = () => {
-        //     setTimeout(() => {
-        //         void this.projectProperties();
-        //     }, 100);
-        // };
-
-        // const saveChanges = async () => {
-        //     // after previous await, document can be closed now...
-        //     if (!this.currentDocument) {
-        //         return;
-        //     }
-        //     const success = await this.applyChangesToTextDocument();
-        //     if (success) {
-        //         backToProperies();
-        //     }
-        //     await showMessageBox(success ? 'info' : 'err',
-        //         success
-        //             ? 'Project properties changes was applied.'
-        //             : `Failed to apply project properties changes.`);
-        // };
-
-        // const changeLayout = async () => {
-        //     const layoutItems = [
-        //         {
-        //             label: 'Categories and resources', detail: 'Hierarchical tree structure',
-        //             value: true,
-        //             description: treeStructure ? '(Current)' : '',
-        //             iconPath: new vscode.ThemeIcon('list-tree'),
-        //             picked: treeStructure
-        //         },
-        //         {
-        //             label: 'Resources only', detail: 'Flat structure',
-        //             value: false,
-        //             description: !treeStructure ? '(Current)' : '',
-        //             iconPath: new vscode.ThemeIcon('list-flat'),
-        //             picked: !treeStructure
-        //         },
-        //         {
-        //             kind: QuickPickItemKind.Separator,
-        //         },
-        //         {
-        //             label: 'Back to project properties',
-        //             //iconPath: new vscode.ThemeIcon('chevron-left')
-        //         }
-        //     ] as PropsQuickPickItem[];
-
-        //     const layout = await vscode.window.showQuickPick(layoutItems, {
-        //         ignoreFocusOut: true,
-        //         placeHolder: 'Layout',
-        //         title: 'Change layout of LHQ structure',
-        //         matchOnDescription: true,
-        //         matchOnDetail: true
-        //     });
-
-        //     if (!layout || layout.value === undefined) {
-        //         return backToProperies();
-        //     }
-
-        //     // after previous await, document can be closed now...
-        //     if (!this.currentDocument) {
-        //         return;
-        //     }
-
-        //     this._currentRootModel!.options.categories = layout.value;
-        //     if (!layout.value) {
-        //         this._currentRootModel!.options.resources = 'All';
-        //     }
-        //     await saveChanges();
-        // };
-
-        // const changeResourcesUnderRoot = async () => {
-        //     const items = [
-        //         {
-        //             label: 'Enabled', detail: 'Resources can be placed under root element',
-        //             value: true,
-        //             description: resourcesUnderRoot ? '(Current)' : '',
-        //         },
-        //         {
-        //             label: 'Disabled', detail: 'Resources can only be placed under categories',
-        //             value: false,
-        //             description: !resourcesUnderRoot ? '(Current)' : '',
-        //         },
-        //         {
-        //             kind: QuickPickItemKind.Separator
-        //         },
-        //         {
-        //             label: 'Back to project properties',
-        //             //iconPath: new vscode.ThemeIcon('chevron-left')
-        //         }
-        //     ] as PropsQuickPickItem[];
-
-        //     const selected = await vscode.window.showQuickPick(items, {
-        //         ignoreFocusOut: true, placeHolder: 'Resources under root', title: 'Change resources under root',
-        //         matchOnDescription: true, matchOnDetail: true
-        //     });
-
-        //     if (!selected || selected.value === undefined) {
-        //         return backToProperies();
-        //     }
-
-        //     if (!this.currentDocument) {
-        //         return;
-        //     }
-
-        //     this._currentRootModel!.options.resources = selected.value ? 'All' : 'Categories';
-        //     await saveChanges();
-        // };
-
-
-        // setTimeout(() => {
-        //     // after previous await, document can be closed now...
-        //     if (!this.currentDocument) {
-        //         return;
-        //     }
-
-        //     if (result.value) {
-        //         void changeLayout();
-        //     } else {
-        //         void changeResourcesUnderRoot();
-        //     }
-        // }, 100);
     }
 
     private toggleLanguages(visible: boolean): void {
@@ -732,7 +555,7 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
             // revealing a single item with select:true would effectively set the selection to just that item.
             // For now, this method will only add to selection or set it if items are provided.
             // To truly "clear" selection, you might need to manage it more complexly or rely on user interaction.
-            logger().log('debug', '[LhqTreeDataProvider] setSelectedItems -> No items provided to select.');
+            //logger().log('debug', '[LhqTreeDataProvider] setSelectedItems -> No items provided to select.');
             return;
         }
 
@@ -1040,7 +863,6 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
             if (parentElement && !isNullOrEmpty(name)) {
                 const found = parentElement.find(name, elementType as CategoryOrResourceType);
                 if (found && (!ignoreElementPath || getElementFullPath(found) !== ignoreElementPath)) {
-                    // const root = parentElement.elementType === 'model' ? '/' : getElementFullPath(parentElement);
                     const root = getElementFullPath(parentElement);
                     return `${elementType} '${name}' already exists in ${root}`;
                 }
@@ -1398,14 +1220,6 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
 
         return await showMessageBox('info', `Added new ${elementType} '${itemName}' under '${getElementFullPath(parent)}'`);
     }
-
-    // private onDidChangeTextDocument(e: vscode.TextDocumentChangeEvent): void {
-    //     this.updateDocument(e.document);
-    // }
-
-    // public onActiveEditorChanged(e: vscode.TextEditor | undefined): void {
-    //     this.updateDocument(e?.document);
-    // }
 
     public hasActiveDocument(): boolean {
         return this.currentDocument !== null && appContext.isEditorActive;

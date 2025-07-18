@@ -238,23 +238,35 @@
                                                     </td>
                                                     <td>
                                                         <template v-if="setting.type === 'boolean'">
-                                                            <input type="checkbox"
+                                                            <input type="checkbox" :data-settings-group="group"
+                                                                :data-settings-name="setting.name"
                                                                 :checked="getCodeGeneratorPropertyValue(group, setting.name)"
                                                                 @change="setCodeGeneratorPropertyValue(group, setting.name, $event.target.checked)"
-                                                                :true-value="true" :false-value="false">
+                                                                @focus="focusOnSettingProperty"
+                                                                @blur="blurOnSettingProperty" :true-value="true"
+                                                                :false-value="false">
                                                         </template>
                                                         <template v-else-if="setting.type === 'string'">
-                                                            <input type="text"
+                                                            <input type="text" :data-settings-group="group"
+                                                                :data-settings-name="setting.name"
+                                                                @focus="focusOnSettingProperty"
+                                                                @blur="blurOnSettingProperty"
                                                                 :value="getCodeGeneratorPropertyValue(group, setting.name)"
                                                                 @input="setCodeGeneratorPropertyValue(group, setting.name, $event.target.value)">
                                                         </template>
                                                         <template v-else-if="setting.type === 'number'">
-                                                            <input type="number"
+                                                            <input type="number" :data-settings-group="group"
+                                                                :data-settings-name="setting.name"
                                                                 :value="getCodeGeneratorPropertyValue(group, setting.name)"
+                                                                @focus="focusOnSettingProperty"
+                                                                @blur="blurOnSettingProperty"
                                                                 @input="setCodeGeneratorPropertyValue(group, setting.name, $event.target.value)">
                                                         </template>
                                                         <template v-else-if="setting.type === 'list'">
-                                                            <select
+                                                            <select :data-settings-group="group"
+                                                                :data-settings-name="setting.name"
+                                                                @focus="focusOnSettingProperty"
+                                                                @blur="blurOnSettingProperty"
                                                                 :value="getCodeGeneratorPropertyValue(group, setting.name)"
                                                                 @change="setCodeGeneratorPropertyValue(group, setting.name, $event.target.value)">
                                                                 <option v-for="option in setting.values"

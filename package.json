@@ -224,7 +224,7 @@
     "typescript": "^5.8.3"
   },
   "dependencies": {
-    "@lhq/lhq-generators": "1.0.0-rc.67",
+    "@lhq/lhq-generators": "1.0.0-rc.72",
     "class-transformer": "^0.5.1",
     "fs-extra": "11.3.0",
     "lodash.debounce": "4.0.8",

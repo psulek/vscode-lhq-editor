@@ -91,6 +91,16 @@
         console.log(`%c[APP]`, 'background:silver;color:black;', ...args);
     }
 
+    function getDefaultModelProperties() {
+        return {
+            visible: false,
+            saving: false,
+            codeGenerator: { templateId: '' },
+            codeGeneratorError: undefined
+        };
+    }
+
+
     const domBody = document.getElementsByTagName('body')[0];
 
     window.addEventListener('message', event => {
@@ -191,13 +201,10 @@
                 window.pageApp.item = undefined;
                 window.pageApp.paramsEnabled = false;
                 window.pageApp.supressOnChange = undefined;
-                window.pageApp.modelProperties = {
-                    visible: false,
-                    saving: false,
-                    codeGenerator: { templateId: '' },
-                    codeGeneratorError: undefined
-                };
-                window.pageApp.modelPropertiesBackup = Object.assign({}, window.pageApp.modelProperties);
+
+                window.pageApp.modelProperties = getDefaultModelProperties();
+                // window.pageApp.modelPropertiesBackup = Object.assign({}, getDefaultModelProperties());
+                window.pageApp.modelPropertiesBackup = structuredClone(getDefaultModelProperties());
                 window.pageApp.templateDefinition = {};
 
                 window.pageApp.$nextTick(() => {
@@ -265,17 +272,11 @@
         logMsg(`Setting new element:  ${getFullPath(element)} (${element.elementType})`, element, ' and modelProperties: ', modelProperties);
         window.pageApp.item = element;
 
-        const getDefaultModelProperties = () => ({
-            visible: false,
-            saving: false,
-            codeGenerator: { templateId: '' },
-            codeGeneratorError: undefined
-        });
-
         window.pageApp.modelProperties = modelProperties ?? getDefaultModelProperties();
         window.pageApp.modelProperties.layoutModes = [{ name: 'Hierarchical tree', value: true }, { 'name': 'Flat list', value: false }];
         window.pageApp.modelPropertiesBackup = modelProperties
-            ? Object.assign({}, modelProperties)
+            // ? Object.assign({}, modelProperties)
+            ? structuredClone(modelProperties)
             : getDefaultModelProperties();
 
         const templateId = modelProperties.codeGenerator?.templateId ?? '';
@@ -416,39 +417,35 @@
 
         const valueType = typeof value;
         switch (property.type) {
-            case 'boolean':
-                {
-                    //return valueType === 'string' ? (value === 'true') : value;
-                    switch (valueType) {
-                        case 'string':
-                            if (value === 'true') {
-                                return true;
-                            } else if (value === 'false') {
-                                return false;
-                            }
-                            break;
-                        case 'boolean':
-                            return value;
-                        case 'number':
-                            return value !== 0;
-                        default:
-                            return property.default;
-                    }
-
-                    break;
+            case 'boolean': {
+                switch (valueType) {
+                    case 'string':
+                        if (value === 'true') {
+                            return true;
+                        } else if (value === 'false') {
+                            return false;
+                        }
+                        break;
+                    case 'boolean':
+                        return value;
+                    case 'number':
+                        return value !== 0;
+                    default:
+                        return property.default;
                 }
+
+                break;
+            }
             case 'string':
-                // eslint-disable-next-line @typescript-eslint/no-base-to-string
                 return valueType === 'string' ? value : String(value);
-            case 'list':
-                {
-                    if (Array.isArray(property.values)) {
-                        const found = property.values.find(pv => typeof pv.value === valueType && pv.value === value);
-                        return found ? found.value : property.default;
-                    }
-
-                    return property.default;
+            case 'list': {
+                if (Array.isArray(property.values)) {
+                    const found = property.values.find(pv => typeof pv.value === valueType && pv.value === value);
+                    return found ? found.value : property.default;
                 }
+
+                return property.default;
+            }
             case 'number':
                 return valueType === 'number' ? value : Number(value);
             default:
@@ -590,7 +587,6 @@
 
             setCodeGeneratorPropertyValue() {
                 return (group, name, value) => {
-                    debugger;
                     const settings = this.modelProperties.codeGenerator?.settings;
                     const groupSettings = settings ? settings[group] : undefined;
 
@@ -1082,7 +1078,8 @@
             },
 
             cancelProperties() {
-                this.modelProperties = Object.assign({}, this.modelPropertiesBackup);
+                // this.modelProperties = Object.assign({}, this.modelPropertiesBackup);
+                this.modelProperties = structuredClone(toRaw(this.modelPropertiesBackup));
                 this.modelProperties.visible = false;
             },
 
@@ -1103,6 +1100,8 @@
             },
 
             handleSavePropertiesResult(error, closeDialog) {
+                logMsg('Handling save properties result, error: ', error, ', closeDialog: ', closeDialog);
+
                 this.modelProperties.codeGeneratorError = error;
                 if (savePropertiesTimer) {
                     clearTimeout(savePropertiesTimer);
@@ -1116,6 +1115,7 @@
 
                 this.modelProperties.saving = false;
                 if (closeDialog) {
+                    logMsg('Closing properties dialog');
                     this.modelProperties.visible = false;
                 } else if (error) {
                     //showTooltip('save-properties-error', error, document.getElementById('settings-table'), true, 20000);
@@ -1123,11 +1123,40 @@
             },
 
             focusOnSettingsError() {
-                console.warn(`Focus on settings error is not implemented!`);
+                const error = this.modelProperties.codeGeneratorError;
+                if (!error) {
+                    return;
+                }
+
+                const group = error.group || '';
+                const name = error.name || '';
+                const input = document.querySelector(`input[data-settings-group="${group}"][data-settings-name="${name}"]`);
+                if (input) {
+                    input.focus();
+                    input.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
             },
 
             changeTemplate() {
                 console.warn(`Change template is not implemented!`);
+            },
+
+            focusOnSettingProperty(event) {
+                if (!event.target) {
+                    return;
+                }
+
+                const row = event.target.closest('tr');
+                row.dataset['focused'] = 'true';
+            },
+
+            blurOnSettingProperty(event) {
+                if (!event.target) {
+                    return;
+                }
+
+                const row = event.target.closest('tr');
+                delete row.dataset['focused'];
             }
         }
     }).mount('#app');
