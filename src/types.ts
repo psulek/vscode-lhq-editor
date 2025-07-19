@@ -97,6 +97,9 @@ export type AppToPageMessage = {
 {
     command: 'savePropertiesResult';
     error?: ClientPageSettingsError | undefined;
+} | {
+    command: 'resetSettingsResult'
+    settings: CodeGeneratorGroupSettings;
 };
 
 export type PageToAppMessage = {
@@ -109,6 +112,8 @@ export type PageToAppMessage = {
 } | {
     command: 'saveProperties',
     modelProperties: ClientPageModelProperties;
+} | {
+    command: 'resetSettings';
 };
 
 

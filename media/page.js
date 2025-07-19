@@ -100,6 +100,25 @@
         };
     }
 
+    function postMessage(message, logText) {
+        if (message === undefined || message === null) {
+            throw new Error('[postMessage] message is undefined or null!');
+        }
+
+        const command = message.command;
+        if (command === undefined || command === null) {
+            throw new Error('[postMessage] message.command is undefined or null!');
+        }
+
+        if (logText === undefined || logText === null) {
+            logMsg(`sending message '${command}' , message: `, message);
+        } else {
+            logMsg(`${logText}, sending message '${command}' , message: `, message);
+        }
+
+        vscode.postMessage(message);
+    }
+
 
     const domBody = document.getElementsByTagName('body')[0];
 
@@ -112,7 +131,7 @@
                 command: 'init';
                 templatesMetadata: Record<string, TemplateMetadataDefinition>;
                 */
-                templatesMetadata = message.templatesMetadata || {};
+                templatesMetadata = structuredClone(message.templatesMetadata) || {};
 
                 break;
             }
@@ -235,6 +254,19 @@
 
                 break;
             }
+
+            case 'resetSettingsResult': {
+                /*
+                 command: 'resetSettingsResult'
+                 settings: CodeGeneratorGroupSettings;
+                */
+
+                if (message.settings && window.pageApp.modelProperties && window.pageApp.modelProperties.codeGenerator) {
+                    window.pageApp.modelProperties.codeGenerator.settings = message.settings;
+                }
+
+                break;
+            }
         }
     });
 
@@ -283,7 +315,7 @@
 
 
         const templateDefinition = Object.prototype.hasOwnProperty.call(templatesMetadata, templateId)
-            ? templatesMetadata[templateId]
+            ? structuredClone(templatesMetadata[templateId])
             : undefined;
 
         if (templateDefinition) {
@@ -576,6 +608,34 @@
                 return this.item && this.item.elementType === 'resource';
             },
 
+            getCodeGeneratorPropertyReadonly() {
+                return (group, name) => {
+                    let readonly = false;
+
+                    const settings = this.modelProperties.codeGenerator?.settings;
+                    const groupSettings = settings ? settings[group] : undefined;
+                    if (groupSettings) {
+                        const templateGroup = this.templateDefinition.settings[group];
+                        if (templateGroup && templateGroup[name] && name !== 'Enabled') {
+                            const propertyEnabled = templateGroup['Enabled'];
+
+                            // if template group has 'Enabled' property, check its value 
+                            if (propertyEnabled) {
+                                let enabledValue = groupSettings['Enabled'];
+                                if (enabledValue === undefined || enabledValue === null) {
+                                    enabledValue = propertyEnabled.default;
+                                }
+                                readonly = !enabledValue;
+                            }
+                        }
+                    } else {
+                        console.warn(`[getCodeGeneratorPropertyReadonly] Group '${group}' not found in code generator settings.`);
+                    }
+
+                    return readonly;
+                };
+            },
+
             getCodeGeneratorPropertyValue() {
                 return (group, name) => {
                     const settings = this.modelProperties.codeGenerator?.settings;
@@ -598,7 +658,7 @@
                             groupSettings[name] = convertValueForProperty(value, property);
                         }
                     } else {
-                        console.warn(`Group '${group}' not found in code generator settings.`);
+                        console.warn(`[setCodeGeneratorPropertyValue] Group '${group}' not found in code generator settings.`);
                     }
                 };
             },
@@ -656,8 +716,10 @@
                         }
 
                         if (data) {
-                            logMsg(`Data changed, sending message 'update' with data: `, data);
-                            vscode.postMessage({ command: 'update', data: data });
+                            /* logMsg(`Data changed, sending message 'update' with data: `, data);
+                            vscode.postMessage({ command: 'update', data: data }); */
+
+                            postMessage({ command: 'update', data: data }, 'Data changed');
                         }
                     }
                 } finally {
@@ -811,8 +873,9 @@
 
             openResource() {
                 const data = { elementType: this.item.elementType, paths: toRaw(this.item.paths) };
-                logMsg(`Click on ${this.item.elementType} (${this.fullPath}), sending message 'select' with data: `, data);
-                vscode.postMessage({ command: 'select', ...data });
+                //logMsg(`Click on ${this.item.elementType} (${this.fullPath}), sending message 'select' with data: `, data);
+                //vscode.postMessage({ command: 'select', ...data });
+                postMessage({ command: 'select', ...data }, `Open resource ${this.item.elementType} (${this.fullPath})`);
             },
 
             focusParameters() {
@@ -1089,14 +1152,15 @@
                 this.modelProperties.codeGeneratorError = undefined;
 
                 const msg = { command: 'saveProperties', modelProperties: toRaw(this.modelProperties) };
-                logMsg('Saving model properties and sending message.. ', msg);
+                //logMsg('Saving model properties and sending message.. ', msg);
 
                 savePropertiesTimer = setTimeout(() => {
                     this.modelProperties.saving = false;
                     this.handleSavePropertiesResult(undefined, false);
                 }, 5000);
 
-                vscode.postMessage(msg);
+                //vscode.postMessage(msg);
+                postMessage(msg, 'Saving model properties');
             },
 
             handleSavePropertiesResult(error, closeDialog) {
@@ -1130,15 +1194,22 @@
 
                 const group = error.group || '';
                 const name = error.name || '';
-                const input = document.querySelector(`input[data-settings-group="${group}"][data-settings-name="${name}"]`);
-                if (input) {
-                    input.focus();
-                    input.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                }
+                this.focusSettingInput(group, name, true);
             },
 
             changeTemplate() {
                 console.warn(`Change template is not implemented!`);
+            },
+
+            focusSettingInput(group, name, scroll) {
+                const input = document.querySelector(`input[data-settings-group="${group}"][data-settings-name="${name}"]`) ||
+                    document.querySelector(`select[data-settings-group="${group}"][data-settings-name="${name}"]`);
+                if (input) {
+                    input.focus();
+                    if (scroll === true) {
+                        input.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }
+                }
             },
 
             focusOnSettingProperty(event) {
@@ -1157,6 +1228,12 @@
 
                 const row = event.target.closest('tr');
                 delete row.dataset['focused'];
+            },
+
+            resetSettings() {
+                // logMsg(`Data changed, sending message 'resetSettings' with data: `, data);
+                // vscode.postMessage({ command: 'update', data: data });
+                postMessage({ command: 'resetSettings'});
             }
         }
     }).mount('#app');

@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { findCulture, generateNonce, isValidDocument, logger, showMessageBox } from './utils';
+import { findCulture, generateNonce, isValidDocument, logger, showConfirmBox, showMessageBox } from './utils';
 import { AppToPageMessage, ClientPageModelProperties, PageToAppMessage } from './types';
 import { CategoryLikeTreeElementToJsonOptions, CodeGeneratorGroupSettings, HbsTemplateManager, ITreeElement, modelConst } from '@lhq/lhq-generators';
 import { isVirtualTreeElement } from './elements';
@@ -71,6 +71,20 @@ export class DocumentContext /* implements IDocumentContext */ {
                         logger().log('error', `[DocumentContext] webview.onDidReceiveMessage: Error saving properties: ${error}`);
                     }
                     this.sendMessageToHtmlPage({ command: 'savePropertiesResult', error });
+                    break;
+                }
+                case 'resetSettings': {
+                    const rootModel = appContext.treeContext.currentRootModel!;
+                    if (!rootModel) {
+                        logger().log('error', `[DocumentContext] webview.onDidReceiveMessage: No current root model found.`);
+                        return;
+                    }
+
+                    if (await showConfirmBox('Reset Code Generator Settings?', 'Are you sure you want to reset code generator settings to default values?')) {
+                        //const codeGenerator = rootModel.codeGenerator ?? { templateId: '', settings: {} as CodeGeneratorGroupSettings, version: modelConst.ModelVersions.codeGenerator };
+                        const settings = rootModel?.codeGenerator?.settings ?? {} as CodeGeneratorGroupSettings;
+                        this.sendMessageToHtmlPage({ command: 'resetSettingsResult', settings });
+                    }
                     break;
                 }
             }
@@ -163,22 +177,13 @@ export class DocumentContext /* implements IDocumentContext */ {
                 resources: rootModel.options.resources,
                 categories: rootModel.options.categories,
                 modelVersion: rootModel.version,
-                //templateId: rootModel.codeGenerator!.templateId,
                 visible: false,
                 codeGenerator: rootModel.codeGenerator ?? { templateId: '', settings: {} as CodeGeneratorGroupSettings, version: modelConst.ModelVersions.codeGenerator }
             }
         };
 
-        // this.currentWebviewPanel.webview.postMessage(message);
         this.sendMessageToHtmlPage(message);
     }
-
-    // public sendMessageToHtmlPage(message: HtmlPageMessage): void {
-    //     if (this.currentWebviewPanel && this.currentWebviewPanel.webview) {
-    //         logger().log('debug', `LhqEditorProvider.sendMessage: ${message.command} ...`);
-    //         this.currentWebviewPanel.webview.postMessage(message);
-    //     }
-    // }
 
     private async getHtmlForWebview(emptyPage: boolean): Promise<string> {
         // if (!this._webviewPanel) {

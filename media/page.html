@@ -178,19 +178,24 @@
                                 <label for="layoutMode">Layout:</label>
                             </td>
                             <td>
-                                <select id="layoutMode" v-model="modelProperties.categories">
-                                    <option disabled value="">Please select layout</option>
-                                    <option v-for="mode in modelProperties.layoutModes" :key="mode.name"
-                                        :value="mode.value">
-                                        {{ mode.name }}
-                                    </option>
-                                </select>
+                                <div style="display: flex;flex-direction: row;gap: 0.3em; align-items: center;">
+                                    <select id="layoutMode" v-model="modelProperties.categories">
+                                        <option disabled value="">Please select layout</option>
+                                        <option v-for="mode in modelProperties.layoutModes" :key="mode.name"
+                                            :value="mode.value">
+                                            {{ mode.name }}
+                                        </option>
+                                    </select>
+                                    <div class="codicon codicon-info"
+                                        :title="modelProperties.categories ? 'Structure hierarchy of categories and resources' : 'Flat list of resources (without categories)'">
+                                    </div>
+                                </div>
                             </td>
                         </tr>
                         <tr v-if="modelProperties.categories">
                             <td>&nbsp;</td>
                             <td style="padding-top: 0;">
-                                <label>
+                                <label title="Allows/disallow resources under root">
                                     <input type="checkbox" v-model="modelProperties.resources" style="width: auto;"
                                         :true-value="'All'" :false-value="'Categories'">
                                     Allow resources under root
@@ -202,9 +207,10 @@
                                 <strong>Code Generator Template:</strong>
                             </td>
                             <td>
-                                <a href="#" @click="changeTemplate" title="Change code generator template">
+                                {{ templateDefinition.id }}
+                                <!-- <a href="#" @click="changeTemplate" title="Change code generator template">
                                     {{ templateDefinition.id }}
-                                </a>
+                                </a> -->
                             </td>
                         </tr>
                         <tr>
@@ -222,17 +228,19 @@
                                             <template v-for="(settings, group) in templateDefinition.settings">
                                                 <tr>
                                                     <td colspan="2" style="padding-top: 8px;">
-                                                        <label class="bold"
+                                                        <label class="bold uppercase"
                                                             :class="{ 'error-text': modelProperties.codeGeneratorError && modelProperties.codeGeneratorError.group === group }">
                                                             {{ group }}
                                                         </label>
                                                     </td>
                                                 </tr>
+
                                                 <tr v-for="setting in settings" :key="setting.name"
                                                     class="settingValue">
                                                     <td>
                                                         <label :title="setting.description"
-                                                            :class="{ 'error-text': modelProperties.codeGeneratorError && modelProperties.codeGeneratorError.name === setting.name }">
+                                                            :class="{ 'error-text': modelProperties.codeGeneratorError && modelProperties.codeGeneratorError.name === setting.name }"
+                                                            @click="focusSettingInput(group, setting.name)">
                                                             {{ setting.displayName }}
                                                         </label>
                                                     </td>
@@ -240,35 +248,43 @@
                                                         <template v-if="setting.type === 'boolean'">
                                                             <input type="checkbox" :data-settings-group="group"
                                                                 :data-settings-name="setting.name"
+                                                                :title="setting.description"
                                                                 :checked="getCodeGeneratorPropertyValue(group, setting.name)"
                                                                 @change="setCodeGeneratorPropertyValue(group, setting.name, $event.target.checked)"
                                                                 @focus="focusOnSettingProperty"
-                                                                @blur="blurOnSettingProperty" :true-value="true"
-                                                                :false-value="false">
+                                                                @blur="blurOnSettingProperty"
+                                                                :disabled="getCodeGeneratorPropertyReadonly(group, setting.name)"
+                                                                :true-value="true" :false-value="false">
                                                         </template>
                                                         <template v-else-if="setting.type === 'string'">
                                                             <input type="text" :data-settings-group="group"
                                                                 :data-settings-name="setting.name"
+                                                                :title="setting.description"
                                                                 @focus="focusOnSettingProperty"
                                                                 @blur="blurOnSettingProperty"
                                                                 :value="getCodeGeneratorPropertyValue(group, setting.name)"
-                                                                @input="setCodeGeneratorPropertyValue(group, setting.name, $event.target.value)">
+                                                                @input="setCodeGeneratorPropertyValue(group, setting.name, $event.target.value)"
+                                                                :readonly="getCodeGeneratorPropertyReadonly(group, setting.name)">
                                                         </template>
                                                         <template v-else-if="setting.type === 'number'">
                                                             <input type="number" :data-settings-group="group"
                                                                 :data-settings-name="setting.name"
+                                                                :title="setting.description"
                                                                 :value="getCodeGeneratorPropertyValue(group, setting.name)"
                                                                 @focus="focusOnSettingProperty"
                                                                 @blur="blurOnSettingProperty"
-                                                                @input="setCodeGeneratorPropertyValue(group, setting.name, $event.target.value)">
+                                                                @input="setCodeGeneratorPropertyValue(group, setting.name, $event.target.value)"
+                                                                :readonly="getCodeGeneratorPropertyReadonly(group, setting.name)">
                                                         </template>
                                                         <template v-else-if="setting.type === 'list'">
                                                             <select :data-settings-group="group"
                                                                 :data-settings-name="setting.name"
+                                                                :title="setting.description"
                                                                 @focus="focusOnSettingProperty"
                                                                 @blur="blurOnSettingProperty"
                                                                 :value="getCodeGeneratorPropertyValue(group, setting.name)"
-                                                                @change="setCodeGeneratorPropertyValue(group, setting.name, $event.target.value)">
+                                                                @change="setCodeGeneratorPropertyValue(group, setting.name, $event.target.value)"
+                                                                :disabled="getCodeGeneratorPropertyReadonly(group, setting.name)">
                                                                 <option v-for="option in setting.values"
                                                                     :key="option.value" :value="option.value">
                                                                     {{ option.name }}
@@ -278,6 +294,14 @@
                                                     </td>
                                                 </tr>
                                             </template>
+                                            <tr>
+                                                <td colspan="2" style="text-align: right;">
+                                                    <a href="#" @click="resetSettings"
+                                                        title="Reset code generator template settings to default values">
+                                                        Reset to default
+                                                    </a>
+                                                </td>
+                                            </tr>
                                         </tbody>
                                     </table>
                                 </div>
@@ -288,7 +312,7 @@
                 <div>
                     <div>
                         <label v-if="modelProperties.codeGeneratorError" class="error-text small-2lines-trim"
-                            :title="settingsError" @click="focusOnSettingsError">
+                            style="cursor: pointer;" :title="settingsError" @click="focusOnSettingsError">
                             {{ settingsError }}
                         </label>
                     </div>

@@ -185,19 +185,14 @@ textarea {
   overflow-y: auto;
 }
 
-textarea[readonly] {
-  /* background-color: var(--vscode-editor-background); */
+textarea[readonly],
+input[readonly] {
   background-color: rgb(
     from var(--vscode-input-placeholderForeground) r g b / 0.1
   );
 
-  /* color: var(--vscode-editor-foreground); */
   color: var(--vscode-input-placeholderForeground);
 }
-
-/* textarea.locked {
-  background-color: #f0f0f0;
-} */
 
 .label-right {
   display: flex;
@@ -447,7 +442,6 @@ label.small-2lines-trim {
   text-overflow: ellipsis;
   white-space: normal;
   max-height: 2.2em;
-  cursor: pointer;
 }
 
 .modal-dialog > div:last-child > div:last-child {
@@ -467,6 +461,10 @@ table#properties {
 
 table#properties td {
   padding: 5px;
+}
+
+.uppercase {
+  text-transform: uppercase;
 }
 
 table#properties td:first-child {
@@ -512,4 +510,13 @@ div.icon-text {
 
 div.icon-text > div.codicon {
   padding-left: 5px;
+}
+
+select[disabled] {
+  pointer-events: none;
+  background-color: rgb(
+    from var(--vscode-input-placeholderForeground) r g b / 0.1
+  );
+
+  color: var(--vscode-input-placeholderForeground);
 }
