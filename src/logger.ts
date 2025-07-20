@@ -20,6 +20,12 @@ export class VsCodeLogger implements ILogger {
         this._debugMode = debug;
     }
 
+    public static showPanel() {
+        if (VsCodeLogger.panel) {
+            VsCodeLogger.panel.show();
+        }
+    }
+
     log(level: LogType, msg: string, err?: Error | undefined): void {
         const text = `[${level}] ${msg}` + (err ? `[${err.name}] ${err.message} ${err.stack}` : '');
 

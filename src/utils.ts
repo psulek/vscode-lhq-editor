@@ -12,15 +12,15 @@ import 'reflect-metadata';
 import { instanceToPlain } from 'class-transformer';
 
 
-const messageBoxPrefix = '[LHQ Editor]';
-
 let _logger: VsCodeLogger = new VsCodeLogger();
 let _cultures: CulturesMap = {};
 
 let _isDebugMode = false; // Default to false
 
 export function initializeDebugMode(mode: vscode.ExtensionMode) {
-    _isDebugMode = mode === vscode.ExtensionMode.Development;
+    //_isDebugMode = mode === vscode.ExtensionMode.Development;
+    // TODO: remove this when the extension is stable
+    _isDebugMode = false;
     _logger.updateDebugMode(_isDebugMode);
     if (_isDebugMode) {
         _logger.log('debug', 'LHQ Editor extension activated in Development mode.');

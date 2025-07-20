@@ -1,13 +1,13 @@
 import * as vscode from 'vscode';
 import { findCulture, generateNonce, isValidDocument, logger, showConfirmBox, showMessageBox } from './utils';
-import { AppToPageMessage, ClientPageModelProperties, PageToAppMessage } from './types';
-import { CategoryLikeTreeElementToJsonOptions, CodeGeneratorGroupSettings, HbsTemplateManager, ITreeElement, modelConst } from '@lhq/lhq-generators';
+import { AppToPageMessage, PageToAppMessage } from './types';
+import { CategoryLikeTreeElementToJsonOptions, CodeGeneratorGroupSettings, Generator, HbsTemplateManager, isNullOrEmpty, ITreeElement, modelConst } from '@lhq/lhq-generators';
 import { isVirtualTreeElement } from './elements';
 
-export class DocumentContext /* implements IDocumentContext */ {
+export class DocumentContext {
     private readonly _context: vscode.ExtensionContext;
     private readonly _document: vscode.TextDocument;
-    private readonly _webviewPanel: vscode.WebviewPanel;// | undefined;
+    private readonly _webviewPanel: vscode.WebviewPanel;
     private readonly _onDidDispose: () => void;
     private _selectedElements: ITreeElement[] = [];
 
@@ -43,53 +43,7 @@ export class DocumentContext /* implements IDocumentContext */ {
     }
 
     private setupEvents(): void {
-        const didReceiveMessageSubscription = this._webviewPanel!.webview.onDidReceiveMessage(async (message: PageToAppMessage) => {
-            logger().log('debug', `[DocumentContext] webview.onDidReceiveMessage: ${message.command} for ${this.fileName}`);
-            switch (message.command) {
-                case 'update':
-                    try {
-                        const element = message.data;
-                        if (element) {
-                            await appContext.treeContext.updateElement(element);
-                        }
-                    } catch (e) {
-                        logger().log('error', `[DocumentContext] webview.onDidReceiveMessage: Error parsing element data: ${e}`);
-                        return;
-                    }
-                    break;
-                case 'select':
-                    try {
-                        await appContext.treeContext.selectElementByPath(message.elementType, message.paths);
-                    } catch (e) {
-                        logger().log('error', `[DocumentContext] webview.onDidReceiveMessage: Error selecting element: ${e}`);
-                        return;
-                    }
-                    break;
-                case 'saveProperties': {
-                    const error = await appContext.treeContext.saveModelProperties(message.modelProperties);
-                    if (error) {
-                        logger().log('error', `[DocumentContext] webview.onDidReceiveMessage: Error saving properties: ${error}`);
-                    }
-                    this.sendMessageToHtmlPage({ command: 'savePropertiesResult', error });
-                    break;
-                }
-                case 'resetSettings': {
-                    const rootModel = appContext.treeContext.currentRootModel!;
-                    if (!rootModel) {
-                        logger().log('error', `[DocumentContext] webview.onDidReceiveMessage: No current root model found.`);
-                        return;
-                    }
-
-                    if (await showConfirmBox('Reset Code Generator Settings?', 'Are you sure you want to reset code generator settings to default values?')) {
-                        //const codeGenerator = rootModel.codeGenerator ?? { templateId: '', settings: {} as CodeGeneratorGroupSettings, version: modelConst.ModelVersions.codeGenerator };
-                        const settings = rootModel?.codeGenerator?.settings ?? {} as CodeGeneratorGroupSettings;
-                        this.sendMessageToHtmlPage({ command: 'resetSettingsResult', settings });
-                    }
-                    break;
-                }
-            }
-        });
-
+        const didReceiveMessageSubscription = this._webviewPanel!.webview.onDidReceiveMessage(this.handleClientCommands.bind(this));
         const viewStateSubscription = this._webviewPanel!.onDidChangeViewState(async e => {
             const changedPanel = e.webviewPanel;
             logger().log('debug', `[DocumentContext] webviewPanel.onDidChangeViewState for ${this.fileName}. Active: ${changedPanel.active}, Visible: ${changedPanel.visible}`);
@@ -115,6 +69,53 @@ export class DocumentContext /* implements IDocumentContext */ {
         );
     }
 
+
+    private async handleClientCommands(message: PageToAppMessage): Promise<void> {
+        logger().log('debug', `[DocumentContext] webview.onDidReceiveMessage: ${message.command} for ${this.fileName}`);
+        switch (message.command) {
+            case 'update':
+                try {
+                    const element = message.data;
+                    if (element) {
+                        await appContext.treeContext.updateElement(element);
+                    }
+                } catch (e) {
+                    logger().log('error', `[DocumentContext] webview.onDidReceiveMessage: Error parsing element data: ${e}`);
+                    return;
+                }
+                break;
+            case 'select':
+                try {
+                    await appContext.treeContext.selectElementByPath(message.elementType, message.paths);
+                } catch (e) {
+                    logger().log('error', `[DocumentContext] webview.onDidReceiveMessage: Error selecting element: ${e}`);
+                    return;
+                }
+                break;
+            case 'saveProperties': {
+                const error = await appContext.treeContext.saveModelProperties(message.modelProperties);
+                if (error) {
+                    logger().log('error', `[DocumentContext] webview.onDidReceiveMessage: Error saving properties: ${error}`);
+                }
+                this.sendMessageToHtmlPage({ command: 'savePropertiesResult', error });
+                break;
+            }
+            case 'resetSettings': {
+                const rootModel = appContext.treeContext.currentRootModel!;
+                if (!rootModel) {
+                    logger().log('error', `[DocumentContext] webview.onDidReceiveMessage: No current root model found.`);
+                    return;
+                }
+
+                if (await showConfirmBox('Reset Code Generator Settings?', 'Are you sure you want to reset code generator settings to default values?')) {
+                    const settings = rootModel?.codeGenerator?.settings ?? {} as CodeGeneratorGroupSettings;
+                    this.sendMessageToHtmlPage({ command: 'resetSettingsResult', settings });
+                }
+                break;
+            }
+        }
+    }
+
     public get fileName(): string {
         return this._document.fileName ?? '-';
     }
@@ -126,6 +127,26 @@ export class DocumentContext /* implements IDocumentContext */ {
     public get isActive(): boolean {
         return this._webviewPanel?.active === true;
     }
+
+    // public runCodeGenerator() {
+    //     if (!this._webviewPanel || !this._webviewPanel.webview) {
+    //         logger().log('warn', `[DocumentContext] runCodeGenerator -> No webview panel o available for document: ${this.fileName}`);
+    //         return;
+    //     }
+
+    //     const file = this._document.fileName;
+    //     if (isNullOrEmpty(file)) {
+    //         logger().log('warn', `[DocumentContext] runCodeGenerator -> Document fileName is not valid (${file}). Cannot run code generator.`);
+    //         return;
+    //     }
+
+
+    //     logger().log('info', `[DocumentContext] runCodeGenerator -> Running code generator for document: ${file}`);
+
+    //     const generator = new Generator();
+    //     generator.generate(file, );
+    // }
+
 
     public onSelectionChanged(selectedElements: ITreeElement[]): void {
         this._selectedElements = selectedElements ?? [];
@@ -142,8 +163,6 @@ export class DocumentContext /* implements IDocumentContext */ {
         logger().log('debug', `[DocumentContext] updateWebviewContent for: ${this.fileName}`);
         this._webviewPanel.webview.html = await this.getHtmlForWebview(false);
 
-        // const rootModel = appContext.treeContext.currentRootModel!;
-        // const templateId = rootModel.codeGenerator?.templateId;
         const templatesMetadata = HbsTemplateManager.getTemplateDefinitions();
 
         this.sendMessageToHtmlPage({ command: 'init', templatesMetadata });

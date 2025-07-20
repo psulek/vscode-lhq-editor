@@ -20,6 +20,17 @@ export class LhqEditorProvider implements vscode.CustomTextEditorProvider {
         appContext.setSelectionChangedCallback(this._debouncedOnSelectionChanged);
     }
 
+    // public runCodeGenerator(): void {
+    //     logger().log('debug', '[LhqEditorProvider] runCodeGenerator -> Run code generator...');
+    //     const ctx = this.activeDocumentContext;
+    //     if (ctx) {
+    //         logger().log('debug', `[LhqEditorProvider] runCodeGenerator -> Running code generator for document: ${ctx.documentUri}`);
+    //         ctx.runCodeGenerator();
+    //     } else {
+    //         logger().log('warn', '[LhqEditorProvider] runCodeGenerator -> No active document context found. Cannot run code generator.');
+    //     }
+    // }
+
     private get activeDocumentContext(): DocumentContext | undefined {
         for (const editor of this._editors.values()) {
             if (editor.isActive) {
@@ -91,7 +102,7 @@ export class LhqEditorProvider implements vscode.CustomTextEditorProvider {
         this._editors.set(documentUri, docCtx);
 
         try {
-            
+
             // 1st - set html page to 'empty' , showing msg: loading $file ...
             await docCtx.loadEmptyPage();
 
@@ -106,7 +117,7 @@ export class LhqEditorProvider implements vscode.CustomTextEditorProvider {
             appContext.isEditorActive = true;
         } catch (error) {
             logger().log('error', `[LhqEditorProvider] resolveCustomTextEditor -> Error while resolving custom text editor: ${error}`);
-            
+
             // clear and hide the tree if error occurs
             await this.treeDataProvider.updateDocument(undefined);
         }

@@ -1,24 +1,27 @@
+import path from 'node:path';
+import { nextTick } from 'node:process';
+
 import * as vscode from 'vscode';
 import { QuickPickItemKind } from 'vscode';
-import path from 'node:path';
+
+import debounce from 'lodash.debounce';
 
 import type {
     CategoryOrResourceType, FormattingOptions, ICategoryLikeTreeElement, IResourceElement, IResourceParameterElement, IResourceValueElement, IRootModelElement,
     ITreeElement, LhqModel, LhqModelResourceTranslationState, LhqValidationResult, TreeElementType
 } from '@lhq/lhq-generators';
-import { detectFormatting, generatorUtils, isNullOrEmpty, ModelUtils } from '@lhq/lhq-generators';
+import { AppError, detectFormatting, Generator, generatorUtils, isNullOrEmpty, ModelUtils } from '@lhq/lhq-generators';
 
 import { LhqTreeItem } from './treeItem';
 import { validateName } from './validator';
 import { filterTreeElements, filterVirtualTreeElements, isVirtualTreeElement, VirtualRootElement } from './elements';
-import type { SearchTreeOptions, MatchingElement, CultureInfo, IVirtualLanguageElement, ValidationError, ITreeContext, ClientPageError, SelectionBackup, ClientPageModelProperties, ClientPageSettingsError } from './types';
+import type { SearchTreeOptions, MatchingElement, CultureInfo, IVirtualLanguageElement, ValidationError, ITreeContext, ClientPageError, SelectionBackup, ClientPageModelProperties, ClientPageSettingsError, CodeGeneratorStatusInfo, CodeGeneratorStatusKind } from './types';
 import {
     getMessageBoxText, createTreeElementPaths, findChildsByPaths, matchForSubstring,
     logger, getElementFullPath, showMessageBox, getCultureDesc, showConfirmBox, loadCultures, isValidDocument,
     DefaultFormattingOptions
 } from './utils';
-import { nextTick } from 'node:process';
-import { Commands } from './context';
+import { Commands, ContextEvents } from './context';
 
 
 type DragTreeItem = {
@@ -59,6 +62,11 @@ const LanguageTypeModes = [
 ] as LangTypeQuickPickItem[];
 
 
+type LastLhqStatus = {
+    kind: CodeGeneratorStatusKind;
+    uid: string;
+}
+
 export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement>,
     vscode.TreeDragAndDropController<ITreeElement>, ITreeContext {
     dropMimeTypes = ['application/vnd.code.tree.lhqTreeView'];
@@ -73,6 +81,8 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
         elems: []
     };
 
+    private _lastLhqStatus: LastLhqStatus | undefined;
+
     private _onDidChangeTreeData: vscode.EventEmitter<(ITreeElement | undefined)[] | undefined> = new vscode.EventEmitter<ITreeElement[] | undefined>();
     readonly onDidChangeTreeData: vscode.Event<any> = this._onDidChangeTreeData.event;
 
@@ -86,7 +96,24 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
     private _validationError: ValidationError | undefined;
     private _pageErrors: ClientPageError[] = [];
 
+    private _codeGeneratorStatus: vscode.StatusBarItem;
+    private _debouncedRunCodeGenerator: () => void;
+    private _codeGeneratorInProgress = false;
+
     constructor(private context: vscode.ExtensionContext) {
+        appContext.on(ContextEvents.isEditorActiveChanged, (active: boolean) => {
+            if (active) {
+                this._codeGeneratorStatus.show();
+            } else {
+                this._codeGeneratorStatus.hide();
+            }
+        });
+
+        this._codeGeneratorStatus = vscode.window.createStatusBarItem('lhq.codeGeneratorStatus', vscode.StatusBarAlignment.Left, 10);
+        this.updateGeneratorStatus({ kind: 'idle' });
+
+        this._codeGeneratorInProgress = false;
+        this._debouncedRunCodeGenerator = debounce(this.runCodeGenerator.bind(this), 200, { leading: true, trailing: false });
 
         context.subscriptions.push(
             vscode.commands.registerCommand(Commands.addElement, args => this.addItem(args)),
@@ -102,6 +129,8 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
             vscode.commands.registerCommand(Commands.showLanguages, () => this.toggleLanguages(true)),
             vscode.commands.registerCommand(Commands.hideLanguages, () => this.toggleLanguages(false)),
             vscode.commands.registerCommand(Commands.projectProperties, () => this.projectProperties()),
+            vscode.commands.registerCommand(Commands.runGenerator, () => this._debouncedRunCodeGenerator()),
+            this._codeGeneratorStatus
         );
 
         this.view = vscode.window.createTreeView('lhqTreeView', {
@@ -162,10 +191,158 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
         const success = await this.applyChangesToTextDocument();
 
         if (success) {
-            showMessageBox('info', 'Project properties changes was applied.');
+            void showMessageBox('info', 'Project properties changes was applied.');
         }
 
         return undefined;
+    }
+
+    private get codeGeneratorTemplateId(): string | '' {
+        return this._currentRootModel?.codeGenerator?.templateId ?? '';
+    }
+
+    // returns uid of this status update
+    private updateGeneratorStatus(info: CodeGeneratorStatusInfo): string {
+        const templateId = this.codeGeneratorTemplateId;
+
+        let text = '';
+        let tooltip: string | undefined;
+        let command: string | undefined;
+        let backgroundId: string | undefined;
+        let colorId: string | undefined;
+        const result = crypto.randomUUID();
+
+        this._lastLhqStatus = {
+            kind: info.kind,
+            uid: result
+        };
+
+        const suffix = ' (lhq-editor)';
+        let textSuffix = true;
+
+        this._codeGeneratorInProgress = info.kind === 'active';
+
+        switch (info.kind) {
+            case 'active':
+                text = `$(sync~spin) LHQ generating code for ${info.filename}`;
+                tooltip = `Running code generator template **${templateId}** ...`;
+                break;
+
+            case 'idle':
+                textSuffix = false;
+                text = '$(run-all) LHQ';
+                command = Commands.runGenerator;
+                // tooltip = `[LHQ] Click to run code generator template \`${templateId}\``;
+                tooltip = `Click to run code generator template **${templateId}**`;
+                break;
+
+            case 'error':
+                text = `$(error) ${info.message}`;
+                backgroundId = 'statusBarItem.errorBackground';
+                colorId = 'statusBarItem.errorForeground';
+                command = Commands.showOutput;
+                tooltip = `Click to see error details in output panel `;
+                break;
+
+            case 'status':
+                text = info.success ? `$(check) ${info.message}` : `$(error) ${info.message}`;
+                backgroundId = info.success
+                    ? 'statusBarItem.prominentBackground'
+                    : 'statusBarItem.errorBackground';
+                colorId = info.success
+                    ? 'statusBarItem.prominentForeground'
+                    : 'statusBarItem.errorForeground';
+                //tooltip = `${info.message}`;
+                break;
+            default:
+                logger().log('warn', `[LhqTreeDataProvider] updateGeneratorStatus -> Unknown status kind: ${JSON.stringify(info)}`);
+        }
+
+        if ((info.kind === 'error' || info.kind === 'status') && info.timeout && info.timeout > 0) {
+            const uid = this._lastLhqStatus!.uid;
+            setTimeout(() => {
+                if (this._lastLhqStatus!.uid === uid) {
+                    this.updateGeneratorStatus({ kind: 'idle' });
+                }
+            }, info.timeout);
+        }
+
+        this._codeGeneratorStatus.text = text + (textSuffix ? suffix : '');
+        this._codeGeneratorStatus.backgroundColor = backgroundId === undefined ? undefined : new vscode.ThemeColor(backgroundId);
+        this._codeGeneratorStatus.color = colorId === undefined ? undefined : new vscode.ThemeColor(colorId);
+        this._codeGeneratorStatus.command = command;
+        this._codeGeneratorStatus.tooltip = new vscode.MarkdownString(tooltip + suffix, true);
+
+        return result;
+    }
+
+    private runCodeGenerator(): void {
+        if (!this.currentDocument || !this.currentJsonModel) {
+            logger().log('warn', '[LhqTreeDataProvider] runCodeGenerator -> No current document or model found.');
+            return;
+        }
+
+        if (this._codeGeneratorInProgress) {
+            logger().log('warn', '[LhqTreeDataProvider] runCodeGenerator -> Code generator is already in progress.');
+            void showMessageBox('info', 'Code generator is already running ...');
+            return;
+        }
+
+        const fileName = this.documentPath;
+        if (isNullOrEmpty(fileName)) {
+            logger().log('warn', `[LhqTreeDataProvider] runCodeGenerator -> Document fileName is not valid (${fileName}). Cannot run code generator.`);
+            return;
+        }
+
+        logger().log('info', `[LhqTreeDataProvider] runCodeGenerator -> Running code generator for document: ${fileName}`);
+
+        const beginStatusUid = this.updateGeneratorStatus({ kind: 'active', filename: fileName });
+        let idleStatusOnEnd = true;
+
+        try {
+
+            const generator = new Generator();
+            const result = generator.generate(fileName, this.currentJsonModel, {});
+
+            if (result.generatedFiles) {
+                const lhqFileFolder = path.dirname(fileName);
+                const fileNames = result.generatedFiles.map(f => path.join(lhqFileFolder, f.fileName));
+                logger().log('debug', `[LhqTreeDataProvider] runCodeGenerator -> Code generator successfully generated files:\n` +
+                    `${fileNames.join('\n')}`);
+                //void showMessageBox('info', `Code generator successfully generated ${result.generatedFiles.length} files.`);
+
+                this.updateGeneratorStatus({
+                    kind: 'status',
+                    message: `Generated ${result.generatedFiles.length} files.`,
+                    success: true,
+                    timeout: 2000
+                });
+            } else {
+                this.updateGeneratorStatus({ kind: 'error', message: 'Error generating files.', timeout: 5000 });
+            }
+        }
+        catch (error) {
+            let msg = '';
+            if (error instanceof AppError) {
+                msg = error.message;
+            }
+
+            logger().log('error', `[LhqTreeDataProvider] runCodeGenerator -> Error during code generation: ${error}`);
+            // void showMessageBox('err', `Failed to run code generator! ${msg}`, {
+            //     detail: 'Please report this issue with the error details (output panel)'
+            // });
+
+            this.updateGeneratorStatus({ kind: 'error', message: 'Error generating files.' });
+
+        } finally {
+            if (idleStatusOnEnd) {
+                setTimeout(() => {
+                    if (beginStatusUid === this._lastLhqStatus?.uid) {
+                        this.updateGeneratorStatus({ kind: 'idle' });
+                    }
+                }, 2000);
+            }
+        }
     }
 
     private async projectProperties(): Promise<void> {
@@ -950,7 +1127,10 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
         }
 
 
-        const serializedRoot = ModelUtils.serializeTreeElement(this._currentRootModel!, this.currentFormatting);
+        // const serializedRoot = ModelUtils.serializeTreeElement(this._currentRootModel!, this.currentFormatting);
+        const newModel = ModelUtils.elementToModel<LhqModel>(this._currentRootModel!);
+        const serializedRoot = ModelUtils.serializeModel(newModel, this.currentFormatting);
+
         const edit = new vscode.WorkspaceEdit();
         const doc = this.currentDocument!;
         edit.replace(
@@ -958,7 +1138,11 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
             new vscode.Range(0, 0, doc.lineCount, 0),
             serializedRoot);
 
-        return vscode.workspace.applyEdit(edit);
+        const res = await vscode.workspace.applyEdit(edit);
+        if (res) {
+            this.currentJsonModel = newModel;
+        }
+        return res;
     }
 
     public get lastValidationError(): ValidationError | undefined {
@@ -1273,7 +1457,7 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
                     appContext.isEditorActive = true;
 
                     const baseName = path.basename(docPath);
-                    this.view.title = `${baseName} [LHQ Structure]`;
+                    this.view.title = `${baseName}`; // [LHQ Structure]`;
 
                     if (this.currentDocument?.uri.toString() !== docUri || !this._currentRootModel || forceRefresh) {
                         this.currentDocument = document;
@@ -1302,6 +1486,9 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
 
     refresh(): void {
         this.clearPageErrors();
+
+        this._codeGeneratorInProgress = false;
+
         if (this.currentDocument) {
             this.currentJsonModel = null;
 
@@ -1346,6 +1533,8 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
                     logger().log('error', `[LhqTreeDataProvider] refresh -> ${error}`);
                     void showMessageBox('err', error);
                     return;
+                } else {
+                    this.updateGeneratorStatus({ kind: 'idle' });
                 }
 
                 this.validateDocument();

@@ -126,12 +126,19 @@ export interface IAppContext {
     get languagesVisible(): boolean;
     set languagesVisible(visible: boolean);
 
+    on(event: string, listener: (...args: any[]) => void): this;
+    off(event: string, listener: (...args: any[]) => void): this;
+
     clearContextValues(): void;
     getFileUri(...pathParts: string[]): Uri;
     getPageHtml(): Promise<string>;
     getMediaUri(webview: Webview, filename: string, themed?: boolean): Uri
+
     setSelectionChangedCallback(callback: SelectionChangedCallback): void;
     setTreeSelection(selectedElements: ITreeElement[]): void;
+
+    // setIsEditorActiveChangeCallback(callback: IsEditorActiveChangedCallback): void;
+
     sendMessageToHtmlPage(message: AppToPageMessage): void;
 }
 
@@ -150,8 +157,17 @@ export interface ITreeContext {
 }
 
 export type SelectionChangedCallback = (selectedElements: ITreeElement[]) => void;
+export type IsEditorActiveChangedCallback = (active: boolean) => void;
 
 export type SelectionBackup = Array<{
     type: TreeElementType;
     fullPath: string;
 }>;
+
+export type CodeGeneratorStatusInfo =
+    | { kind: 'active'; filename: string; }
+    | { kind: 'idle'; }
+    | { kind: 'error'; message: string; timeout?: number; }
+    | { kind: 'status'; message: string; success: boolean; timeout: number; };
+
+export type CodeGeneratorStatusKind = CodeGeneratorStatusInfo['kind'];

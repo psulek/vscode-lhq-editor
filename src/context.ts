@@ -1,14 +1,15 @@
+import path from 'path';
 import * as vscode from 'vscode';
 import fse from 'fs-extra';
 import { glob } from 'glob';
-import { AppToPageMessage, IAppContext, ITreeContext, IVirtualLanguageElement, SelectionChangedCallback } from './types';
+import { AppToPageMessage, IAppContext, IsEditorActiveChangedCallback, ITreeContext, IVirtualLanguageElement, SelectionChangedCallback } from './types';
 import { Generator, GeneratorInitialization, HbsTemplateManager, ICodeGeneratorElement, ITreeElement, ModelUtils, generatorUtils, modelConst } from '@lhq/lhq-generators';
 import { VirtualTreeElement } from './elements';
 import { DefaultFormattingOptions, getElementFullPath, initializeDebugMode, isValidDocument, loadCultures, logger, safeReadFile, showConfirmBox, showMessageBox } from './utils';
 import { LhqEditorProvider } from './editorProvider';
 import { LhqTreeDataProvider } from './treeDataProvider';
-import path from 'path';
 import { HostEnvironmentCli } from './hostEnv';
+import EventEmitter from 'events';
 
 const globalStateKeys = {
     languagesVisible: 'languagesVisible'
@@ -29,7 +30,11 @@ export const Commands = {
     showLanguages: 'lhqTreeView.showLanguages',
     hideLanguages: 'lhqTreeView.hideLanguages',
     projectProperties: 'lhqTreeView.projectProperties',
-    createNewLhqFile: 'lhqTreeView.createNewLhqFile'
+    createNewLhqFile: 'lhqTreeView.createNewLhqFile',
+    runGenerator: 'lhqTreeView.runGenerator',
+
+    // commands not in package.json (internal)
+    showOutput: 'lhq.showOutput'
 };
 
 const contextKeys = {
@@ -43,6 +48,10 @@ const contextKeys = {
     hasLanguagesVisible: 'lhqTreeHasLanguagesVisible',
 };
 
+export const ContextEvents = {
+    isEditorActiveChanged: 'isEditorActiveChanged',
+};
+
 
 export class AppContext implements IAppContext {
     private _ctx!: vscode.ExtensionContext;
@@ -53,9 +62,25 @@ export class AppContext implements IAppContext {
     private _lhqTreeDataProvider: LhqTreeDataProvider = undefined!;
     private _lhqEditorProvider: LhqEditorProvider = undefined!;
     private _pageHtml: string = '';
+    private _eventEmitter = new EventEmitter();
+    // private _onIsEditorActiveChanged: IsEditorActiveChangedCallback | undefined;
 
     public setSelectionChangedCallback(callback: SelectionChangedCallback): void {
         this._onSelectionChanged = callback;
+    }
+
+    // public setIsEditorActiveChangeCallback(callback: IsEditorActiveChangedCallback): void {
+    //     this._onIsEditorActiveChanged = callback;
+    // }
+
+    public on(event: string, listener: (...args: any[]) => void): this {
+        this._eventEmitter.on(event, listener);
+        return this;
+    }
+    
+    public off(event: string, listener: (...args: any[]) => void): this {
+        this._eventEmitter.off(event, listener);
+        return this;
     }
 
     public async init(ctx: vscode.ExtensionContext): Promise<void> {
@@ -72,6 +97,10 @@ export class AppContext implements IAppContext {
         await loadCultures(ctx);
 
         this._ctx.subscriptions.push(
+            vscode.commands.registerCommand('lhq.showOutput', () => {
+                vscode.commands.executeCommand('workbench.action.showOutput', 'LHQ Editor');
+            }),
+
             vscode.workspace.onDidChangeTextDocument(async e => {
                 if (!e.reason) {
                     logger().log('debug', `[AppContext] onDidChangeTextDocument -> No reason provided, ignoring change for document: ${e.document?.fileName ?? '-'}`);
@@ -138,6 +167,7 @@ export class AppContext implements IAppContext {
         // commands
         vscode.commands.registerCommand(Commands.createNewLhqFile, () => this.createNewLhqFile());
     }
+
 
     private async initGenerator(context: vscode.ExtensionContext): Promise<void> {
         try {
@@ -293,6 +323,7 @@ export class AppContext implements IAppContext {
         if (this._isEditorActive !== active) {
             this._isEditorActive = active;
             vscode.commands.executeCommand('setContext', contextKeys.isEditorActive, active);
+            this._eventEmitter.emit(ContextEvents.isEditorActiveChanged, active);
         }
     }
 

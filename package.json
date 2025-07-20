@@ -108,6 +108,11 @@
         "command": "lhqTreeView.createNewLhqFile",
         "title": "Create strings localization file (LHQ Editor)",
         "icon": "$(new-file)"
+      },
+      {
+        "command": "lhqTreeView.runGenerator",
+        "title": "Run code generator",
+        "icon": "$(run-all)"
       }
     ],
     "menus": {
@@ -130,19 +135,22 @@
           "command": "lhqTreeView.addLanguage",
           "when": "view == lhqTreeView && lhqTreeHasLanguageSelection",
           "group": "navigation"
-        },
+        }, 
         {
-          "command": "lhqTreeView.showLanguages",
-          "when": "view == lhqTreeView && !lhqTreeHasLanguagesVisible",
-          "group": "navigation"
-        },
-        {
-          "command": "lhqTreeView.hideLanguages",
-          "when": "view == lhqTreeView && lhqTreeHasLanguagesVisible",
-          "group": "navigation"
+            "command": "lhqTreeView.runGenerator",
+            "when": "view == lhqTreeView",
+            "group": "navigation"
         }
       ],
       "view/item/context": [
+        {
+          "command": "lhqTreeView.showLanguages",
+          "when": "view == lhqTreeView && (viewItem == languages) && !lhqTreeHasLanguagesVisible"
+        },
+        {
+          "command": "lhqTreeView.hideLanguages",
+          "when": "view == lhqTreeView && (viewItem == languages) && lhqTreeHasLanguagesVisible"
+        },
         {
           "command": "lhqTreeView.addCategory",
           "when": "view == lhqTreeView && (viewItem == category || viewItem == model) && !lhqTreeHasMultiSelection && !lhqTreeHasLanguageSelection"
@@ -224,7 +232,7 @@
     "typescript": "^5.8.3"
   },
   "dependencies": {
-    "@lhq/lhq-generators": "1.0.0-rc.74",
+    "@lhq/lhq-generators": "1.0.0-rc.76",
     "class-transformer": "^0.5.1",
     "fs-extra": "11.3.0",
     "lodash.debounce": "4.0.8",
