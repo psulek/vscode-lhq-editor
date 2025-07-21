@@ -15,14 +15,14 @@ export class DocumentContext {
         onDidDispose: () => void
     ) {
         if (!document) {
-            logger().log('error', '[DocumentContext] Document is undefined or null.');
+            logger().log(this, 'error', 'ctor(), Document is undefined or null.');
             throw new Error('Document is undefined or null.');
         }
 
         const fileName = document.fileName ?? '-';
 
         if (!isValidDocument(document)) {
-            logger().log('error', `[DocumentContext] Invalid document: ${fileName}`);
+            logger().log(this, 'error', `Invalid document: ${fileName}`);
             void showMessageBox('err', `Invalid document: ${fileName}`, { modal: true });
         }
 
@@ -46,11 +46,11 @@ export class DocumentContext {
         const didReceiveMessageSubscription = this._webviewPanel!.webview.onDidReceiveMessage(this.handleClientCommands.bind(this));
         const viewStateSubscription = this._webviewPanel!.onDidChangeViewState(async e => {
             const changedPanel = e.webviewPanel;
-            logger().log('debug', `[DocumentContext] webviewPanel.onDidChangeViewState for ${this.fileName}. Active: ${changedPanel.active}, Visible: ${changedPanel.visible}`);
+            logger().log(this, 'debug', `webviewPanel.onDidChangeViewState for ${this.fileName}. Active: ${changedPanel.active}, Visible: ${changedPanel.visible}`);
 
             if (changedPanel.active) {
                 // This specific webview panel became active
-                logger().log('debug', `[DocumentContext] webviewPanel.onDidChangeViewState for ${this.fileName} became active. Updating tree and context.`);
+                logger().log(this, 'debug', `webviewPanel.onDidChangeViewState for ${this.fileName} became active. Updating tree and context.`);
                 await appContext.treeContext.updateDocument(this._document);
             }
         });
@@ -58,7 +58,7 @@ export class DocumentContext {
 
         this._context.subscriptions.push(
             this._webviewPanel!.onDidDispose(() => {
-                logger().log('debug', `[DocumentContext] onDidDispose -> for: ${this.fileName}`);
+                logger().log(this, 'debug', `onDidDispose -> for: ${this.fileName}`);
                 viewStateSubscription.dispose();
                 didReceiveMessageSubscription.dispose();
                 //this._webviewPanel = undefined;
@@ -71,7 +71,7 @@ export class DocumentContext {
 
 
     private async handleClientCommands(message: PageToAppMessage): Promise<void> {
-        logger().log('debug', `[DocumentContext] webview.onDidReceiveMessage: ${message.command} for ${this.fileName}`);
+        logger().log(this, 'debug', `webview.onDidReceiveMessage: ${message.command} for ${this.fileName}`);
         switch (message.command) {
             case 'update':
                 try {
@@ -80,7 +80,7 @@ export class DocumentContext {
                         await appContext.treeContext.updateElement(element);
                     }
                 } catch (e) {
-                    logger().log('error', `[DocumentContext] webview.onDidReceiveMessage: Error parsing element data: ${e}`);
+                    logger().log(this, 'error', `webview.onDidReceiveMessage: Error parsing element data: ${e}`);
                     return;
                 }
                 break;
@@ -88,14 +88,14 @@ export class DocumentContext {
                 try {
                     await appContext.treeContext.selectElementByPath(message.elementType, message.paths);
                 } catch (e) {
-                    logger().log('error', `[DocumentContext] webview.onDidReceiveMessage: Error selecting element: ${e}`);
+                    logger().log(this, 'error', `webview.onDidReceiveMessage: Error selecting element: ${e}`);
                     return;
                 }
                 break;
             case 'saveProperties': {
                 const error = await appContext.treeContext.saveModelProperties(message.modelProperties);
                 if (error) {
-                    logger().log('error', `[DocumentContext] webview.onDidReceiveMessage: Error saving properties: ${error}`);
+                    logger().log(this, 'error', `webview.onDidReceiveMessage: Error saving properties: ${error}`);
                 }
                 this.sendMessageToHtmlPage({ command: 'savePropertiesResult', error });
                 break;
@@ -103,7 +103,7 @@ export class DocumentContext {
             case 'resetSettings': {
                 const rootModel = appContext.treeContext.currentRootModel!;
                 if (!rootModel) {
-                    logger().log('error', `[DocumentContext] webview.onDidReceiveMessage: No current root model found.`);
+                    logger().log(this, 'error', `webview.onDidReceiveMessage: No current root model found.`);
                     return;
                 }
 
@@ -150,17 +150,17 @@ export class DocumentContext {
 
     public onSelectionChanged(selectedElements: ITreeElement[]): void {
         this._selectedElements = selectedElements ?? [];
-        logger().log('debug', `[DocumentContext] onSelectionChanged -> ${selectedElements ? selectedElements.length : 0} elements selected.`);
+        //logger().log(this, 'debug', `onSelectionChanged -> ${selectedElements ? selectedElements.length : 0} elements selected.`);
         this.reflectSelectedElementToWebview();
     }
 
     public async loadEmptyPage(): Promise<void> {
-        logger().log('debug', `[DocumentContext] loadEmptyPage for: ${this.fileName}`);
+        //logger().log(this, 'debug', `loadEmptyPage for: ${this.fileName}`);
         this._webviewPanel.webview.html = await this.getHtmlForWebview(true);
     }
 
     public async updateWebviewContent(): Promise<void> {
-        logger().log('debug', `[DocumentContext] updateWebviewContent for: ${this.fileName}`);
+        //logger().log('debug', `[DocumentContext] updateWebviewContent for: ${this.fileName}`);
         this._webviewPanel.webview.html = await this.getHtmlForWebview(false);
 
         const templatesMetadata = HbsTemplateManager.getTemplateDefinitions();
@@ -221,7 +221,7 @@ export class DocumentContext {
             if (startIdx > -1 && endIdx > -1) {
                 pageHtml = pageHtml.substring(0, startIdx) + pageHtml.substring(endIdx + content_end.length);
             } else {
-                logger().log('error', `[DocumentContext] getHtmlForWebview: Content markers not found in page.html`);
+                logger().log(this, 'error', `getHtmlForWebview: Content markers not found in page.html`);
             }
         }
 
@@ -256,14 +256,14 @@ export class DocumentContext {
         try {
             if (this._webviewPanel && this._webviewPanel.webview) {
                 if (this._webviewPanel.active) {
-                    logger().log('debug', `[DocumentContext] sendMessage -> ${message.command} ...`);
+                    //logger().log(this, 'debug', `sendMessage -> ${message.command} ...`);
                     this._webviewPanel.webview.postMessage(message);
                 } else {
-                    logger().log('debug', `[DocumentContext] sendMessage -> WebviewPanel is not active. Skipping message: ${message.command}`);
+                    logger().log(this, 'debug', `sendMessage() skipped for message '${message.command}' -> WebviewPanel is not active.`);
                 }
             }
         } catch (error) {
-            logger().log('error', `[DocumentContext] sendMessageToHtmlPage: Error sending message '${message.command}': ${error}`);
+            logger().log(this, 'error', `sendMessageToHtmlPage: Error sending message '${message.command}': ${error}`);
         }
     }
 }

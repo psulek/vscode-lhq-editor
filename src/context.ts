@@ -2,8 +2,8 @@ import path from 'path';
 import * as vscode from 'vscode';
 import fse from 'fs-extra';
 import { glob } from 'glob';
-import { AppToPageMessage, IAppContext, IsEditorActiveChangedCallback, ITreeContext, IVirtualLanguageElement, SelectionChangedCallback } from './types';
-import { Generator, GeneratorInitialization, HbsTemplateManager, ICodeGeneratorElement, ITreeElement, ModelUtils, generatorUtils, modelConst } from '@lhq/lhq-generators';
+import { AppToPageMessage, IAppContext, ITreeContext, IVirtualLanguageElement, SelectionChangedCallback } from './types';
+import { Generator, GeneratorInitialization, HbsTemplateManager, ITreeElement, ModelUtils, generatorUtils } from '@lhq/lhq-generators';
 import { VirtualTreeElement } from './elements';
 import { DefaultFormattingOptions, getElementFullPath, initializeDebugMode, isValidDocument, loadCultures, logger, safeReadFile, showConfirmBox, showMessageBox } from './utils';
 import { LhqEditorProvider } from './editorProvider';
@@ -103,17 +103,18 @@ export class AppContext implements IAppContext {
 
             vscode.workspace.onDidChangeTextDocument(async e => {
                 if (!e.reason) {
-                    logger().log('debug', `[AppContext] onDidChangeTextDocument -> No reason provided, ignoring change for document: ${e.document?.fileName ?? '-'}`);
+                    logger().log(this, 'debug', `onDidChangeTextDocument -> No reason provided, ignoring change for document: ${e.document?.fileName ?? '-'}`);
                     return;
                 }
                 const reason = e.reason === vscode.TextDocumentChangeReason.Undo ? 'Undo' : 'Redo';
                 const hasReason = e.reason !== undefined;
-                logger().log('debug', `[AppContext] onDidChangeTextDocument -> document: ${e.document?.fileName ?? '-'}, reason: ${reason}`);
+                logger().log(this, 'debug', `onDidChangeTextDocument -> document: ${e.document?.fileName ?? '-'}, reason: ${reason}`);
 
                 const docUri = e.document?.uri.toString() ?? '';
                 if (isValidDocument(e.document)) {
                     const treeDocUri = this._lhqTreeDataProvider.documentUri;
                     if (treeDocUri === docUri) {
+                        // TODO: make it work? save/restore tree selection?
                         const selectionBackup = hasReason ? this._lhqTreeDataProvider.backupSelection() : undefined;
                         await this._lhqTreeDataProvider.clearSelection();
 
@@ -123,10 +124,10 @@ export class AppContext implements IAppContext {
                         //     await this._lhqTreeDataProvider.restoreSelection(selectionBackup);
                         // }
                     } else {
-                        logger().log('debug', `[AppContext] onDidChangeTextDocument -> Document uri (${docUri}) is not the treeContext has (${treeDocUri}), ignoring change.`);
+                        logger().log(this, 'debug', `onDidChangeTextDocument -> Document uri (${docUri}) is not same as treeview has (${treeDocUri}), ignoring change.`);
                     }
                 } else {
-                    logger().log('debug', `[AppContext] onDidChangeTextDocument -> Document (${docUri}) is not valid, ignoring change.`);
+                    logger().log(this, 'debug', `onDidChangeTextDocument -> Document (${docUri}) is not valid, ignoring change.`);
                 }
             }),
 
@@ -177,7 +178,7 @@ export class AppContext implements IAppContext {
             const metadataContent = await fse.readFile(metadataFile, { encoding: 'utf-8' });
             const result = generatorUtils.validateTemplateMetadata(metadataContent);
             if (!result.success) {
-                logger().log('error', `Validation of  ${metadataFile} failed: ${result.error}`);
+                logger().log(this, 'error', `Validation of  ${metadataFile} failed: ${result.error}`);
                 await showMessageBox('err', `Validation of lhq templates metadata file failed: ${result.error}`);
             }
 
@@ -200,7 +201,7 @@ export class AppContext implements IAppContext {
 
             Generator.initialize(generatorInit);
         } catch (error) {
-            logger().log('error', `Failed to initialize generator: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            logger().log(this, 'error', `Failed to initialize generator: ${error instanceof Error ? error.message : 'Unknown error'}`);
             await showMessageBox('err', `Failed to initialize lhq generator! Please report this issue.`);
         }
     }
@@ -293,7 +294,7 @@ export class AppContext implements IAppContext {
 
             await showMessageBox('info', `Successfully created file: ${filePath}`);
         } catch (error) {
-            logger().log('error', `Error creating new LHQ file: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            logger().log(this, 'error', `Error creating new LHQ file: ${error instanceof Error ? error.message : 'Unknown error'}`);
             await showMessageBox('err', `Error creating new LHQ file.`);
         }
     }
@@ -360,7 +361,7 @@ export class AppContext implements IAppContext {
                 const elem1 = selectedElements[0];
                 selInfo = `[${getElementFullPath(elem1)} (${elem1.elementType})]`;
             }
-            logger().log('debug', `[AppContext] setTreeSelection -> fire _onSelectionChanged ${selInfo} (${selectedElements.length} items selected)`);
+            logger().log(this, 'debug', `setTreeSelection -> fire _onSelectionChanged ${selInfo} (${selectedElements.length} items selected)`);
             this._onSelectionChanged(selectedElements);
         }
 

@@ -220,8 +220,6 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
         const suffix = ' (lhq-editor)';
         let textSuffix = true;
 
-        this._codeGeneratorInProgress = info.kind === 'active';
-
         switch (info.kind) {
             case 'active':
                 text = `$(sync~spin) LHQ generating code for ${info.filename}`;
@@ -252,10 +250,10 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
                 colorId = info.success
                     ? 'statusBarItem.prominentForeground'
                     : 'statusBarItem.errorForeground';
-                //tooltip = `${info.message}`;
+                //command = info.success ? Commands.runGenerator : undefined;
                 break;
             default:
-                logger().log('warn', `[LhqTreeDataProvider] updateGeneratorStatus -> Unknown status kind: ${JSON.stringify(info)}`);
+                logger().log(this, 'debug', `updateGeneratorStatus -> Unknown status kind: ${JSON.stringify(info)}`);
         }
 
         if ((info.kind === 'error' || info.kind === 'status') && info.timeout && info.timeout > 0) {
@@ -278,28 +276,32 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
 
     private runCodeGenerator(): void {
         if (!this.currentDocument || !this.currentJsonModel) {
-            logger().log('warn', '[LhqTreeDataProvider] runCodeGenerator -> No current document or model found.');
+            logger().log(this, 'debug', 'runCodeGenerator -> No current document or model found.');
             return;
         }
 
         if (this._codeGeneratorInProgress) {
-            logger().log('warn', '[LhqTreeDataProvider] runCodeGenerator -> Code generator is already in progress.');
+            logger().log(this, 'debug', '[LhqTreeDataProvider] runCodeGenerator -> Code generator is already in progress.');
             void showMessageBox('info', 'Code generator is already running ...');
             return;
         }
 
         const fileName = this.documentPath;
         if (isNullOrEmpty(fileName)) {
-            logger().log('warn', `[LhqTreeDataProvider] runCodeGenerator -> Document fileName is not valid (${fileName}). Cannot run code generator.`);
+            logger().log(this, 'debug', `runCodeGenerator -> Document fileName is not valid (${fileName}). Cannot run code generator.`);
             return;
         }
 
-        logger().log('info', `[LhqTreeDataProvider] runCodeGenerator -> Running code generator for document: ${fileName}`);
+        const templateId = this.codeGeneratorTemplateId;
+        logger().log(this, 'info', `Running code generator template '${templateId}' for document: ${fileName}`);
 
-        const beginStatusUid = this.updateGeneratorStatus({ kind: 'active', filename: fileName });
+        this._codeGeneratorInProgress = true;
+
+        let beginStatusUid = '';
         let idleStatusOnEnd = true;
 
         try {
+            beginStatusUid = this.updateGeneratorStatus({ kind: 'active', filename: fileName });
 
             const generator = new Generator();
             const result = generator.generate(fileName, this.currentJsonModel, {});
@@ -307,9 +309,8 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
             if (result.generatedFiles) {
                 const lhqFileFolder = path.dirname(fileName);
                 const fileNames = result.generatedFiles.map(f => path.join(lhqFileFolder, f.fileName));
-                logger().log('debug', `[LhqTreeDataProvider] runCodeGenerator -> Code generator successfully generated files:\n` +
+                logger().log(this, 'info', `Code generator template '${templateId}' successfully generated ${fileNames.length} files:\n` +
                     `${fileNames.join('\n')}`);
-                //void showMessageBox('info', `Code generator successfully generated ${result.generatedFiles.length} files.`);
 
                 this.updateGeneratorStatus({
                     kind: 'status',
@@ -327,14 +328,12 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
                 msg = error.message;
             }
 
-            logger().log('error', `[LhqTreeDataProvider] runCodeGenerator -> Error during code generation: ${error}`);
-            // void showMessageBox('err', `Failed to run code generator! ${msg}`, {
-            //     detail: 'Please report this issue with the error details (output panel)'
-            // });
+            logger().log(this, 'error', `Code generator template '${templateId}' failed ${msg}`, error as Error);
 
-            this.updateGeneratorStatus({ kind: 'error', message: 'Error generating files.' });
-
+            this.updateGeneratorStatus({ kind: 'error', message: `Error generating files. ${msg}` });
         } finally {
+            this._codeGeneratorInProgress = false;
+
             if (idleStatusOnEnd) {
                 setTimeout(() => {
                     if (beginStatusUid === this._lastLhqStatus?.uid) {
@@ -372,9 +371,9 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
             ? this._currentRootModel
             : this._currentRootModel.getElementByPath(paths, elementType as CategoryOrResourceType);
 
-        const elemFullPath = paths.getParentPath('/', true);
-        const found = !isNullOrEmpty(elem);
-        logger().log('debug', `[LhqTreeDataProvider] selectElementByPath -> elementType: ${elementType}, paths: ${elemFullPath} -> found: ${found}`);
+        //const elemFullPath = paths.getParentPath('/', true);
+        //const found = !isNullOrEmpty(elem);
+        //logger().log(this, 'debug', `[LhqTreeDataProvider] selectElementByPath -> elementType: ${elementType}, paths: ${elemFullPath} -> found: ${found}`);
 
         if (elem) {
             await this.setSelectedItems([elem!]);
@@ -431,8 +430,8 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
             isPrimary: boolean;
         }
 
-        const elemFullPath = paths.getParentPath('/', true);
-        logger().log('debug', `[LhqTreeDataProvider] updateElement -> elementType: ${elementType}, paths: ${elemFullPath}`);
+        //const elemFullPath = paths.getParentPath('/', true);
+        //logger().log('debug', `[LhqTreeDataProvider] updateElement -> elementType: ${elementType}, paths: ${elemFullPath}`);
 
         if (elem && !isVirtualTreeElement(elem)) {
             const newName = (element.name as string ?? '').trim();
@@ -523,7 +522,7 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
 
                 const elemPath = getElementFullPath(elem);
                 if (!success) {
-                    logger().log('error', `[LhqTreeDataProvider] updateElement -> apply changes to document failed for: ${elemPath}`);
+                    logger().log(this, 'error', `updateElement -> apply changes to document failed for: ${elemPath}`);
                     return await showMessageBox('err', `Failed to apply changes.`);
                 } else {
                     if (elemPath !== elemFullPath) {
@@ -534,10 +533,10 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
                     }
                 }
             } else {
-                logger().log('debug', `[LhqTreeDataProvider] updateElement -> No changes for element '${getElementFullPath(elem)}'.`);
+                logger().log(this, 'debug', `updateElement -> No changes for element '${getElementFullPath(elem)}'.`);
             }
         } else {
-            logger().log('debug', `[LhqTreeDataProvider] updateElement -> Element not found or is virtual: ${path.join('/')}`);
+            logger().log(this, 'debug', `updateElement -> Element not found or is virtual: ${path.join('/')}`);
         }
     }
 
@@ -716,7 +715,7 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
 
     public async setSelectedItems(itemsToSelect: ITreeElement[], options?: { focus?: boolean; expand?: boolean | number }): Promise<void> {
         if (!this.view) {
-            logger().log('warn', '[LhqTreeDataProvider] setSelectedItems -> TreeView is not available.');
+            logger().log(this, 'debug', 'setSelectedItems -> TreeView is not available.');
             return;
         }
 
@@ -746,7 +745,7 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
             try {
                 await this.revealElement(item, revealOptions);
             } catch (error) {
-                logger().log('error', `[LhqTreeDataProvider] setSelectedItems -> Failed to reveal/select item '${getElementFullPath(item)}'`, error as Error);
+                logger().log(this, 'error', `setSelectedItems -> Failed to reveal/select item '${getElementFullPath(item)}'`, error as Error);
             }
         }
     }
@@ -858,7 +857,10 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
                 if (changed) {
                     changedCount++;
                 }
-                logger().log('debug', `[LhqTreeDataProvider] handleDrop -> ${item.elementType} '${oldPath}' moved to '${getElementFullPath(item)}', successfully: ${changed}`);
+
+                if (!changed) {
+                    logger().log(this, 'debug', `handleDrop -> ${item.elementType} '${oldPath}' move to '${getElementFullPath(item)}', failed to change parent.`);
+                }
             }
         });
 
@@ -967,7 +969,7 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
         const root = this._currentRootModel!;
         elemsToDelete.forEach(elem => {
             if (!root.removeLanguage(elem.name)) {
-                logger().log('warn', `[LhqTreeDataProvider] deleteLanguage -> Cannot delete language '${elem.name}' - not found in model.`);
+                logger().log(this, 'error', `deleteLanguage -> Cannot delete language '${elem.name}' - not found in model.`);
             }
         });
 
@@ -1010,7 +1012,11 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
             return;
         }
 
+        logger().log(this, 'info', `Deleting ${elemIdent} ...`);
+
         let parentToSelect: ICategoryLikeTreeElement | undefined;
+        let deletedCount = 0;
+        let notDeletedCount = 0;
         elemsToDelete.forEach(elem => {
             const parent = this.getCategoryLikeParent(elem);
             if (parent) {
@@ -1018,20 +1024,23 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
                     parentToSelect = parent;
                 }
                 parent.removeElement(elem);
-                logger().log('debug', `[LhqTreeDataProvider] deleteItem -> ${elem.elementType} '${getElementFullPath(elem)}' deleted.`);
+                deletedCount++;
             } else {
-                logger().log('warn', `[LhqTreeDataProvider] deleteItem -> Cannot delete ${elem.elementType} '${getElementFullPath(elem)}' - no parent found.`);
+                notDeletedCount++;
             }
         });
 
         const success = await this.applyChangesToTextDocument();
+
+        logger().log(this, 'debug', `Deleting ${elemIdent} ${success ? 'suceed' : 'failed'} where ${deletedCount} element(s) was deleted` +
+            (notDeletedCount > 0 ? ` and failed to delete ${notDeletedCount} elements (no parent found).` : '.'));
 
         this._onDidChangeTreeData.fire([parentToSelect]);
         if (parentToSelect) {
             await this.revealElement(parentToSelect, { expand: true, select: true });
         }
 
-        await showMessageBox(success ? 'info' : 'err', success ? `Successfully deleted ${elemIdent}.` : `Failed to delete ${elemIdent}.`, { modal: !success });
+        await showMessageBox(success ? 'info' : 'err', success ? `Successfully deleted ${elemIdent}.` : `Failed to delete ${elemIdent}.`);
     }
 
     private validateElementName(elementType: TreeElementType, name: string, parentElement?: ICategoryLikeTreeElement, ignoreElementPath?: string): string | null {
@@ -1107,13 +1116,14 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
 
 
         if (!success) {
-            logger().log('error', `[LhqTreeDataProvider] renameItem -> apply changes to document failed for '${originalName}' to '${newName}' (${elemPath})`);
-            return await showMessageBox('err', `Failed to apply rename for item '${originalName}'.`);
+            const err = `Failed to rename ${elementType} '${originalName}' to '${newName}' (${elemPath})`;
+            logger().log(this, 'error', err);
+            return await showMessageBox('err', err);
         }
     }
 
     private async applyChangesToTextDocument(): Promise<boolean> {
-        logger().log('debug', `[LhqTreeDataProvider] applyChangesToTextDocument -> started (${this.documentPath})`);
+        //logger().log(this, 'debug', `[LhqTreeDataProvider] applyChangesToTextDocument -> started (${this.documentPath})`);
 
         if (!this.currentDocument) {
             return Promise.resolve(false);
@@ -1122,10 +1132,8 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
 
         const validationResult = this.validateDocument();
         if (!validationResult.success) {
-            logger().log('warn', `[LhqTreeDataProvider] applyChangesToTextDocument -> Validation failed: ${validationResult.error?.message}`);
-            //await showMessageBox('warn', validationResult.error!.message, { detail: validationResult.error!.detail, modal: true });
+            logger().log(this, 'warn', ` applyChangesToTextDocument -> Validation failed: ${validationResult.error?.message}`);
         }
-
 
         // const serializedRoot = ModelUtils.serializeTreeElement(this._currentRootModel!, this.currentFormatting);
         const newModel = ModelUtils.elementToModel<LhqModel>(this._currentRootModel!);
@@ -1402,7 +1410,8 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
         this._onDidChangeTreeData.fire([parent]);
         await this.revealElement(newElement, { expand: true, select: true, focus: true });
 
-        return await showMessageBox('info', `Added new ${elementType} '${itemName}' under '${getElementFullPath(parent)}'`);
+        return await showMessageBox('info', `Added new ${elementType} '${itemName}' under '${getElementFullPath(parent)}'`,
+            { logger: true });
     }
 
     public hasActiveDocument(): boolean {
@@ -1453,7 +1462,7 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
                 const docUri = document ? document.uri.toString() : '';
                 const docPath = document ? document.uri.fsPath : '';
                 if (isValidDocument(document)) {
-                    logger().log('debug', `[LhqTreeDataProvider] updateDocument -> [VALID] - ${docPath}`);
+                    //logger().log('debug', `[LhqTreeDataProvider] updateDocument -> [VALID] - ${docPath}`);
                     appContext.isEditorActive = true;
 
                     const baseName = path.basename(docPath);
@@ -1466,7 +1475,7 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
 
                     resolve();
                 } else if (appContext.isEditorActive) {
-                    logger().log('debug', `[LhqTreeDataProvider] updateDocument -> [INVALID] - ${docPath}`);
+                    logger().log(this, 'debug', `updateDocument -> [INVALID] - ${docPath}`);
                     this.view.title = `LHQ Structure`;
                     this.currentDocument = null;
                     this._validationError = undefined;
@@ -1501,7 +1510,7 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
 
             } catch (ex) {
                 const error = `Error parsing LHQ file '${this.documentPath}'`;
-                logger().log('error', `[LhqTreeDataProvider] refresh -> ${error}`, ex as Error);
+                logger().log(this, 'error', `refresh failed -> ${error}`, ex as Error);
                 this.currentJsonModel = null;
                 void showMessageBox('err', error);
                 return;
@@ -1521,7 +1530,7 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
                 } catch (ex) {
                     this.currentJsonModel = null;
                     const error = `Error validating LHQ file '${this.documentPath}': ${ex}`;
-                    logger().log('error', `[LhqTreeDataProvider] refresh -> ${error}`, ex as Error);
+                    logger().log(this, 'error', `refresh failed -> ${error}`, ex as Error);
                     void showMessageBox('err', error);
                     return;
                 }
@@ -1530,7 +1539,7 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
                     const error = validateResult
                         ? `Validation errors while parsing LHQ file '${this.documentPath}': \n${validateResult.error}`
                         : `Error validating LHQ file '${this.documentPath}'`;
-                    logger().log('error', `[LhqTreeDataProvider] refresh -> ${error}`);
+                    logger().log(this, 'error', `refresh failed -> ${error}`);
                     void showMessageBox('err', error);
                     return;
                 } else {

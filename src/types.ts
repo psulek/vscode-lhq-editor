@@ -1,5 +1,5 @@
 import type { CodeGeneratorGroupSettings, ICodeGeneratorElement, IRootModelElement, ITreeElement, LhqModelOptionsResources, TemplateMetadataDefinition, TreeElementType } from '@lhq/lhq-generators';
-import type { TextDocument, Uri, Webview } from 'vscode';
+import type { MessageOptions, TextDocument, Uri, Webview } from 'vscode';
 
 export type SearchTreeKind = 'path' | 'name' | 'translation' | 'language';
 
@@ -171,3 +171,7 @@ export type CodeGeneratorStatusInfo =
     | { kind: 'status'; message: string; success: boolean; timeout: number; };
 
 export type CodeGeneratorStatusKind = CodeGeneratorStatusInfo['kind'];
+
+export type MessageBoxOptions = MessageOptions & {
+    logger?: boolean
+}

@@ -20,17 +20,6 @@ export class LhqEditorProvider implements vscode.CustomTextEditorProvider {
         appContext.setSelectionChangedCallback(this._debouncedOnSelectionChanged);
     }
 
-    // public runCodeGenerator(): void {
-    //     logger().log('debug', '[LhqEditorProvider] runCodeGenerator -> Run code generator...');
-    //     const ctx = this.activeDocumentContext;
-    //     if (ctx) {
-    //         logger().log('debug', `[LhqEditorProvider] runCodeGenerator -> Running code generator for document: ${ctx.documentUri}`);
-    //         ctx.runCodeGenerator();
-    //     } else {
-    //         logger().log('warn', '[LhqEditorProvider] runCodeGenerator -> No active document context found. Cannot run code generator.');
-    //     }
-    // }
-
     private get activeDocumentContext(): DocumentContext | undefined {
         for (const editor of this._editors.values()) {
             if (editor.isActive) {
@@ -41,26 +30,23 @@ export class LhqEditorProvider implements vscode.CustomTextEditorProvider {
     }
 
     private onSelectionChanged(selectedElements: ITreeElement[]): void {
-        logger().log('debug', `[LhqEditorProvider] onSelectionChanged -> ${selectedElements ? selectedElements.length : 0} elements selected.`);
+        logger().log(this, 'debug', `[LhqEditorProvider] onSelectionChanged -> ${selectedElements ? selectedElements.length : 0} elements selected.`);
         const ctx = this.activeDocumentContext;
         if (ctx) {
-            logger().log('debug', `[LhqEditorProvider] onSelectionChanged -> updating selection on document context (${ctx.documentUri}).`);
+            logger().log(this, 'debug', `[LhqEditorProvider] onSelectionChanged -> updating selection on document context (${ctx.documentUri}).`);
             ctx.onSelectionChanged(selectedElements);
         } else {
-            logger().log('debug', '[LhqEditorProvider] onSelectionChanged -> No active document context found. Skipping selection update.');
+            logger().log(this, 'debug', '[LhqEditorProvider] onSelectionChanged -> No active document context found. Skipping selection update.');
         }
-
-        //this.lastSelectedElements = selectedElements;
-        //this.reflectSelectedElementToWebview();
     }
 
     public sendMessageToHtmlPage(message: AppToPageMessage): void {
         const ctx = this.activeDocumentContext;
         if (ctx) {
-            logger().log('debug', `[LhqEditorProvider] sendMessageToHtmlPage -> Sending message '${message.command}' to webview for document ${ctx.documentUri}`);
+            logger().log(this, 'debug', `[LhqEditorProvider] sendMessageToHtmlPage -> Sending message '${message.command}' to webview for document ${ctx.documentUri}`);
             ctx.sendMessageToHtmlPage(message);
         } else {
-            logger().log('warn', '[LhqEditorProvider] sendMessageToHtmlPage -> No active document context found. Cannot send message.');
+            logger().log(this, 'warn', '[LhqEditorProvider] sendMessageToHtmlPage -> No active document context found. Cannot send message.');
         }
     }
 
@@ -69,7 +55,7 @@ export class LhqEditorProvider implements vscode.CustomTextEditorProvider {
         webviewPanel: vscode.WebviewPanel,
         _token: vscode.CancellationToken
     ): Promise<void> {
-        logger().log('debug', `[LhqEditorProvider] resolveCustomTextEditor -> for document: ${document.fileName}`);
+        logger().log(this, 'debug', `resolveCustomTextEditor -> for document: ${document.fileName}`);
 
         const documentUri = document.uri.toString();
         if (this._editors.has(documentUri)) {
@@ -84,9 +70,9 @@ export class LhqEditorProvider implements vscode.CustomTextEditorProvider {
 
                 const treeHasActiveDoc = this.treeDataProvider.hasActiveDocument();
                 if (treeHasActiveDoc && !this.treeDataProvider.isSameDocument(document)) {
-                    logger().log('debug', "[LhqEditorProvider] onDidDispose -> No active document or same document. Nothing to do.");
+                    logger().log(this, 'debug', "onDidDispose -> No active document or same document. Nothing to do.");
                 } else {
-                    logger().log('debug', "[LhqEditorProvider] onDidDispose -> Triggering treeDataProvider.updateDocument");
+                    logger().log(this, 'debug', "onDidDispose -> Triggering treeDataProvider.updateDocument");
                     const activeDocument = vscode.window.activeTextEditor?.document;
 
                     // if not active document or not valid document, update tree data provider to clear/hide tree
@@ -116,7 +102,7 @@ export class LhqEditorProvider implements vscode.CustomTextEditorProvider {
             await this.treeDataProvider.selectRootElement();
             appContext.isEditorActive = true;
         } catch (error) {
-            logger().log('error', `[LhqEditorProvider] resolveCustomTextEditor -> Error while resolving custom text editor: ${error}`);
+            logger().log(this, 'error', `resolveCustomTextEditor -> Error while resolving custom text editor: ${error}`);
 
             // clear and hide the tree if error occurs
             await this.treeDataProvider.updateDocument(undefined);

@@ -4,8 +4,8 @@ import fse from 'fs-extra';
 import type { FileInfo, ReadFileInfoOptions, ITreeElementPaths, ITreeElement, IRootModelElement, ICategoryLikeTreeElement, FormattingOptions } from '@lhq/lhq-generators';
 import { fileUtils, isNullOrEmpty, ModelUtils, strCompare } from '@lhq/lhq-generators';
 
-import { ILogger, VsCodeLogger } from './logger';
-import { CultureInfo, CulturesMap, MatchForSubstringResult } from './types';
+import { ILogger, LogType, VsCodeLogger } from './logger';
+import { CultureInfo, CulturesMap, MatchForSubstringResult, MessageBoxOptions } from './types';
 
 import 'reflect-metadata';
 
@@ -23,9 +23,9 @@ export function initializeDebugMode(mode: vscode.ExtensionMode) {
     _isDebugMode = false;
     _logger.updateDebugMode(_isDebugMode);
     if (_isDebugMode) {
-        _logger.log('debug', 'LHQ Editor extension activated in Development mode.');
+        _logger.log('extension', 'debug', 'LHQ Editor extension activated in Development mode.');
     } else {
-        _logger.log('info', 'LHQ Editor extension activated');
+        _logger.log('extension', 'info', 'LHQ Editor extension activated');
     }
 }
 
@@ -72,7 +72,7 @@ export async function showConfirmBox(message: string, detail?: string, warn?: bo
 }
 
 
-export async function showMessageBox(type: 'warn' | 'info' | 'err', message: string, options?: vscode.MessageOptions): Promise<void> {
+export async function showMessageBox(type: 'warn' | 'info' | 'err', message: string, options?: MessageBoxOptions): Promise<void> {
     const msg = getMessageBoxText(message);
 
     if (type === 'err' && isNullOrEmpty(options)) {
@@ -80,6 +80,13 @@ export async function showMessageBox(type: 'warn' | 'info' | 'err', message: str
     }
 
     options = options ?? {};
+    const addToLogger = options.logger ?? false;
+    delete options.logger;
+
+    if (addToLogger) {
+        const logType: LogType = type === 'err' ? 'error' : type === 'warn' ? 'warn' : 'info';
+        logger().log('', logType, msg);
+    } 
 
     if (type === 'warn') {
         await vscode.window.showWarningMessage(msg, options);
@@ -226,7 +233,7 @@ export function matchForSubstring(value: string, searchString: string, ignoreCas
 export async function loadCultures(context?: vscode.ExtensionContext): Promise<CulturesMap> {
     if (Object.keys(_cultures).length === 0) {
         if (context === undefined) {
-            logger().log('error', 'Failed to load list of cultures. Context is undefined.');
+            logger().log('loadCultures', 'error', 'Failed to load list of cultures. Context is undefined.');
             await showMessageBox('err', 'Failed to load list of cultures. Context is undefined. Please report this issue.');
             return {};
         }
@@ -240,7 +247,7 @@ export async function loadCultures(context?: vscode.ExtensionContext): Promise<C
             }
 
         } catch (error) {
-            logger().log('error', 'Failed to read or parse dist/cultures.json');
+            logger().log('loadCultures', 'error', 'Failed to read or parse dist/cultures.json');
             await showMessageBox('err', 'Failed to load list of cultures. Please reinstall the extension or report this issue.');
         }
     }

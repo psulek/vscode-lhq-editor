@@ -1,15 +1,33 @@
+import { isNullOrEmpty } from '@lhq/lhq-generators';
 import * as vscode from 'vscode';
 
 export type LogType = 'debug' | 'info' | 'warn' | 'error';
 
+
 export type ILogger = {
-    log: (level: LogType, msg: string, err?: Error) => void;
+    log: (ctx: string | object, level: LogType, msg: string, err?: Error) => void;
 };
 
 export class ConsoleLogger implements ILogger {
-    log(level: LogType, msg: string, err?: Error | undefined): void {
-        console[level](msg, err);
+    log(ctx: string | object, level: LogType, msg: string, err?: Error | undefined): void {
+        console[level](getFormattedMsg(ctx, msg), err);
     }
+}
+
+function getFormattedMsg(ctx: string | object, message: string): string {
+    let prefix = '';
+    if (typeof ctx === 'string') {
+        prefix = ctx ?? '';
+    }
+    else if (ctx) {
+        if (typeof ctx === 'object' && ctx.constructor && ctx.constructor.name) {
+            prefix = ctx.constructor.name ?? '';
+        } else {
+            prefix = ctx.toString();
+        }
+    }
+
+    return isNullOrEmpty(prefix) ? message : `[${prefix}] ${message}`;
 }
 
 export class VsCodeLogger implements ILogger {
@@ -26,10 +44,13 @@ export class VsCodeLogger implements ILogger {
         }
     }
 
-    log(level: LogType, msg: string, err?: Error | undefined): void {
-        const text = `[${level}] ${msg}` + (err ? `[${err.name}] ${err.message} ${err.stack}` : '');
+    log(ctx: string | object, level: LogType, msg: string, err?: Error | undefined): void {
+        const toConsole = this._debugMode || level === 'debug';
 
-        if (this._debugMode || level === 'debug') {
+        msg = msg + (err ? `[${err.name}] ${err.message} ${err.stack}` : '');
+        const text = `[${level}] ` + (toConsole ? getFormattedMsg(ctx, msg) : msg);
+
+        if (toConsole) {
             if (err) {
                 console.log(text, err);
             } else {
