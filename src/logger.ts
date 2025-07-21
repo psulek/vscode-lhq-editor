@@ -1,4 +1,4 @@
-import { isNullOrEmpty } from '@lhq/lhq-generators';
+import { AppError, isNullOrEmpty } from '@lhq/lhq-generators';
 import * as vscode from 'vscode';
 
 export type LogType = 'debug' | 'info' | 'warn' | 'error';
@@ -47,7 +47,16 @@ export class VsCodeLogger implements ILogger {
     log(ctx: string | object, level: LogType, msg: string, err?: Error | undefined): void {
         const toConsole = this._debugMode || level === 'debug';
 
-        msg = msg + (err ? `[${err.name}] ${err.message} ${err.stack}` : '');
+        let errInfo = '';
+        if (err) {
+            if (err instanceof AppError) {
+                errInfo = `${err.kind}|${err.code}|${err.cause} ${err.message}`;
+            } else {
+                errInfo = `[${err.name}] ${err.message} ${err.stack}`;
+            }
+        }
+
+        msg = `${msg} ${errInfo}`;
         const text = `[${level}] ` + (toConsole ? getFormattedMsg(ctx, msg) : msg);
 
         if (toConsole) {

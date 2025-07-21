@@ -267,6 +267,15 @@
 
                 break;
             }
+
+            case 'requestPageReload': {
+                //postMessage({ command: 'reloadPage' }, `Request page reload`);
+                const item = window.pageApp.item;
+                const data = { elementType: item.elementType, paths: toRaw(item.paths) };
+                postMessage({ command: 'select', reload: true, ...data }, `Page reload for ${item.elementType} (${window.pageApp.fullPath})`);
+
+                break;
+            }
         }
     });
 
@@ -873,8 +882,6 @@
 
             openResource() {
                 const data = { elementType: this.item.elementType, paths: toRaw(this.item.paths) };
-                //logMsg(`Click on ${this.item.elementType} (${this.fullPath}), sending message 'select' with data: `, data);
-                //vscode.postMessage({ command: 'select', ...data });
                 postMessage({ command: 'select', ...data }, `Open resource ${this.item.elementType} (${this.fullPath})`);
             },
 
@@ -1233,7 +1240,7 @@
             resetSettings() {
                 // logMsg(`Data changed, sending message 'resetSettings' with data: `, data);
                 // vscode.postMessage({ command: 'update', data: data });
-                postMessage({ command: 'resetSettings'});
+                postMessage({ command: 'resetSettings' });
             }
         }
     }).mount('#app');

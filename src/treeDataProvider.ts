@@ -166,39 +166,57 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
             return;
         }
 
-        const root = this._currentRootModel;
+        let result: ClientPageSettingsError | undefined;
 
-        root.options.categories = modelProperties.categories;
-        root.options.resources = modelProperties.categories ? modelProperties.resources : 'All';
+        try {
 
-        const templateId = modelProperties.codeGenerator.templateId;
+            const root = this._currentRootModel;
 
-        const validateResult = ModelUtils
-            .getCodeGeneratorSettingsConvertor()
-            .validateSettings(templateId, modelProperties.codeGenerator.settings);
+            root.options.categories = modelProperties.categories;
+            root.options.resources = modelProperties.categories ? modelProperties.resources : 'All';
 
-        if (!isNullOrEmpty(validateResult.error)) {
-            return {
-                group: validateResult.group,
-                name: validateResult.property,
-                message: validateResult.error
+            const templateId = modelProperties.codeGenerator.templateId;
+
+            const validateResult = ModelUtils
+                .getCodeGeneratorSettingsConvertor()
+                .validateSettings(templateId, modelProperties.codeGenerator.settings);
+
+            if (isNullOrEmpty(validateResult.error)) {
+                const codeGenerator = ModelUtils.createCodeGeneratorElement(templateId, modelProperties.codeGenerator.settings);
+                root.codeGenerator = codeGenerator;
+
+                const success = await this.applyChangesToTextDocument();
+
+                if (success) {
+                    void showMessageBox('info', 'Project properties was successfully changed.');
+                }
+            } else {
+                result = {
+                    group: validateResult.group,
+                    name: validateResult.property,
+                    message: validateResult.error
+                };
+            }
+        } catch (error) {
+            result = {
+                group: '',
+                name: '',
+                message: 'Unknown error occurred while saving model properties.'
             };
+            logger().log(this, 'error', `saveModelProperties -> Error saving model properties: ${result.message}`, error as Error);
         }
 
-        const codeGenerator = ModelUtils.createCodeGeneratorElement(templateId, modelProperties.codeGenerator.settings);
-        root.codeGenerator = codeGenerator;
-
-        const success = await this.applyChangesToTextDocument();
-
-        if (success) {
-            void showMessageBox('info', 'Project properties changes was applied.');
-        }
-
-        return undefined;
+        return result;
     }
 
     private get codeGeneratorTemplateId(): string | '' {
         return this._currentRootModel?.codeGenerator?.templateId ?? '';
+    }
+
+    public resetGeneratorStatus(): void {
+        if (this._lastLhqStatus === undefined || this._lastLhqStatus.kind === 'error' || !this._codeGeneratorInProgress) {
+            this.updateGeneratorStatus({ kind: 'idle' });
+        }
     }
 
     // returns uid of this status update
@@ -230,7 +248,6 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
                 textSuffix = false;
                 text = '$(run-all) LHQ';
                 command = Commands.runGenerator;
-                // tooltip = `[LHQ] Click to run code generator template \`${templateId}\``;
                 tooltip = `Click to run code generator template **${templateId}**`;
                 break;
 
@@ -244,13 +261,13 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
 
             case 'status':
                 text = info.success ? `$(check) ${info.message}` : `$(error) ${info.message}`;
+                tooltip = '';
                 backgroundId = info.success
                     ? 'statusBarItem.prominentBackground'
                     : 'statusBarItem.errorBackground';
                 colorId = info.success
                     ? 'statusBarItem.prominentForeground'
                     : 'statusBarItem.errorForeground';
-                //command = info.success ? Commands.runGenerator : undefined;
                 break;
             default:
                 logger().log(this, 'debug', `updateGeneratorStatus -> Unknown status kind: ${JSON.stringify(info)}`);
@@ -269,7 +286,7 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
         this._codeGeneratorStatus.backgroundColor = backgroundId === undefined ? undefined : new vscode.ThemeColor(backgroundId);
         this._codeGeneratorStatus.color = colorId === undefined ? undefined : new vscode.ThemeColor(colorId);
         this._codeGeneratorStatus.command = command;
-        this._codeGeneratorStatus.tooltip = new vscode.MarkdownString(tooltip + suffix, true);
+        this._codeGeneratorStatus.tooltip = isNullOrEmpty(tooltip) ? '' : new vscode.MarkdownString(tooltip + suffix, true);
 
         return result;
     }
@@ -323,14 +340,9 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
             }
         }
         catch (error) {
-            let msg = '';
-            if (error instanceof AppError) {
-                msg = error.message;
-            }
+            logger().log(this, 'error', `Code generator template '${templateId}' failed.`, error as Error);
 
-            logger().log(this, 'error', `Code generator template '${templateId}' failed ${msg}`, error as Error);
-
-            this.updateGeneratorStatus({ kind: 'error', message: `Error generating files. ${msg}` });
+            this.updateGeneratorStatus({ kind: 'error', message: `Error generating files.` });
         } finally {
             this._codeGeneratorInProgress = false;
 
@@ -515,6 +527,9 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
                 const success = await this.applyChangesToTextDocument();
 
                 this._onDidChangeTreeData.fire([elem]);
+
+                //await this.revealElement(elem, { expand: true, select: true, focus: true });
+
                 // if (this.selectedElements.length === 0) {
                 //     await this.setSelectedItems([elem]);
                 // }
@@ -666,6 +681,8 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
                 focus: options.focus,
                 expand: options.expand
             });
+        } else {
+            logger().log(this, 'debug', `revealElement -> TreeView is not available or item is undefined.`);
         }
     }
 
@@ -674,8 +691,9 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
         await vscode.commands.executeCommand('list.find', 'lhqTreeView');
     }
 
-    public async clearSelection(reselect: boolean = false): Promise<void> {
+    public async clearSelection(reselect?: boolean): Promise<void> {
         appContext.clearContextValues();
+        reselect = reselect ?? false;
 
         if (!this.view || this.view.selection.length === 0) {
             return;
@@ -695,11 +713,19 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
         if (itemToUse) {
             try {
                 // select/deselect trick
-                await this.revealElement(itemToUse, { select: true, focus: false, expand: false });
-                await this.revealElement(itemToUse, { select: false, focus: false, expand: false });
+                //await this.revealElement(itemToUse, { select: true, focus: false, expand: false });
+
+                // select 'lang root' to hack clear/set selection
+                const langRoot = this.currentVirtualRootElement!.languagesRoot;
+                await this.revealElement(langRoot, { select: true, focus: false, expand: false });
+
+
+                //await this.revealElement(itemToUse, { select: false, focus: false, expand: false });
 
                 if (reselect) {
                     await this.revealElement(itemToUse, { select: true, focus: true, expand: false });
+                } else {
+                    await this.revealElement(itemToUse, { select: false, focus: false, expand: false });
                 }
             } catch (error) {
                 console.error("Failed to clear selection using two-step reveal:", error);
@@ -734,6 +760,10 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
             //logger().log('debug', '[LhqTreeDataProvider] setSelectedItems -> No items provided to select.');
             return;
         }
+
+        // select 'lang root' to hack clear/set selection
+        const langRoot = this.currentVirtualRootElement!.languagesRoot;
+        await this.revealElement(langRoot, { select: true, focus: false, expand: false });
 
         for (let i = 0; i < itemsToSelect.length; i++) {
             const item = itemsToSelect[i];
@@ -910,18 +940,33 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
             return;
         }
 
-        this._currentRootModel!.primaryLanguage = langElement.name;
+        const langRoot = this.currentVirtualRootElement!.languagesRoot;
 
+        this._currentRootModel!.primaryLanguage = langElement.name;
         const success = await this.applyChangesToTextDocument();
 
         if (success) {
-            //this.reflectSelectedElementToWebview();
             await this.clearSelection(true);
+
+            this._onDidChangeTreeData.fire([langRoot]);
+            await this.revealElement(langRoot, { expand: true, select: true, focus: true });
+
+            // reload actual page with element data to show new primary language
+            this.requestPageReload();
         }
 
         await showMessageBox(success ? 'info' : 'err', success
             ? `Successfully marked '${getCultureDesc(langElement.name)}' as primary language.`
             : `Failed to mark '${getCultureDesc(langElement.name)}' as primary language.`, { modal: !success });
+    }
+
+    public requestPageReload(): void {
+        if (!this.currentDocument) {
+            return;
+        }
+
+        // reload actual page with element data
+        appContext.sendMessageToHtmlPage({ command: 'requestPageReload' });
     }
 
     private async deleteLanguage(element: ITreeElement): Promise<void> {
@@ -974,8 +1019,21 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
         });
 
         const success = await this.applyChangesToTextDocument();
+
+        //langRoot.refresh();
+        const langRoot = this.currentVirtualRootElement!.languagesRoot;
+
+        await this.clearSelection(true);
+        langRoot.refresh();
+        this._onDidChangeTreeData.fire([langRoot]);
+        await this.revealElement(langRoot, { expand: true, select: true, focus: true });
+        // reload actual page with element data to show new primary language
+        this.requestPageReload();
+
         await showMessageBox(success ? 'info' : 'err',
             success ? `Successfully deleted ${elemIdent}.` : `Failed to delete ${elemIdent}.`, { modal: !success });
+
+        this.requestPageReload();
     }
 
     private async deleteElement(element: ITreeElement): Promise<void> {
@@ -1342,8 +1400,12 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
 
         await this.applyChangesToTextDocument();
 
+        await this.clearSelection(true);
+        langRoot.refresh();
         this._onDidChangeTreeData.fire([langRoot]);
         await this.revealElement(langRoot, { expand: true, select: true, focus: true });
+        // reload actual page with element data to show new primary language
+        this.requestPageReload();
 
         if (added.length > 0) {
             const maxDisplayCount = 5;
@@ -1356,62 +1418,67 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
         } else {
             await showMessageBox('warn', `No languages were added as they already exist in the model.`);
         }
+
+        //this.requestPageReload();
     }
 
     private async addItemComplete(parent: ITreeElement, elementType: TreeElementType) {
-        const isResource = elementType === 'resource';
-        const parentCategory = parent as ICategoryLikeTreeElement;
-        const elemPath = getElementFullPath(parent);
-        const itemName = await vscode.window.showInputBox({
-            prompt: `Enter new ${elementType} name (${elemPath})`,
-            ignoreFocusOut: true,
-            validateInput: value => this.validateElementName(elementType, value, parentCategory)
-        });
+        try {
+            const isResource = elementType === 'resource';
+            const parentCategory = parent as ICategoryLikeTreeElement;
+            const elemPath = getElementFullPath(parent);
+            const itemName = await vscode.window.showInputBox({
+                prompt: `Enter new ${elementType} name (${elemPath})`,
+                ignoreFocusOut: true,
+                validateInput: value => this.validateElementName(elementType, value, parentCategory)
+            });
 
-        if (!itemName) {
-            return;
+            if (!itemName) {
+                return;
+            }
+
+            // after previous await, document can be closed now...
+            if (!this.currentDocument) {
+                return;
+            }
+
+            const validationError = this.validateElementName(elementType, itemName, parentCategory);
+            if (validationError) {
+                return await showMessageBox('warn', validationError);
+            }
+
+            // do not allow resources under root if not enabled in project properties
+            if (!this.resourcesUnderRoot && isResource && parentCategory.elementType === 'model') {
+                return await showMessageBox('warn', `Resources are not allowed under root!`,
+                    {
+                        detail: `Cannot add resource '${itemName}' under root element '${getElementFullPath(parent)}'.\n\n` +
+                            `NOTE: 'Resources under root' can be enabled in project properties.`, modal: true
+                    });
+            }
+            // do not allow categories in flat structure
+            if (!this.isTreeStructure && !isResource && parentCategory.elementType === 'model') {
+                return await showMessageBox('warn', `Categories are not allowed in flat structure!`,
+                    {
+                        detail: `Cannot add category '${itemName}' under root element '${getElementFullPath(parent)}'.\n\n` +
+                            `NOTE: 'Hierarchical tree structure' can be enabled in project properties.`, modal: true
+                    });
+            }
+
+            let newElement: ITreeElement;
+            if (isResource) {
+                newElement = parentCategory.addResource(itemName);
+            } else {
+                newElement = parentCategory.addCategory(itemName);
+            }
+
+            await this.applyChangesToTextDocument();
+            this._onDidChangeTreeData.fire([parent]);
+            await this.revealElement(newElement, { expand: true, select: true, focus: true });
+
+            return await showMessageBox('info', `Added new ${elementType} '${itemName}' under '${getElementFullPath(parent)}'`);
+        } catch (error) {
+            logger().log(this, 'error', `addItemComplete -> Failed to add new ${elementType} under '${getElementFullPath(parent)}'`, error as Error);
         }
-
-        // after previous await, document can be closed now...
-        if (!this.currentDocument) {
-            return;
-        }
-
-        const validationError = this.validateElementName(elementType, itemName, parentCategory);
-        if (validationError) {
-            return await showMessageBox('warn', validationError);
-        }
-
-        // do not allow resources under root if not enabled in project properties
-        if (!this.resourcesUnderRoot && isResource && parentCategory.elementType === 'model') {
-            return await showMessageBox('warn', `Resources are not allowed under root!`,
-                {
-                    detail: `Cannot add resource '${itemName}' under root element '${getElementFullPath(parent)}'.\n\n` +
-                        `NOTE: 'Resources under root' can be enabled in project properties.`, modal: true
-                });
-        }
-        // do not allow categories in flat structure
-        if (!this.isTreeStructure && !isResource && parentCategory.elementType === 'model') {
-            return await showMessageBox('warn', `Categories are not allowed in flat structure!`,
-                {
-                    detail: `Cannot add category '${itemName}' under root element '${getElementFullPath(parent)}'.\n\n` +
-                        `NOTE: 'Hierarchical tree structure' can be enabled in project properties.`, modal: true
-                });
-        }
-
-        let newElement: ITreeElement;
-        if (isResource) {
-            newElement = parentCategory.addResource(itemName);
-        } else {
-            newElement = parentCategory.addCategory(itemName);
-        }
-
-        await this.applyChangesToTextDocument();
-        this._onDidChangeTreeData.fire([parent]);
-        await this.revealElement(newElement, { expand: true, select: true, focus: true });
-
-        return await showMessageBox('info', `Added new ${elementType} '${itemName}' under '${getElementFullPath(parent)}'`,
-            { logger: true });
     }
 
     public hasActiveDocument(): boolean {
@@ -1473,7 +1540,7 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
                         this.refresh();
                     }
 
-                    resolve();
+                    return resolve();
                 } else if (appContext.isEditorActive) {
                     logger().log(this, 'debug', `updateDocument -> [INVALID] - ${docPath}`);
                     this.view.title = `LHQ Structure`;
@@ -1484,10 +1551,10 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
 
                     nextTick(() => {
                         appContext.isEditorActive = false;
-                        resolve();
+                        return resolve();
                     });
                 } else {
-                    resolve();
+                    return resolve();
                 }
             });
         });
@@ -1595,10 +1662,10 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
     }
 
     getParent(element: ITreeElement): vscode.ProviderResult<ITreeElement> {
-        // if (isVirtualTreeElement(element)) {
-        //     debugger;
-        //     console.warn('!!!!!');
-        // }
+        if (isVirtualTreeElement(element)) {
+            debugger;
+            console.warn('!!!!!');
+        }
         return element.parent;
     }
 } 

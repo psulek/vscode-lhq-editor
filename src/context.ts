@@ -5,11 +5,12 @@ import { glob } from 'glob';
 import { AppToPageMessage, IAppContext, ITreeContext, IVirtualLanguageElement, SelectionChangedCallback } from './types';
 import { Generator, GeneratorInitialization, HbsTemplateManager, ITreeElement, ModelUtils, generatorUtils } from '@lhq/lhq-generators';
 import { VirtualTreeElement } from './elements';
-import { DefaultFormattingOptions, getElementFullPath, initializeDebugMode, isValidDocument, loadCultures, logger, safeReadFile, showConfirmBox, showMessageBox } from './utils';
+import { DefaultFormattingOptions, delay, getElementFullPath, initializeDebugMode, isValidDocument, loadCultures, logger, safeReadFile, showConfirmBox, showMessageBox } from './utils';
 import { LhqEditorProvider } from './editorProvider';
 import { LhqTreeDataProvider } from './treeDataProvider';
 import { HostEnvironmentCli } from './hostEnv';
 import EventEmitter from 'events';
+import { VsCodeLogger } from './logger';
 
 const globalStateKeys = {
     languagesVisible: 'languagesVisible'
@@ -77,7 +78,7 @@ export class AppContext implements IAppContext {
         this._eventEmitter.on(event, listener);
         return this;
     }
-    
+
     public off(event: string, listener: (...args: any[]) => void): this {
         this._eventEmitter.off(event, listener);
         return this;
@@ -98,38 +99,12 @@ export class AppContext implements IAppContext {
 
         this._ctx.subscriptions.push(
             vscode.commands.registerCommand('lhq.showOutput', () => {
-                vscode.commands.executeCommand('workbench.action.showOutput', 'LHQ Editor');
+                //vscode.commands.executeCommand('workbench.action.showOutput', 'LHQ Editor');
+                VsCodeLogger.showPanel();
+                this._lhqTreeDataProvider.resetGeneratorStatus();
             }),
 
-            vscode.workspace.onDidChangeTextDocument(async e => {
-                if (!e.reason) {
-                    logger().log(this, 'debug', `onDidChangeTextDocument -> No reason provided, ignoring change for document: ${e.document?.fileName ?? '-'}`);
-                    return;
-                }
-                const reason = e.reason === vscode.TextDocumentChangeReason.Undo ? 'Undo' : 'Redo';
-                const hasReason = e.reason !== undefined;
-                logger().log(this, 'debug', `onDidChangeTextDocument -> document: ${e.document?.fileName ?? '-'}, reason: ${reason}`);
-
-                const docUri = e.document?.uri.toString() ?? '';
-                if (isValidDocument(e.document)) {
-                    const treeDocUri = this._lhqTreeDataProvider.documentUri;
-                    if (treeDocUri === docUri) {
-                        // TODO: make it work? save/restore tree selection?
-                        const selectionBackup = hasReason ? this._lhqTreeDataProvider.backupSelection() : undefined;
-                        await this._lhqTreeDataProvider.clearSelection();
-
-                        await this._lhqTreeDataProvider.updateDocument(e.document, hasReason);
-
-                        // if (selectionBackup && this._lhqTreeDataProvider.currentRootModel) {
-                        //     await this._lhqTreeDataProvider.restoreSelection(selectionBackup);
-                        // }
-                    } else {
-                        logger().log(this, 'debug', `onDidChangeTextDocument -> Document uri (${docUri}) is not same as treeview has (${treeDocUri}), ignoring change.`);
-                    }
-                } else {
-                    logger().log(this, 'debug', `onDidChangeTextDocument -> Document (${docUri}) is not valid, ignoring change.`);
-                }
-            }),
+            vscode.workspace.onDidChangeTextDocument(this.handleDidChangeTextDocument.bind(this)),
 
             vscode.workspace.onWillSaveTextDocument(async (event: vscode.TextDocumentWillSaveEvent) => {
                 // if (event.document.uri.toString() === document.uri.toString()) {
@@ -169,6 +144,50 @@ export class AppContext implements IAppContext {
         vscode.commands.registerCommand(Commands.createNewLhqFile, () => this.createNewLhqFile());
     }
 
+    private async handleDidChangeTextDocument(e: vscode.TextDocumentChangeEvent) {
+        if (!e.reason) {
+            logger().log(this, 'debug', `onDidChangeTextDocument -> No reason provided, ignoring change for document: ${e.document?.fileName ?? '-'}`);
+            return;
+        }
+
+        const reason = e.reason === vscode.TextDocumentChangeReason.Undo ? 'Undo' : 'Redo';
+        //const hasReason = e.reason !== undefined;
+        logger().log(this, 'debug', `onDidChangeTextDocument -> document: ${e.document?.fileName ?? '-'}, reason: ${reason}`);
+
+        const docUri = e.document?.uri.toString() ?? '';
+        if (isValidDocument(e.document)) {
+            const treeDocUri = this._lhqTreeDataProvider.documentUri;
+            if (treeDocUri === docUri) {
+                // TODO: make it work? save/restore tree selection?
+                //const selectionBackup = hasReason ? this._lhqTreeDataProvider.backupSelection() : undefined;
+                // const selectionBackup = this._lhqTreeDataProvider.backupSelection();
+
+                //await this._lhqTreeDataProvider.clearSelection();
+
+                await this._lhqTreeDataProvider.updateDocument(e.document, true);
+
+                // void this._lhqTreeDataProvider.updateDocument(e.document, true)
+                //     .then(async () => {
+                //         console.log('Document updated successfully');
+                //         await delay(500);
+                //         console.log('Requesting page reload');
+                //         this._lhqTreeDataProvider.requestPageReload();
+                //     });
+
+                // await delay(500);
+
+                this._lhqTreeDataProvider.requestPageReload();
+
+                // if (selectionBackup && this._lhqTreeDataProvider.currentRootModel) {
+                //     await this._lhqTreeDataProvider.restoreSelection(selectionBackup);
+                // }
+            } else {
+                logger().log(this, 'debug', `onDidChangeTextDocument -> Document uri (${docUri}) is not same as treeview has (${treeDocUri}), ignoring change.`);
+            }
+        } else {
+            logger().log(this, 'debug', `onDidChangeTextDocument -> Document (${docUri}) is not valid, ignoring change.`);
+        }
+    }
 
     private async initGenerator(context: vscode.ExtensionContext): Promise<void> {
         try {

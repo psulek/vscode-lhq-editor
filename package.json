@@ -48,69 +48,83 @@
     "commands": [
       {
         "command": "lhqTreeView.projectProperties",
+        "category": "LHQ",
         "title": "Properties",
         "icon": "$(settings-gear)"
       },
       {
         "command": "lhqTreeView.addElement",
+        "category": "LHQ",
         "title": "Add element",
         "icon": "$(new-file)"
       },
       {
         "command": "lhqTreeView.addLanguage",
+        "category": "LHQ",
         "title": "Add language",
         "icon": "$(new-file)"
       },
       {
         "command": "lhqTreeView.addCategory",
+        "category": "LHQ",
         "title": "Add category"
       },
       {
         "command": "lhqTreeView.addResource",
+        "category": "LHQ",
         "title": "Add resource"
       },
       {
         "command": "lhqTreeView.renameElement",
+        "category": "LHQ",
         "title": "Rename element",
         "icon": "$(edit)"
       },
       {
         "command": "lhqTreeView.deleteElement",
+        "category": "LHQ",
         "title": "Delete element(s)",
         "icon": "$(trash)"
       },
       {
         "command": "lhqTreeView.deleteLanguage",
+        "category": "LHQ",
         "title": "Delete language(s)",
         "icon": "$(trash)"
       },
       {
         "command": "lhqTreeView.findInTreeView",
+        "category": "LHQ",
         "title": "Find",
         "icon": "$(search)"
       },
       {
         "command": "lhqTreeView.markLanguageAsPrimary",
+        "category": "LHQ",
         "title": "Mark language as primary",
         "icon": "$(check)"
       },
       {
         "command": "lhqTreeView.showLanguages",
+        "category": "LHQ",
         "title": "Toggle languages (show)",
         "icon": "$(layers)"
       },
       {
         "command": "lhqTreeView.hideLanguages",
+        "category": "LHQ",
         "title": "Toggle languages (hide)",
         "icon": "$(layers-active)"
       },
       {
         "command": "lhqTreeView.createNewLhqFile",
+        "category": "LHQ",
         "title": "Create strings localization file (LHQ Editor)",
         "icon": "$(new-file)"
       },
       {
         "command": "lhqTreeView.runGenerator",
+        "category": "LHQ",
         "title": "Run code generator",
         "icon": "$(run-all)"
       }

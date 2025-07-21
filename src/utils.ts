@@ -80,7 +80,7 @@ export async function showMessageBox(type: 'warn' | 'info' | 'err', message: str
     }
 
     options = options ?? {};
-    const addToLogger = options.logger ?? false;
+    const addToLogger = options.logger ?? true;
     delete options.logger;
 
     if (addToLogger) {

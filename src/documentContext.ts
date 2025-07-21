@@ -71,7 +71,8 @@ export class DocumentContext {
 
 
     private async handleClientCommands(message: PageToAppMessage): Promise<void> {
-        logger().log(this, 'debug', `webview.onDidReceiveMessage: ${message.command} for ${this.fileName}`);
+        const header = `handleClientCommand '${message.command}'`;
+        logger().log(this, 'debug', `${header} for ${this.fileName}`);
         switch (message.command) {
             case 'update':
                 try {
@@ -80,22 +81,27 @@ export class DocumentContext {
                         await appContext.treeContext.updateElement(element);
                     }
                 } catch (e) {
-                    logger().log(this, 'error', `webview.onDidReceiveMessage: Error parsing element data: ${e}`);
+                    logger().log(this, 'error', `${header} - error parsing element data: ${e}`);
                     return;
                 }
                 break;
             case 'select':
                 try {
+                    const reload = message.reload ?? false;
+                    if (reload) {
+                        await appContext.treeContext.clearSelection();
+                    }
+
                     await appContext.treeContext.selectElementByPath(message.elementType, message.paths);
                 } catch (e) {
-                    logger().log(this, 'error', `webview.onDidReceiveMessage: Error selecting element: ${e}`);
+                    logger().log(this, 'error', `${header} - error selecting element: ${e}`);
                     return;
                 }
                 break;
             case 'saveProperties': {
                 const error = await appContext.treeContext.saveModelProperties(message.modelProperties);
                 if (error) {
-                    logger().log(this, 'error', `webview.onDidReceiveMessage: Error saving properties: ${error}`);
+                    logger().log(this, 'error', `${header} - error saving properties: ${error.message}`);
                 }
                 this.sendMessageToHtmlPage({ command: 'savePropertiesResult', error });
                 break;
@@ -103,7 +109,7 @@ export class DocumentContext {
             case 'resetSettings': {
                 const rootModel = appContext.treeContext.currentRootModel!;
                 if (!rootModel) {
-                    logger().log(this, 'error', `webview.onDidReceiveMessage: No current root model found.`);
+                    logger().log(this, 'error', `${header} No current root model found.`);
                     return;
                 }
 

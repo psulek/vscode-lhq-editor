@@ -100,7 +100,9 @@ export type AppToPageMessage = {
 } | {
     command: 'resetSettingsResult'
     settings: CodeGeneratorGroupSettings;
-};
+} | {
+    command: 'requestPageReload' // usually after language(s) change
+}
 
 export type PageToAppMessage = {
     command: 'update',
@@ -109,6 +111,7 @@ export type PageToAppMessage = {
     command: 'select',
     paths: string[];
     elementType: TreeElementType
+    reload?: boolean;
 } | {
     command: 'saveProperties',
     modelProperties: ClientPageModelProperties;
@@ -149,6 +152,8 @@ export interface ITreeContext {
 
     updateDocument(document: TextDocument | undefined): Promise<void>;
 
+    clearSelection(reselect?: boolean): Promise<void>;
+    
     selectElementByPath(elementType: TreeElementType, path: string[]): Promise<void>;
 
     saveModelProperties(modelProperties: ClientPageModelProperties): Promise<ClientPageSettingsError | undefined>;

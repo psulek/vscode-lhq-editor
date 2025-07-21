@@ -119,8 +119,9 @@ export class LanguagesElement extends VirtualTreeElement {
 
     constructor(root: IRootModelElement, name: string) {
         super(root, name, 'languages');
+        this.refresh();
 
-        this._virtualLangs = [];
+        /* this._virtualLangs = [];
         const primary = root.languages.find(lang => this.root.primaryLanguage === lang);
         if (!isNullOrEmpty(primary)) {
             this._virtualLangs.push(new LanguageElement(root, primary));
@@ -128,6 +129,20 @@ export class LanguagesElement extends VirtualTreeElement {
         root.languages.forEach(lang => {
             if (lang !== this.root.primaryLanguage) {
                 this._virtualLangs.push(new LanguageElement(root, lang));
+            }
+        }); */
+    }
+
+    public refresh(): void {
+        this._virtualLangs = [];
+        const primary = this.root.languages.find(lang => this.root.primaryLanguage === lang);
+        if (!isNullOrEmpty(primary)) {
+            this._virtualLangs.push(new LanguageElement(this.root, primary));
+        }
+        
+        this.root.languages.forEach(lang => {
+            if (lang !== this.root.primaryLanguage) {
+                this._virtualLangs.push(new LanguageElement(this.root, lang));
             }
         });
     }
