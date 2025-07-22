@@ -95,14 +95,19 @@ export class VirtualTreeElement implements IVirtualTreeElement {
 export class VirtualRootElement extends VirtualTreeElement {
     private _languagesRoot: LanguagesElement;
 
-    constructor(root: IRootModelElement, languagesVisible: boolean) {
+    constructor(root: IRootModelElement) {
         super(root, root.name, 'treeRoot');
+        this._languagesRoot = new LanguagesElement(root, '');
+        this.refresh();
+    }
+
+    public refresh(): void {
         let label = 'Languages';
-        if (!languagesVisible) {
-            const primary = root.primaryLanguage ?? '';
-            label += `: ${root.languages?.length ?? 0} (primary: ${primary})`;
+        if (!appContext.languagesVisible) {
+            const primary = this.root.primaryLanguage ?? '';
+            label += `: ${this.root.languages?.length ?? 0} (primary: ${primary})`;
         }
-        this._languagesRoot = new LanguagesElement(root, label);
+        this._languagesRoot.name = label;
     }
 
     get languagesRoot(): LanguagesElement {
@@ -120,17 +125,6 @@ export class LanguagesElement extends VirtualTreeElement {
     constructor(root: IRootModelElement, name: string) {
         super(root, name, 'languages');
         this.refresh();
-
-        /* this._virtualLangs = [];
-        const primary = root.languages.find(lang => this.root.primaryLanguage === lang);
-        if (!isNullOrEmpty(primary)) {
-            this._virtualLangs.push(new LanguageElement(root, primary));
-        }
-        root.languages.forEach(lang => {
-            if (lang !== this.root.primaryLanguage) {
-                this._virtualLangs.push(new LanguageElement(root, lang));
-            }
-        }); */
     }
 
     public refresh(): void {

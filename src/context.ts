@@ -5,7 +5,10 @@ import { glob } from 'glob';
 import { AppToPageMessage, IAppContext, ITreeContext, IVirtualLanguageElement, SelectionChangedCallback } from './types';
 import { Generator, GeneratorInitialization, HbsTemplateManager, ITreeElement, ModelUtils, generatorUtils } from '@lhq/lhq-generators';
 import { VirtualTreeElement } from './elements';
-import { DefaultFormattingOptions, delay, getElementFullPath, initializeDebugMode, isValidDocument, loadCultures, logger, safeReadFile, showConfirmBox, showMessageBox } from './utils';
+import {
+    DefaultFormattingOptions, getElementFullPath, initializeDebugMode, isValidDocument, loadCultures,
+    logger, safeReadFile, showConfirmBox, showMessageBox
+} from './utils';
 import { LhqEditorProvider } from './editorProvider';
 import { LhqTreeDataProvider } from './treeDataProvider';
 import { HostEnvironmentCli } from './hostEnv';
@@ -97,12 +100,31 @@ export class AppContext implements IAppContext {
         initializeDebugMode(ctx.extensionMode);
         await loadCultures(ctx);
 
+        // const lhqFs = new LhqFileSystemProvider();
+        // const uriHandler = new LhqUriHandler();
+
+
+        // NOTE: For testing...
+        // context.subscriptions.push(vscode.commands.registerCommand('lhq-editor.open', () => {
+        //     const activeEditor = vscode.window.activeTextEditor;
+        //     if (activeEditor) {
+        //         const docUri = activeEditor.document.uri;
+        //         // This is the core logic: open the file with our custom editor's viewType.
+        //         vscode.commands.executeCommand('vscode.openWith', docUri, LhqEditorProvider.viewType);
+        //     }
+        // }));
+
         this._ctx.subscriptions.push(
             vscode.commands.registerCommand('lhq.showOutput', () => {
                 //vscode.commands.executeCommand('workbench.action.showOutput', 'LHQ Editor');
                 VsCodeLogger.showPanel();
                 this._lhqTreeDataProvider.resetGeneratorStatus();
             }),
+
+            // vscode.workspace.registerFileSystemProvider('lhq', lhqFs, { isCaseSensitive: true, isReadonly: false }),
+            // vscode.window.registerUriHandler(uriHandler),
+
+            //vscode.workspace.onDidOpenTextDocument(this.handleDidOpenTextDocument.bind(this)),
 
             vscode.workspace.onDidChangeTextDocument(this.handleDidChangeTextDocument.bind(this)),
 
@@ -113,16 +135,8 @@ export class AppContext implements IAppContext {
 
                     if (validationError) {
                         await showMessageBox('warn', validationError.message, { detail: validationError.detail, modal: true });
-
-                        // event.waitUntil(
-                        //     new Promise<vscode.TextEdit[]>((_resolve, reject) => {
-                        //         throw new Error(validationError.message);
-                        //         //reject(new Error(validationError.message));
-                        //     })
-                        // );
-
                     } else {
-                        //event.waitUntil(Promise.resolve([] as vscode.TextEdit[]));
+                        // event.waitUntil(this.processBeforeSave(event.document));
                     }
                 }
             })
@@ -143,6 +157,34 @@ export class AppContext implements IAppContext {
         // commands
         vscode.commands.registerCommand(Commands.createNewLhqFile, () => this.createNewLhqFile());
     }
+
+    /* private async processBeforeSave(document: vscode.TextDocument): Promise<vscode.TextEdit[]> {
+        const edits: vscode.TextEdit[] = [];
+
+        // Get the current content
+        const text = document.getText();
+
+        // Process the content (modify as needed)
+        const modifiedText = yourModificationFunction(text);
+
+        // Create a full document replace edit
+        const firstLine = document.lineAt(0);
+        const lastLine = document.lineAt(document.lineCount - 1);
+        const textRange = new vscode.Range(
+            firstLine.range.start,
+            lastLine.range.end
+        );
+
+        edits.push(vscode.TextEdit.replace(textRange, modifiedText));
+
+        return edits;
+    } */
+
+    // private handleDidOpenTextDocument(e: vscode.TextDocument): void {
+    //     if (isValidDocument(e)) {
+
+    //     }
+    // }
 
     private async handleDidChangeTextDocument(e: vscode.TextDocumentChangeEvent) {
         if (!e.reason) {
@@ -166,15 +208,6 @@ export class AppContext implements IAppContext {
 
                 await this._lhqTreeDataProvider.updateDocument(e.document, true);
 
-                // void this._lhqTreeDataProvider.updateDocument(e.document, true)
-                //     .then(async () => {
-                //         console.log('Document updated successfully');
-                //         await delay(500);
-                //         console.log('Requesting page reload');
-                //         this._lhqTreeDataProvider.requestPageReload();
-                //     });
-
-                // await delay(500);
 
                 this._lhqTreeDataProvider.requestPageReload();
 

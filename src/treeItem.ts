@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
-import { ICategoryLikeTreeElement, ITreeElement } from '@lhq/lhq-generators';
-import { getElementFullPath, toPascalCasing } from './utils';
+import { ICategoryLikeTreeElement, isNullOrEmpty, ITreeElement, ModelUtils } from '@lhq/lhq-generators';
+import { getElementFullPath, logger, toPascalCasing } from './utils';
 import { isVirtualTreeElement, VirtualTreeElement } from './elements';
 import { SearchTreeOptions, AppTreeElementType, IVirtualLanguageElement } from './types';
 
@@ -17,7 +17,6 @@ const icons: Record<AppTreeElementType, string> = {
 const primaryLangIcon = 'debug-breakpoint-log';
 
 export class LhqTreeItem extends vscode.TreeItem {
-
     constructor(
         public readonly element: ITreeElement,
         public readonly searchOptions: SearchTreeOptions
@@ -25,7 +24,8 @@ export class LhqTreeItem extends vscode.TreeItem {
         const elementType = element.elementType as AppTreeElementType;
 
         let virtualElement: VirtualTreeElement | undefined;
-        if (isVirtualTreeElement(element)) {
+        const isVirtualElem = isVirtualTreeElement(element);
+        if (isVirtualElem) {
             virtualElement = element as VirtualTreeElement;
         }
 
@@ -66,7 +66,17 @@ export class LhqTreeItem extends vscode.TreeItem {
 
         const label = { label: elementName, highlights };
         super(label, collapsibleState);
+
         this.contextValue = elementType;
+
+        if (!isVirtualElem) {
+            this.id = element.data['uid'] as string ?? '';
+            if (isNullOrEmpty(this.id)) {
+                throw new Error(`Element ${elementName} has no UID set!`);
+            }
+            logger().log(this, 'debug', `Created tree item for element: ${elementName} ${elementType} (${this.id})`);
+        }
+
         let icon = icons[elementType];
 
         if (virtualElement) {

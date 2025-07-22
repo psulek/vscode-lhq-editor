@@ -364,13 +364,18 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
         appContext.sendMessageToHtmlPage({ command: 'showProperties' });
     }
 
-    private toggleLanguages(visible: boolean): void {
+    private async toggleLanguages(visible: boolean): Promise<void> {
         appContext.languagesVisible = visible;
 
         if (!this.currentVirtualRootElement) {
             return;
         }
-        this.refresh();
+
+        this._onDidChangeTreeData.fire(undefined);
+        this.currentVirtualRootElement.refresh();
+
+        const langRoot = this.currentVirtualRootElement!.languagesRoot;
+        await this.revealElement(langRoot, { select: true, focus: false, expand: true });
     }
 
     public async selectElementByPath(elementType: TreeElementType, path: string[]): Promise<void> {
@@ -1194,7 +1199,7 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
         }
 
         // const serializedRoot = ModelUtils.serializeTreeElement(this._currentRootModel!, this.currentFormatting);
-        const newModel = ModelUtils.elementToModel<LhqModel>(this._currentRootModel!);
+        const newModel = ModelUtils.elementToModel<LhqModel>(this._currentRootModel!, {keepData: true, keepDataKeys: ['uid']});
         const serializedRoot = ModelUtils.serializeModel(newModel, this.currentFormatting);
 
         const edit = new vscode.WorkspaceEdit();
@@ -1529,11 +1534,10 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
                 const docUri = document ? document.uri.toString() : '';
                 const docPath = document ? document.uri.fsPath : '';
                 if (isValidDocument(document)) {
-                    //logger().log('debug', `[LhqTreeDataProvider] updateDocument -> [VALID] - ${docPath}`);
                     appContext.isEditorActive = true;
 
                     const baseName = path.basename(docPath);
-                    this.view.title = `${baseName}`; // [LHQ Structure]`;
+                    this.view.title = `${baseName}`;
 
                     if (this.currentDocument?.uri.toString() !== docUri || !this._currentRootModel || forceRefresh) {
                         this.currentDocument = document;
@@ -1560,7 +1564,7 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
         });
     }
 
-    refresh(): void {
+    private refresh(): void {
         this.clearPageErrors();
 
         this._codeGeneratorInProgress = false;
@@ -1590,7 +1594,13 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
                     validateResult = generatorUtils.validateLhqModel(this.currentJsonModel);
                     if (validateResult.success && validateResult.model) {
                         this._currentRootModel = ModelUtils.createRootElement(validateResult.model);
-                        this.currentVirtualRootElement = new VirtualRootElement(this._currentRootModel, appContext.languagesVisible);
+                        this.currentVirtualRootElement = new VirtualRootElement(this._currentRootModel);
+
+                        // generate uids for tree elements to be used in treeview as unique id
+                        this._currentRootModel!.iterateTree(elem => {
+                            ModelUtils.setTempData(elem, 'uid', crypto.randomUUID());
+                        });
+
                     } else {
                         this.currentJsonModel = null;
                     }
