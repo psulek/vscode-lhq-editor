@@ -49,6 +49,16 @@
     },
     "commands": [
       {
+        "command": "lhqTreeView.focusTree",
+        "category": "LHQ",
+        "title": "Focus Tree View"
+      },
+      {
+        "command": "lhqTreeView.focusEditor",
+        "category": "LHQ",
+        "title": "Focus Editor"
+      },
+      {
         "command": "lhqTreeView.projectProperties",
         "category": "LHQ",
         "title": "Properties",
@@ -151,11 +161,11 @@
           "command": "lhqTreeView.addLanguage",
           "when": "view == lhqTreeView && lhqTreeHasLanguageSelection",
           "group": "navigation"
-        }, 
+        },
         {
-            "command": "lhqTreeView.runGenerator",
-            "when": "view == lhqTreeView",
-            "group": "navigation"
+          "command": "lhqTreeView.runGenerator",
+          "when": "view == lhqTreeView && !lhqGeneratorIsRunning",
+          "group": "navigation"
         }
       ],
       "view/item/context": [
@@ -212,6 +222,16 @@
         "command": "lhqTreeView.addResource",
         "key": "insert",
         "when": "lhqEditorIsActive && !lhqTreeHasMultiSelection && !lhqTreeHasLanguageSelection"
+      }, 
+      {
+        "command": "lhqTreeView.focusTree",
+        "key": "f2",
+        "when": "lhqEditorIsActive"
+      },
+      {
+        "command": "lhqTreeView.focusEditor",
+        "key": "f4",
+        "when": "lhqEditorIsActive"
       }
     ]
   },

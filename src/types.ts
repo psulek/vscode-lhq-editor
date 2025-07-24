@@ -115,6 +115,8 @@ export type AppToPageMessage = {
     settings: CodeGeneratorGroupSettings;
 } | {
     command: 'requestPageReload' // usually after language(s) change
+} | {
+    command: 'focus'
 }
 
 export type PageToAppMessage = {
@@ -151,7 +153,7 @@ export interface IAppContext {
     on(event: string, listener: (...args: any[]) => void): this;
     off(event: string, listener: (...args: any[]) => void): this;
 
-    clearContextValues(): void;
+    clearTreeContextValues(): void;
     getFileUri(...pathParts: string[]): Uri;
     getPageHtml(): Promise<string>;
     getMediaUri(webview: Webview, filename: string, themed?: boolean): Uri
@@ -159,7 +161,7 @@ export interface IAppContext {
     setSelectionChangedCallback(callback: SelectionChangedCallback): void;
     setTreeSelection(selectedElements: ITreeElement[]): void;
 
-    runCodeGenerator(): void;
+    // runCodeGenerator(): void;
     sendMessageToHtmlPage(message: AppToPageMessage): void;
 
     enableEditorActive(): void;

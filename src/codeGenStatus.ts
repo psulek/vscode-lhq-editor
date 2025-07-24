@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { isNullOrEmpty } from '@lhq/lhq-generators';
 
 import { CodeGeneratorStatusInfo, ICodeGenStatus, LastLhqStatus } from './types';
-import { Commands, ContextEvents, GlobalCommands } from './context';
+import { Commands, ContextEvents, ContextKeys, GlobalCommands } from './context';
 import { logger } from './utils';
 
 export class CodeGenStatus implements ICodeGenStatus {
@@ -11,7 +11,7 @@ export class CodeGenStatus implements ICodeGenStatus {
     private _codeGeneratorStatus: vscode.StatusBarItem;
 
     constructor(private readonly context: vscode.ExtensionContext) {
-        this._inProgress = false;
+        this.inProgress = false;
 
         this._codeGeneratorStatus = vscode.window.createStatusBarItem('lhq.codeGeneratorStatus', vscode.StatusBarAlignment.Left, 10);
         this.updateGeneratorStatus('', { kind: 'idle' });
@@ -35,6 +35,8 @@ export class CodeGenStatus implements ICodeGenStatus {
 
     public set inProgress(value: boolean) {
         this._inProgress = value;
+
+        vscode.commands.executeCommand('setContext', ContextKeys.generatorIsRunning, value);
     }
 
     public get lastStatus(): LastLhqStatus | undefined {

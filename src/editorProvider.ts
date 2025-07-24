@@ -1,7 +1,7 @@
 import path from 'node:path';
 import * as vscode from 'vscode';
 import { LhqTreeDataProvider } from './treeDataProvider';
-import { isValidDocument, logger, showMessageBox } from './utils';
+import { delay, isValidDocument, logger, showMessageBox } from './utils';
 import { AppToPageMessage, SelectionChangedCallback } from './types';
 import debounce from 'lodash.debounce';
 import { Generator, isNullOrEmpty, ITreeElement } from '@lhq/lhq-generators';
@@ -90,7 +90,7 @@ export class LhqEditorProvider implements vscode.CustomTextEditorProvider {
         }
     }
 
-    public runCodeGenerator(): void {
+    public async runCodeGenerator(): Promise<void> {
         const activeDoc = this.activeDocument;
         if (!activeDoc) {
             logger().log(this, 'warn', 'runCodeGenerator -> No active document context found. Cannot run code generator.');
@@ -129,8 +129,15 @@ export class LhqEditorProvider implements vscode.CustomTextEditorProvider {
         try {
             beginStatusUid = this._codeGenStatus.updateGeneratorStatus(templateId, { kind: 'active', filename: fileName });
 
+            const startTime = Date.now();
             const generator = new Generator();
             const result = generator.generate(fileName, activeDoc.jsonModel, {});
+            const generationTime = Date.now() - startTime;
+
+            // artificially delay the status update to show the spinner ...
+            if (generationTime < 500) {
+                await delay(500 - generationTime);
+            }
 
             if (result.generatedFiles) {
                 const lhqFileFolder = path.dirname(fileName);

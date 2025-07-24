@@ -235,8 +235,8 @@
                     window.pageApp.$nextTick(() => {
                         window.pageApp.bindTagParameters(oldElement);
                         window.pageApp.recheckInvalidData();
-
                         window.pageApp.debouncedResize();
+                        //window.pageApp.initFocus();
                     });
                 });
                 delete domBody.dataset['loading'];
@@ -276,13 +276,12 @@
                 postMessage({ command: 'select', reload: true, ...data }, `Page reload for ${item.elementType} (${window.pageApp.fullPath})`);
                 break;
             }
-        }
 
-        // function handleRequestPageReload() {
-        //     const item = window.pageApp.item;
-        //     const data = { elementType: item.elementType, paths: toRaw(item.paths) };
-        //     postMessage({ command: 'select', reload: true, ...data }, `Page reload for ${item.elementType} (${window.pageApp.fullPath})`);
-        // }
+            case 'focus': {
+                window.pageApp.focusEditor();
+                break;
+            }
+        }
     });
 
     function setNewElement(element, modelProperties) {
@@ -1244,9 +1243,18 @@
             },
 
             resetSettings() {
-                // logMsg(`Data changed, sending message 'resetSettings' with data: `, data);
-                // vscode.postMessage({ command: 'update', data: data });
                 postMessage({ command: 'resetSettings' });
+            },
+
+            focusEditor() {
+                if (this.isResource) {
+                    if (this.$refs.translationTextArea && this.$refs.translationTextArea.length > 0) {
+                        const textarea = this.$refs.translationTextArea[0];
+                        textarea.focus();
+                    }
+                } else {
+                    this.$refs.name.focus();
+                }
             }
         }
     }).mount('#app');

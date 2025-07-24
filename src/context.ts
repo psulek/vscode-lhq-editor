@@ -32,7 +32,9 @@ export const Commands = {
     markLanguageAsPrimary: 'lhqTreeView.markLanguageAsPrimary',
     showLanguages: 'lhqTreeView.showLanguages',
     hideLanguages: 'lhqTreeView.hideLanguages',
-    projectProperties: 'lhqTreeView.projectProperties'
+    projectProperties: 'lhqTreeView.projectProperties',
+    focusTree: 'lhqTreeView.focusTree',
+    focusEditor: 'lhqTreeView.focusEditor',
 } as const;
 
 export const GlobalCommands = {
@@ -46,7 +48,7 @@ export const GlobalCommands = {
 export type AvailableCommands = typeof Commands[keyof typeof Commands];
 
 
-const contextKeys = {
+export const ContextKeys = {
     isEditorActive: 'lhqEditorIsActive',
     hasSelectedItem: 'lhqTreeHasSelectedItem',
     hasMultiSelection: 'lhqTreeHasMultiSelection',
@@ -55,6 +57,7 @@ const contextKeys = {
     hasPrimaryLanguageSelected: 'lhqTreeHasPrimaryLanguageSelected',
     hasSelectedResource: 'lhqTreeHasSelectedResource',
     hasLanguagesVisible: 'lhqTreeHasLanguagesVisible',
+    generatorIsRunning: 'lhqGeneratorIsRunning'
 };
 
 export const ContextEvents = {
@@ -157,9 +160,9 @@ export class AppContext implements IAppContext {
         vscode.commands.registerCommand(GlobalCommands.createNewLhqFile, () => this.createNewLhqFile());
     }
 
-    public runCodeGenerator(): void {
+    /* public runCodeGenerator(): void {
         this._lhqEditorProvider.runCodeGenerator();
-    }
+    } */
 
     /* private async processBeforeSave(document: vscode.TextDocument): Promise<vscode.TextEdit[]> {
         const edits: vscode.TextEdit[] = [];
@@ -360,7 +363,7 @@ export class AppContext implements IAppContext {
 
     public set languagesVisible(visible: boolean) {
         this._ctx.globalState.update(globalStateKeys.languagesVisible, visible);
-        vscode.commands.executeCommand('setContext', contextKeys.hasLanguagesVisible, visible);
+        vscode.commands.executeCommand('setContext', ContextKeys.hasLanguagesVisible, visible);
     }
 
     public get isEditorActive(): boolean {
@@ -370,7 +373,7 @@ export class AppContext implements IAppContext {
     private set isEditorActive(active: boolean) {
         if (this._isEditorActive !== active) {
             this._isEditorActive = active;
-            vscode.commands.executeCommand('setContext', contextKeys.isEditorActive, active);
+            vscode.commands.executeCommand('setContext', ContextKeys.isEditorActive, active);
             this._eventEmitter.emit(ContextEvents.isEditorActiveChanged, active);
         }
     }
@@ -430,17 +433,18 @@ export class AppContext implements IAppContext {
             hasPrimaryLanguageSelected = virtualElements.some(x => x.virtualElementType === 'language' && (x as unknown as IVirtualLanguageElement).isPrimary);
         }
 
-        vscode.commands.executeCommand('setContext', contextKeys.hasSelectedItem, hasSelectedItem);
-        vscode.commands.executeCommand('setContext', contextKeys.hasMultiSelection, hasMultiSelection);
-        vscode.commands.executeCommand('setContext', contextKeys.hasSelectedDiffParents, hasSelectedDiffParents);
-        vscode.commands.executeCommand('setContext', contextKeys.hasLanguageSelection, hasLanguageSelection);
-        vscode.commands.executeCommand('setContext', contextKeys.hasPrimaryLanguageSelected, hasPrimaryLanguageSelected);
-        vscode.commands.executeCommand('setContext', contextKeys.hasSelectedResource, hasSelectedResource);
+        vscode.commands.executeCommand('setContext', ContextKeys.hasSelectedItem, hasSelectedItem);
+        vscode.commands.executeCommand('setContext', ContextKeys.hasMultiSelection, hasMultiSelection);
+        vscode.commands.executeCommand('setContext', ContextKeys.hasSelectedDiffParents, hasSelectedDiffParents);
+        vscode.commands.executeCommand('setContext', ContextKeys.hasLanguageSelection, hasLanguageSelection);
+        vscode.commands.executeCommand('setContext', ContextKeys.hasPrimaryLanguageSelected, hasPrimaryLanguageSelected);
+        vscode.commands.executeCommand('setContext', ContextKeys.hasSelectedResource, hasSelectedResource);
     }
 
-    public clearContextValues() {
-        for (const key of Object.values(contextKeys)) {
-            if (key !== contextKeys.isEditorActive) {
+    public clearTreeContextValues() {
+        for (const key of Object.values(ContextKeys)) {
+            // if (key !== contextKeys.isEditorActive) {
+            if (key.indexOf('lhqTree') === 0) {
                 vscode.commands.executeCommand('setContext', key, false);
             }
         }

@@ -239,7 +239,7 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
     }
 
     public async clearSelection(reselect?: boolean): Promise<void> {
-        appContext.clearContextValues();
+        appContext.clearTreeContextValues();
         reselect = reselect ?? false;
 
         if (!this.view || this.view.selection.length === 0) {

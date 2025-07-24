@@ -259,7 +259,7 @@ export class DocumentContext implements IDocumentContext {
                 await this.commitChanges(`updateElement (${elemPath})`);
 
                 if (pathChanged) {
-                    await appContext.treeContext.showLoading('Renaming element ...');
+                    await appContext.treeContext.showLoading('Renaming ...');
 
                     await appContext.treeContext.selectElementByPath(elem.elementType, elem.paths.getPaths(true));
                 }
@@ -820,6 +820,10 @@ export class DocumentContext implements IDocumentContext {
                 return this.toggleLanguages(false);
             case Commands.projectProperties:
                 return this.showProjectProperties();
+            case Commands.focusTree:
+                return this.focusTree();
+            case Commands.focusEditor:
+                return this.focusEditor();
         }
 
         return Promise.resolve();
@@ -1126,7 +1130,8 @@ export class DocumentContext implements IDocumentContext {
     }
 
     private async findInTreeView(): Promise<void> {
-        await vscode.commands.executeCommand('lhqTreeView.focus');
+        // await vscode.commands.executeCommand('lhqTreeView.focus');
+        await vscode.commands.executeCommand(Commands.focusTree);
         await vscode.commands.executeCommand('list.find', 'lhqTreeView');
     }
 
@@ -1375,5 +1380,17 @@ export class DocumentContext implements IDocumentContext {
         }
 
         appContext.sendMessageToHtmlPage({ command: 'showProperties' });
+    }
+
+    private async focusTree(): Promise<void> {
+        await this.treeContext.clearSelection(true);
+    }
+
+    private focusEditor(): Promise<void> {
+        if (this._webviewPanel && this._webviewPanel.webview) {
+            this.sendMessageToHtmlPage({ command: 'focus' });
+        }
+
+        return Promise.resolve();
     }
 }
