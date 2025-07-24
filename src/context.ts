@@ -2,8 +2,8 @@ import path from 'path';
 import * as vscode from 'vscode';
 import fse from 'fs-extra';
 import { glob } from 'glob';
-import { AppToPageMessage, IAppContext, ITreeContext, IVirtualLanguageElement, SelectionChangedCallback } from './types';
-import { Generator, GeneratorInitialization, HbsTemplateManager, ITreeElement, ModelUtils, generatorUtils } from '@lhq/lhq-generators';
+import { AppToPageMessage, CheckAnyActiveDocumentCallback, IAppContext, ITreeContext, IVirtualLanguageElement, SelectionChangedCallback } from './types';
+import { Generator, GeneratorInitialization, HbsTemplateManager, ITreeElement, ModelUtils, generatorUtils, isNullOrEmpty } from '@lhq/lhq-generators';
 import { VirtualTreeElement } from './elements';
 import {
     DefaultFormattingOptions, getElementFullPath, initializeDebugMode, isValidDocument, loadCultures,
@@ -20,7 +20,6 @@ const globalStateKeys = {
 };
 
 export const Commands = {
-    // refresh: 'lhqTreeView.refresh',
     addElement: 'lhqTreeView.addElement',
     renameElement: 'lhqTreeView.renameElement',
     deleteElement: 'lhqTreeView.deleteElement',
@@ -33,13 +32,19 @@ export const Commands = {
     markLanguageAsPrimary: 'lhqTreeView.markLanguageAsPrimary',
     showLanguages: 'lhqTreeView.showLanguages',
     hideLanguages: 'lhqTreeView.hideLanguages',
-    projectProperties: 'lhqTreeView.projectProperties',
-    createNewLhqFile: 'lhqTreeView.createNewLhqFile',
+    projectProperties: 'lhqTreeView.projectProperties'
+} as const;
+
+export const GlobalCommands = {
     runGenerator: 'lhqTreeView.runGenerator',
+    createNewLhqFile: 'lhqTreeView.createNewLhqFile',
 
     // commands not in package.json (internal)
-    showOutput: 'lhq.showOutput'
+    showOutput: 'lhqTreeView.showOutput'
 };
+
+export type AvailableCommands = typeof Commands[keyof typeof Commands];
+
 
 const contextKeys = {
     isEditorActive: 'lhqEditorIsActive',
@@ -67,15 +72,15 @@ export class AppContext implements IAppContext {
     private _lhqEditorProvider: LhqEditorProvider = undefined!;
     private _pageHtml: string = '';
     private _eventEmitter = new EventEmitter();
-    // private _onIsEditorActiveChanged: IsEditorActiveChangedCallback | undefined;
+    private _checkAnyActiveDocumentCallback: CheckAnyActiveDocumentCallback | undefined;
 
     public setSelectionChangedCallback(callback: SelectionChangedCallback): void {
         this._onSelectionChanged = callback;
     }
 
-    // public setIsEditorActiveChangeCallback(callback: IsEditorActiveChangedCallback): void {
-    //     this._onIsEditorActiveChanged = callback;
-    // }
+    public setCheckAnyActiveDocumentCallback(callback: CheckAnyActiveDocumentCallback): void {
+        this._checkAnyActiveDocumentCallback = callback;
+    }
 
     public on(event: string, listener: (...args: any[]) => void): this {
         this._eventEmitter.on(event, listener);
@@ -115,10 +120,11 @@ export class AppContext implements IAppContext {
         // }));
 
         this._ctx.subscriptions.push(
-            vscode.commands.registerCommand('lhq.showOutput', () => {
+            vscode.commands.registerCommand(GlobalCommands.showOutput, () => {
                 //vscode.commands.executeCommand('workbench.action.showOutput', 'LHQ Editor');
                 VsCodeLogger.showPanel();
-                this._lhqTreeDataProvider.resetGeneratorStatus();
+                //this._lhqTreeDataProvider.resetGeneratorStatus();
+                this._lhqEditorProvider.resetGeneratorStatus();
             }),
 
             // vscode.workspace.registerFileSystemProvider('lhq', lhqFs, { isCaseSensitive: true, isReadonly: false }),
@@ -128,17 +134,8 @@ export class AppContext implements IAppContext {
 
             vscode.workspace.onDidChangeTextDocument(this.handleDidChangeTextDocument.bind(this)),
 
-            vscode.workspace.onWillSaveTextDocument(async (event: vscode.TextDocumentWillSaveEvent) => {
-                // if (event.document.uri.toString() === document.uri.toString()) {
-                if (event.document.uri.toString() === this._lhqTreeDataProvider.documentUri) {
-                    const validationError = this._lhqTreeDataProvider.lastValidationError;
-
-                    if (validationError) {
-                        await showMessageBox('warn', validationError.message, { detail: validationError.detail, modal: true });
-                    } else {
-                        // event.waitUntil(this.processBeforeSave(event.document));
-                    }
-                }
+            vscode.workspace.onWillSaveTextDocument((event: vscode.TextDocumentWillSaveEvent) => {
+                this._lhqEditorProvider.onWillSaveTextDocument(event);
             })
         );
 
@@ -154,8 +151,14 @@ export class AppContext implements IAppContext {
             })
         );
 
+        //this._codeGenStatus = new CodeGenStatus(ctx);
+
         // commands
-        vscode.commands.registerCommand(Commands.createNewLhqFile, () => this.createNewLhqFile());
+        vscode.commands.registerCommand(GlobalCommands.createNewLhqFile, () => this.createNewLhqFile());
+    }
+
+    public runCodeGenerator(): void {
+        this._lhqEditorProvider.runCodeGenerator();
     }
 
     /* private async processBeforeSave(document: vscode.TextDocument): Promise<vscode.TextEdit[]> {
@@ -198,25 +201,17 @@ export class AppContext implements IAppContext {
 
         const docUri = e.document?.uri.toString() ?? '';
         if (isValidDocument(e.document)) {
-            const treeDocUri = this._lhqTreeDataProvider.documentUri;
-            if (treeDocUri === docUri) {
-                // TODO: make it work? save/restore tree selection?
-                //const selectionBackup = hasReason ? this._lhqTreeDataProvider.backupSelection() : undefined;
-                // const selectionBackup = this._lhqTreeDataProvider.backupSelection();
 
-                //await this._lhqTreeDataProvider.clearSelection();
+            await this._lhqEditorProvider.onUndoRedo(e.document);
 
-                await this._lhqTreeDataProvider.updateDocument(e.document, true);
-
-
-                this._lhqTreeDataProvider.requestPageReload();
-
-                // if (selectionBackup && this._lhqTreeDataProvider.currentRootModel) {
-                //     await this._lhqTreeDataProvider.restoreSelection(selectionBackup);
-                // }
-            } else {
-                logger().log(this, 'debug', `onDidChangeTextDocument -> Document uri (${docUri}) is not same as treeview has (${treeDocUri}), ignoring change.`);
-            }
+            // const treeDocUri = this._lhqTreeDataProvider.documentUri;
+            // if (treeDocUri === docUri) {
+            //     // TODO: undo/redo support
+            //     /* await this._lhqTreeDataProvider.updateDocument(e.document, true);
+            //     this._lhqTreeDataProvider.requestPageReload(); */
+            // } else {
+            //     logger().log(this, 'debug', `onDidChangeTextDocument -> Document uri (${docUri}) is not same as treeview has (${treeDocUri}), ignoring change.`);
+            // }
         } else {
             logger().log(this, 'debug', `onDidChangeTextDocument -> Document (${docUri}) is not valid, ignoring change.`);
         }
@@ -372,7 +367,7 @@ export class AppContext implements IAppContext {
         return this._isEditorActive;
     }
 
-    public set isEditorActive(active: boolean) {
+    private set isEditorActive(active: boolean) {
         if (this._isEditorActive !== active) {
             this._isEditorActive = active;
             vscode.commands.executeCommand('setContext', contextKeys.isEditorActive, active);
@@ -448,6 +443,21 @@ export class AppContext implements IAppContext {
             if (key !== contextKeys.isEditorActive) {
                 vscode.commands.executeCommand('setContext', key, false);
             }
+        }
+    }
+
+    public enableEditorActive(): void {
+        this.isEditorActive = true;
+    }
+
+    // NOTE: Sets 'isEditorActive' to false if there are no active documents in the editor.
+    public disableEditorActive() {
+        if (isNullOrEmpty(this._checkAnyActiveDocumentCallback)) {
+            throw new Error('CheckAnyActiveDocumentCallback is not set. Please set it using setCheckAnyActiveDocumentCallback method.');
+        }
+
+        if (!this._checkAnyActiveDocumentCallback()) {
+            this.isEditorActive = false;
         }
     }
 }

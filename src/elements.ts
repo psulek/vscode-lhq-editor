@@ -1,6 +1,8 @@
-import { ICategoryLikeTreeElement, IRootModelElement, isNullOrEmpty, ITreeElement, ITreeElementPaths, ModelUtils, TreeElementToJsonOptions, TreeElementType } from '@lhq/lhq-generators';
-import { createTreeElementPaths } from './utils';
-import type { IVirtualLanguageElement, IVirtualTreeElement, VirtualElementType } from './types';
+import { CategoryOrResourceType, ICategoryLikeTreeElement, IRootModelElement, isNullOrEmpty, ITreeElement, ITreeElementPaths, ModelUtils, TreeElementToJsonOptions, TreeElementType } from '@lhq/lhq-generators';
+import { createTreeElementPaths, getElementFullPath } from './utils';
+import { validateName } from './validator';
+
+import type { ILanguagesElement, IVirtualLanguageElement, IVirtualRootElement, IVirtualTreeElement, VirtualElementType } from './types';
 
 export function isVirtualTreeElement(element: ITreeElement | undefined, elementType?: VirtualElementType): boolean {
     return element !== undefined && element instanceof VirtualTreeElement && (!elementType || element.virtualElementType === elementType);
@@ -21,16 +23,22 @@ export class VirtualTreeElement implements IVirtualTreeElement {
     private _name: string;
     private _paths: ITreeElementPaths;
     private _virtualElementType: VirtualElementType;
+    protected _id: string;
 
     constructor(root: IRootModelElement, name: string, virtualElementType: VirtualElementType) {
         this._root = root;
         this._name = name;
         this._virtualElementType = virtualElementType;
         this._paths = createTreeElementPaths('/');
+        this._id = `/${virtualElementType}/${this._name}`;
     }
-    
+
     toJson<TOptions extends TreeElementToJsonOptions>(options?: TOptions): Record<string, unknown> {
         return {};
+    }
+
+    get id(): string {
+        return this._id;
     }
 
     get virtualElementType(): VirtualElementType {
@@ -92,7 +100,14 @@ export class VirtualTreeElement implements IVirtualTreeElement {
     }
 }
 
-export class VirtualRootElement extends VirtualTreeElement {
+export class VirtualElementLoading extends VirtualTreeElement {
+    constructor() {
+        super(undefined!, 'Loading...', 'loading');
+        this._id = '/loading:0';
+    }
+}
+
+export class VirtualRootElement extends VirtualTreeElement implements IVirtualRootElement {
     private _languagesRoot: LanguagesElement;
 
     constructor(root: IRootModelElement) {
@@ -119,7 +134,7 @@ export class VirtualRootElement extends VirtualTreeElement {
     }
 }
 
-export class LanguagesElement extends VirtualTreeElement {
+export class LanguagesElement extends VirtualTreeElement implements ILanguagesElement {
     private _virtualLangs: VirtualTreeElement[] = [];
 
     constructor(root: IRootModelElement, name: string) {
@@ -133,7 +148,7 @@ export class LanguagesElement extends VirtualTreeElement {
         if (!isNullOrEmpty(primary)) {
             this._virtualLangs.push(new LanguageElement(this.root, primary));
         }
-        
+
         this.root.languages.forEach(lang => {
             if (lang !== this.root.primaryLanguage) {
                 this._virtualLangs.push(new LanguageElement(this.root, lang));
@@ -162,4 +177,40 @@ export class LanguageElement extends VirtualTreeElement implements IVirtualLangu
     public get isPrimary(): boolean {
         return this.name === this.root.primaryLanguage;
     }
+}
+
+export function validateTreeElementName(elementType: TreeElementType, name: string, parentElement?: ICategoryLikeTreeElement,
+    ignoreElementPath?: string): string | null {
+    const valRes = validateName(name);
+    if (valRes === 'valid') {
+        if (parentElement && !isNullOrEmpty(name)) {
+            const found = parentElement.find(name, elementType as CategoryOrResourceType);
+            if (found && (!ignoreElementPath || getElementFullPath(found) !== ignoreElementPath)) {
+                const root = getElementFullPath(parentElement);
+                return `${elementType} '${name}' already exists in ${root}`;
+            }
+        }
+    } else {
+        switch (valRes) {
+            case 'nameIsEmpty':
+                return 'Name cannot be empty.';
+            case 'nameCannotBeginWithNumber':
+                return 'Name cannot start with a number.';
+            case 'nameCanContainOnlyAlphaNumeric':
+                return 'Name can only contain alphanumeric characters and underscores.';
+        }
+    }
+
+    return null;
+}
+
+export function setTreeElementUid(element: ITreeElement): void {
+    const id = element.data['uid'] as string ?? '';
+    if (isNullOrEmpty(id)) {
+        ModelUtils.setTempData(element, 'uid', crypto.randomUUID());
+    }
+}
+
+export function getTreeElementUid(element: ITreeElement): string {
+    return element.data['uid'] as string ?? '';
 }

@@ -1,4 +1,4 @@
-import type { CodeGeneratorGroupSettings, ICodeGeneratorElement, IRootModelElement, ITreeElement, LhqModelOptionsResources, TemplateMetadataDefinition, TreeElementType } from '@lhq/lhq-generators';
+import type { CodeGeneratorGroupSettings, FormattingOptions, ICodeGeneratorElement, IRootModelElement, ITreeElement, LhqModel, LhqModelOptionsResources, TemplateMetadataDefinition, TreeElementType } from '@lhq/lhq-generators';
 import type { MessageOptions, TextDocument, Uri, Webview } from 'vscode';
 
 export type SearchTreeKind = 'path' | 'name' | 'translation' | 'language';
@@ -28,15 +28,28 @@ export type SearchTreeOptions =
     };
 
 
-export type VirtualElementType = 'treeRoot' | 'languages' | 'language';
+export type VirtualElementType = 'treeRoot' | 'languages' | 'language' | 'loading';
 
 export interface IVirtualTreeElement extends ITreeElement {
     get virtualElementType(): VirtualElementType;
 }
 
 export interface IVirtualLanguageElement extends IVirtualTreeElement {
-    //get culture(): CultureInfo;
     get isPrimary(): boolean;
+}
+
+export interface ILanguagesElement extends IVirtualTreeElement {
+    get virtualLanguages(): ReadonlyArray<IVirtualTreeElement>;
+
+    refresh(): void;
+    find(langName: string): IVirtualTreeElement | undefined;
+    contains(langName: string): boolean;
+}
+
+export interface IVirtualRootElement extends IVirtualTreeElement {
+    refresh(): void;
+
+    get languagesRoot(): ILanguagesElement;
 }
 
 export type AppTreeElementType = TreeElementType | VirtualElementType;
@@ -119,12 +132,18 @@ export type PageToAppMessage = {
     command: 'resetSettings';
 };
 
+export type LastLhqStatus = {
+    kind: CodeGeneratorStatusKind;
+    uid: string;
+}
 
 export interface IAppContext {
     get treeContext(): ITreeContext;
 
+    get selectedElements(): ITreeElement[];
+
     get isEditorActive(): boolean;
-    set isEditorActive(active: boolean);
+    // set isEditorActive(active: boolean);
 
     get languagesVisible(): boolean;
     set languagesVisible(visible: boolean);
@@ -140,29 +159,75 @@ export interface IAppContext {
     setSelectionChangedCallback(callback: SelectionChangedCallback): void;
     setTreeSelection(selectedElements: ITreeElement[]): void;
 
-    // setIsEditorActiveChangeCallback(callback: IsEditorActiveChangedCallback): void;
-
+    runCodeGenerator(): void;
     sendMessageToHtmlPage(message: AppToPageMessage): void;
+
+    enableEditorActive(): void;
+    disableEditorActive(): void;
+    setCheckAnyActiveDocumentCallback(callback: CheckAnyActiveDocumentCallback): void;
 }
 
 export interface ITreeContext {
-    get currentRootModel(): IRootModelElement | undefined;
+    updateDocument(docCtx: IDocumentContext | undefined): void;
 
-    updateElement(element: Record<string, unknown>): Promise<void>;
+    setSelectedItems(itemsToSelect: ITreeElement[], options?: { focus?: boolean; expand?: boolean | number }): Promise<void>;
 
-    updateDocument(document: TextDocument | undefined): Promise<void>;
+    revealElement(item: ITreeElement, options?: { select?: boolean; focus?: boolean; expand?: boolean | number }): Promise<void>
 
     clearSelection(reselect?: boolean): Promise<void>;
-    
+
     selectElementByPath(elementType: TreeElementType, path: string[]): Promise<void>;
 
-    saveModelProperties(modelProperties: ClientPageModelProperties): Promise<ClientPageSettingsError | undefined>;
+    refreshTree(elements: ITreeElement[] | undefined): unknown;
 
-    clearPageErrors(): void;
+    advancedFind(): Promise<void>;
+
+    showLoading(text: string): Promise<void>;
+
+    backupSelection(): SelectionBackup;
+
+    restoreSelection(selection: SelectionBackup): Promise<void>;
+}
+
+export interface IDocumentContext {
+    get lastValidationError(): ValidationError | undefined;
+
+    get documentUri(): Uri | undefined;
+
+    get fileName(): string;
+
+    get isActive(): boolean;
+
+    //get documentText(): string;
+
+    get documentFormatting(): FormattingOptions;
+
+    get jsonModel(): LhqModel | undefined;
+
+    get rootModel(): IRootModelElement | undefined;
+
+    get virtualRootElement(): IVirtualRootElement | undefined;
+
+    get resourcesUnderRoot(): boolean;
+
+    get isTreeStructure(): boolean;
+
+    commitChanges(message: string): Promise<boolean>;
+
+    isSameDocument(document: TextDocument): boolean;
+}
+
+export interface ICodeGenStatus {
+    get inProgress(): boolean;
+    set inProgress(value: boolean);
+
+    get lastStatus(): LastLhqStatus | undefined;
+
+    updateGeneratorStatus(templateId: string, info: CodeGeneratorStatusInfo): string
 }
 
 export type SelectionChangedCallback = (selectedElements: ITreeElement[]) => void;
-export type IsEditorActiveChangedCallback = (active: boolean) => void;
+export type CheckAnyActiveDocumentCallback = () => boolean;
 
 export type SelectionBackup = Array<{
     type: TreeElementType;

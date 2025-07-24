@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { ICategoryLikeTreeElement, isNullOrEmpty, ITreeElement, ModelUtils } from '@lhq/lhq-generators';
 import { getElementFullPath, logger, toPascalCasing } from './utils';
-import { isVirtualTreeElement, VirtualTreeElement } from './elements';
+import { getTreeElementUid, isVirtualTreeElement, VirtualTreeElement } from './elements';
 import { SearchTreeOptions, AppTreeElementType, IVirtualLanguageElement } from './types';
 
 // https://code.visualstudio.com/api/references/icons-in-labels#icon-listing
@@ -11,7 +11,8 @@ const icons: Record<AppTreeElementType, string> = {
     resource: 'debug-breakpoint-unverified',
     treeRoot: 'target',
     languages: 'globe', //open-editors-view-icon
-    language: 'debug-breakpoint-log-unverified'
+    language: 'debug-breakpoint-log-unverified',
+    loading: 'loading~spin',
 };
 
 const primaryLangIcon = 'debug-breakpoint-log';
@@ -22,11 +23,17 @@ export class LhqTreeItem extends vscode.TreeItem {
         public readonly searchOptions: SearchTreeOptions
     ) {
         const elementType = element.elementType as AppTreeElementType;
+        let itemId: string;
 
         let virtualElement: VirtualTreeElement | undefined;
         const isVirtualElem = isVirtualTreeElement(element);
         if (isVirtualElem) {
             virtualElement = element as VirtualTreeElement;
+            itemId = virtualElement.id;
+        } else if (ModelUtils.isTreeElementInstance(element)) {
+            itemId = `/${elementType}:${getElementFullPath(element)}`;
+        } else {
+            throw new Error(`Element ${element} (${element.name}) is not a valid tree element!`);
         }
 
         const hasNoChilds = elementType === 'resource' || elementType === 'language';
@@ -66,16 +73,17 @@ export class LhqTreeItem extends vscode.TreeItem {
 
         const label = { label: elementName, highlights };
         super(label, collapsibleState);
+        this.id = itemId;
 
         this.contextValue = elementType;
 
-        if (!isVirtualElem) {
-            this.id = element.data['uid'] as string ?? '';
-            if (isNullOrEmpty(this.id)) {
-                throw new Error(`Element ${elementName} has no UID set!`);
-            }
-            logger().log(this, 'debug', `Created tree item for element: ${elementName} ${elementType} (${this.id})`);
-        }
+        // if (!isVirtualElem) {
+        //     this.id = getTreeElementUid(element);
+        //     if (isNullOrEmpty(this.id)) {
+        //         throw new Error(`Element ${elementName} has no UID set!`);
+        //     }
+        //     logger().log(this, 'debug', `Created tree item for element: ${elementName} ${elementType} (${this.id})`);
+        // }
 
         let icon = icons[elementType];
 

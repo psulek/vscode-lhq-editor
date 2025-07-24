@@ -185,6 +185,8 @@
                     window.pageApp.$nextTick(() => {
                         window.pageApp.item.paths = message.paths;
                         //window.pageApp.supressOnChange = undefined;
+
+                        //handleRequestPageReload();
                     });
                 }
 
@@ -269,14 +271,18 @@
             }
 
             case 'requestPageReload': {
-                //postMessage({ command: 'reloadPage' }, `Request page reload`);
                 const item = window.pageApp.item;
                 const data = { elementType: item.elementType, paths: toRaw(item.paths) };
                 postMessage({ command: 'select', reload: true, ...data }, `Page reload for ${item.elementType} (${window.pageApp.fullPath})`);
-
                 break;
             }
         }
+
+        // function handleRequestPageReload() {
+        //     const item = window.pageApp.item;
+        //     const data = { elementType: item.elementType, paths: toRaw(item.paths) };
+        //     postMessage({ command: 'select', reload: true, ...data }, `Page reload for ${item.elementType} (${window.pageApp.fullPath})`);
+        // }
     });
 
     function setNewElement(element, modelProperties) {
