@@ -92,7 +92,7 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
         this._onDidChangeTreeData.fire(elements);
     }
 
-    public async selectElementByPath(elementType: TreeElementType, path: string[]): Promise<void> {
+    public async selectElementByPath(elementType: TreeElementType, path: string[], expand?: boolean): Promise<void> {
         if (!this.checkActiveDoc('selectElementByPath')) {
             return;
         }
@@ -103,7 +103,9 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
             : this.currentRootModel!.getElementByPath(paths, elementType as CategoryOrResourceType);
 
         if (elem) {
-            await this.setSelectedItems([elem!]);
+            //await this.setSelectedItems([elem!]);
+
+            await this.revealElement(elem, { select: true, focus: true, expand: expand ?? false });
         }
     }
 
@@ -542,7 +544,7 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
                         this._loadingNodeVisible = false;
                         this.refreshTree(undefined);
                     }
-                } finally { 
+                } finally {
                     return resolve();
                 }
 

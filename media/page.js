@@ -119,6 +119,30 @@
         vscode.postMessage(message);
     }
 
+    document.addEventListener('keydown', (event) => {
+        // filter out Ctrl+Enter key combination so vscode does not handle it and forward it to tree which will send 'focus' back to this page :-)
+        if (event.ctrlKey === true && event.keyCode === 13) {
+            event.preventDefault();
+            event.stopPropagation();
+        } else if (!event.ctrlKey && !event.shiftKey && !event.metaKey && event.keyCode === 27) {
+
+            // Escape key pressed, close all tooltips
+            if (isAnyTooltipVisible()) {
+                logMsg('Escape key pressed, closing all tooltips');
+                tooltipsMap.forEach(item => {
+                    removeTooltip(item);
+                });
+            }
+
+            if (window.pageApp && window.pageApp.modelProperties.visible) {
+                window.pageApp.cancelProperties();
+            }
+
+            event.preventDefault();
+            event.stopPropagation();
+        }
+    });
+
 
     const domBody = document.getElementsByTagName('body')[0];
 
@@ -200,10 +224,12 @@
                 cultures: CultureInfo[];
                 primaryLang: string;
                 modelProperties: PageModelProperties;
+                autoFocus: boolean;
                 */
                 domBody.dataset['loading'] = 'true';
                 const element = message.element;
                 const modelProperties = message.modelProperties;
+                const autoFocus = message.autoFocus ?? false;
                 //const file = message.file;
                 usedCultures = message.cultures || [];
                 if (usedCultures.length === 0) {
@@ -236,7 +262,10 @@
                         window.pageApp.bindTagParameters(oldElement);
                         window.pageApp.recheckInvalidData();
                         window.pageApp.debouncedResize();
-                        //window.pageApp.initFocus();
+
+                        if (autoFocus) {
+                            window.pageApp.focusEditor();
+                        }
                     });
                 });
                 delete domBody.dataset['loading'];
@@ -257,14 +286,31 @@
                 break;
             }
 
-            case 'resetSettingsResult': {
+            case 'confirmQuestionResult': {
                 /*
                  command: 'resetSettingsResult'
-                 settings: CodeGeneratorGroupSettings;
+                 id: ConfirmQuestionTypes;
+                 confirmed: boolean;
+                 result: unknown | undefined;
                 */
 
-                if (message.settings && window.pageApp.modelProperties && window.pageApp.modelProperties.codeGenerator) {
-                    window.pageApp.modelProperties.codeGenerator.settings = message.settings;
+                switch (message.id) {
+                    case 'resetSettings': {
+                        if (message.confirmed) {
+                            if (message.result && window.pageApp.modelProperties && window.pageApp.modelProperties.codeGenerator) {
+                                window.pageApp.modelProperties.codeGenerator.settings = message.result;
+                            }
+                        }
+                        break;
+                    }
+                    case 'cancelSettingsChanges': {
+                        if (message.confirmed) {
+                            window.pageApp.closePropertiesDialog(true);
+                        } else {
+                            window.pageApp.$refs.layoutMode.focus();
+                        }
+                        break;
+                    }
                 }
 
                 break;
@@ -1036,6 +1082,9 @@
                         !tagify.state.inputText && // assuming user is not in the middle or adding a tag
                         !tagify.state.editing      // user not editing a tag     
                     ) {
+                        e.preventDefault();
+                        e.stopPropagation();
+
                         self.$nextTick(() => {
                             self.editParameters({ target: { dataset: { cancel: 'false' } } });
                         });
@@ -1153,25 +1202,45 @@
             },
 
             cancelProperties() {
-                // this.modelProperties = Object.assign({}, this.modelPropertiesBackup);
-                this.modelProperties = structuredClone(toRaw(this.modelPropertiesBackup));
+                const prop1 = structuredClone(toRaw(this.modelPropertiesBackup));
+                prop1.visible = false;
+                const prop2 = structuredClone(toRaw(this.modelProperties));
+                prop2.visible = false;
+                const equals = JSON.stringify(prop1) === JSON.stringify(prop2);
+
+                if (!equals) {
+                    postMessage({
+                        command: 'confirmQuestion',
+                        id: 'cancelSettingsChanges',
+                        message: 'Do you really want to cancel changes?',
+                        detail: 'All unsaved changes will be lost.'
+                    });
+                    return;
+                }
+
+                if (equals) {
+                    this.closePropertiesDialog(true);
+                }
+            },
+
+            closePropertiesDialog(reset) {
+                if (reset === true) {
+                    this.modelProperties = structuredClone(toRaw(this.modelPropertiesBackup));
+                }
                 this.modelProperties.visible = false;
             },
 
             saveProperties() {
-                // this.modelProperties.visible = false;
                 this.modelProperties.saving = true;
                 this.modelProperties.codeGeneratorError = undefined;
 
                 const msg = { command: 'saveProperties', modelProperties: toRaw(this.modelProperties) };
-                //logMsg('Saving model properties and sending message.. ', msg);
 
                 savePropertiesTimer = setTimeout(() => {
                     this.modelProperties.saving = false;
                     this.handleSavePropertiesResult(undefined, false);
                 }, 5000);
 
-                //vscode.postMessage(msg);
                 postMessage(msg, 'Saving model properties');
             },
 
@@ -1192,7 +1261,7 @@
                 this.modelProperties.saving = false;
                 if (closeDialog) {
                     logMsg('Closing properties dialog');
-                    this.modelProperties.visible = false;
+                    this.closePropertiesDialog(false);
                 } else if (error) {
                     //showTooltip('save-properties-error', error, document.getElementById('settings-table'), true, 20000);
                 }
@@ -1243,7 +1312,12 @@
             },
 
             resetSettings() {
-                postMessage({ command: 'resetSettings' });
+                postMessage({
+                    command: 'confirmQuestion',
+                    id: 'resetSettings',
+                    message: 'Reset Code Generator Settings?',
+                    detail: 'Are you sure you want to reset code generator settings to default values?'
+                });
             },
 
             focusEditor() {

@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { nextTick } from 'node:process';
-import { createTreeElementPaths, findCulture, generateNonce, getCultureDesc, getElementFullPath, isValidDocument, loadCultures, logger, showConfirmBox, showMessageBox } from './utils';
+import { createTreeElementPaths, delay, findCulture, generateNonce, getCultureDesc, getElementFullPath, isValidDocument, loadCultures, logger, showConfirmBox, showMessageBox } from './utils';
 import { AppToPageMessage, ClientPageError, ClientPageModelProperties, ClientPageSettingsError, CultureInfo, ICodeGenStatus, IDocumentContext, IVirtualLanguageElement, IVirtualRootElement, PageToAppMessage, SelectionBackup, ValidationError } from './types';
 import { CategoryLikeTreeElementToJsonOptions, CategoryOrResourceType, CodeGeneratorGroupSettings, detectFormatting, FormattingOptions, generatorUtils, HbsTemplateManager, ICategoryLikeTreeElement, IResourceElement, IResourceParameterElement, IResourceValueElement, IRootModelElement, isNullOrEmpty, ITreeElement, LhqModel, LhqModelResourceTranslationState, LhqValidationResult, modelConst, ModelUtils, TreeElementType } from '@lhq/lhq-generators';
 import { filterTreeElements, filterVirtualTreeElements, getTreeElementUid, isVirtualTreeElement, setTreeElementUid, validateTreeElementName, VirtualRootElement } from './elements';
@@ -340,7 +340,6 @@ export class DocumentContext implements IDocumentContext {
             this._textDocument = document;
             this._fileName = newFileName;
             this._documentUri = document.uri;
-            // appContext.isEditorActive = true;
             appContext.enableEditorActive();
 
             if (sameDoc || !this._rootModel || options.forceRefresh) {
@@ -349,24 +348,16 @@ export class DocumentContext implements IDocumentContext {
             }
 
             appContext.treeContext.updateDocument(this);
-
         } else if (appContext.isEditorActive) {
-            // logger().log(this, 'debug', `updateDocument -> [INVALID] - ${newFileName}`);
             this._validationError = undefined;
             this._textDocument = undefined;
             this.refresh();
 
             appContext.treeContext.updateDocument(undefined);
 
-            // NOTE: needs to be next ick to ensure treeview refresh is done before we hide it (via isEditorActive = false)
+            // NOTE: needs to be next tick to ensure treeview refresh is done before we hide it (via isEditorActive = false)
             nextTick(() => {
                 appContext.disableEditorActive();
-
-                // if (options?.hasAnyActiveDocument) {
-                //     appContext.isEditorActive = options.hasAnyActiveDocument();
-                // } else {
-                //     appContext.isEditorActive = false;
-                // }
             });
         }
     }
@@ -530,7 +521,7 @@ export class DocumentContext implements IDocumentContext {
                         await appContext.treeContext.clearSelection();
                     }
 
-                    await appContext.treeContext.selectElementByPath(message.elementType, message.paths);
+                    await appContext.treeContext.selectElementByPath(message.elementType, message.paths, true);
                 } catch (e) {
                     logger().log(this, 'error', `${header} - error selecting element: ${e}`);
                     return;
@@ -544,17 +535,30 @@ export class DocumentContext implements IDocumentContext {
                 this.sendMessageToHtmlPage({ command: 'savePropertiesResult', error });
                 break;
             }
-            case 'resetSettings': {
+            case 'confirmQuestion': {
                 //const rootModel = appContext.treeContext.currentRootModel!;
                 if (!this.rootModel) {
                     logger().log(this, 'error', `${header} No current root model found.`);
                     return;
                 }
 
-                if (await showConfirmBox('Reset Code Generator Settings?', 'Are you sure you want to reset code generator settings to default values?')) {
-                    const settings = this.rootModel?.codeGenerator?.settings ?? {} as CodeGeneratorGroupSettings;
-                    this.sendMessageToHtmlPage({ command: 'resetSettingsResult', settings });
+                // const text = 'Reset Code Generator Settings?';
+                // const detail = 'Are you sure you want to reset code generator settings to default values?';
+                const text = message.message;
+                const detail = message.detail;
+                const warn = message.warning ?? false;
+
+                await delay(100);
+                const confirmed = await showConfirmBox(text, detail, warn);
+
+                let result: unknown | undefined;
+                switch (message.id) {
+                    case 'resetSettings':
+                        result = this.rootModel?.codeGenerator?.settings ?? {} as CodeGeneratorGroupSettings;
+                        break;
                 }
+
+                this.sendMessageToHtmlPage({ command: 'confirmQuestionResult', id: message.id, confirmed, result });
                 break;
             }
         }
@@ -621,6 +625,9 @@ export class DocumentContext implements IDocumentContext {
             includeCategories: false,
             includeResources: false
         };
+
+        const autoFocus = appContext.getConfig().autoFocusEditor;
+
         const message: AppToPageMessage = {
             command: 'loadPage',
             file: this.fileName,
@@ -633,7 +640,8 @@ export class DocumentContext implements IDocumentContext {
                 modelVersion: rootModel.version,
                 visible: false,
                 codeGenerator: rootModel.codeGenerator ?? { templateId: '', settings: {} as CodeGeneratorGroupSettings, version: modelConst.ModelVersions.codeGenerator }
-            }
+            },
+            autoFocus
         };
 
         this.sendMessageToHtmlPage(message);

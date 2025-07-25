@@ -1,6 +1,10 @@
 import type { CodeGeneratorGroupSettings, FormattingOptions, ICodeGeneratorElement, IRootModelElement, ITreeElement, LhqModel, LhqModelOptionsResources, TemplateMetadataDefinition, TreeElementType } from '@lhq/lhq-generators';
 import type { MessageOptions, TextDocument, Uri, Webview } from 'vscode';
 
+export type ExtensionConfig = {
+    autoFocusEditor: boolean;
+}
+
 export type SearchTreeKind = 'path' | 'name' | 'translation' | 'language';
 
 export type SearchTreeOptionsBase = {
@@ -86,6 +90,8 @@ export type ClientPageSettingsError = {
     message: string;
 }
 
+export type ConfirmQuestionTypes = 'resetSettings' | 'cancelSettingsChanges';
+
 export type AppToPageMessage = {
     command: 'init';
     templatesMetadata: Record<string, TemplateMetadataDefinition>;
@@ -96,6 +102,7 @@ export type AppToPageMessage = {
     cultures: CultureInfo[];
     primaryLang: string;
     modelProperties: ClientPageModelProperties;
+    autoFocus: boolean;
 } | {
     command: 'invalidData';
     action: 'add' | 'remove';
@@ -111,8 +118,11 @@ export type AppToPageMessage = {
     command: 'savePropertiesResult';
     error?: ClientPageSettingsError | undefined;
 } | {
-    command: 'resetSettingsResult'
-    settings: CodeGeneratorGroupSettings;
+    command: 'confirmQuestionResult';
+    id: ConfirmQuestionTypes;
+    confirmed: boolean;
+    result: unknown | undefined;
+    // settings: CodeGeneratorGroupSettings;
 } | {
     command: 'requestPageReload' // usually after language(s) change
 } | {
@@ -120,19 +130,27 @@ export type AppToPageMessage = {
 }
 
 export type PageToAppMessage = {
-    command: 'update',
+    command: 'update';
     data: Record<string, unknown>;
 } | {
     command: 'select',
     paths: string[];
-    elementType: TreeElementType
+    elementType: TreeElementType;
     reload?: boolean;
 } | {
-    command: 'saveProperties',
+    command: 'saveProperties';
     modelProperties: ClientPageModelProperties;
 } | {
-    command: 'resetSettings';
+    command: 'confirmQuestion';
+    id: ConfirmQuestionTypes;
+    message: string;
+    detail?: string;
+    warning?: boolean;
 };
+
+// | {
+//     command: 'resetSettings';
+// };
 
 export type LastLhqStatus = {
     kind: CodeGeneratorStatusKind;
@@ -140,6 +158,9 @@ export type LastLhqStatus = {
 }
 
 export interface IAppContext {
+    getConfig(): ExtensionConfig;
+    updateConfig(newConfig: ExtensionConfig): Promise<void>;
+
     get treeContext(): ITreeContext;
 
     get selectedElements(): ITreeElement[];
@@ -178,7 +199,7 @@ export interface ITreeContext {
 
     clearSelection(reselect?: boolean): Promise<void>;
 
-    selectElementByPath(elementType: TreeElementType, path: string[]): Promise<void>;
+    selectElementByPath(elementType: TreeElementType, path: string[], expand?: boolean): Promise<void>;
 
     refreshTree(elements: ITreeElement[] | undefined): unknown;
 

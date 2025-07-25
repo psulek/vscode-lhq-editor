@@ -64,7 +64,7 @@
                 <td>
                     <div style="display: flex; flex-direction: row; align-items: center; gap: 1em; width: 100%;">
                         <input type="text" id="name" v-model="item.name" ref="name" autocomplete="off"
-                            style="flex-basis: 60%;" @focus="focusOnName">
+                            style="flex-basis: 60%;" @focus="focusOnName" >
 
                         <template v-if="isResource">
                             <label for="state">State:</label>
@@ -179,7 +179,7 @@
                             </td>
                             <td>
                                 <div style="display: flex;flex-direction: row;gap: 0.3em; align-items: center;">
-                                    <select id="layoutMode" v-model="modelProperties.categories">
+                                    <select id="layoutMode" v-model="modelProperties.categories" ref="layoutMode">
                                         <option disabled value="">Please select layout</option>
                                         <option v-for="mode in modelProperties.layoutModes" :key="mode.name"
                                             :value="mode.value">

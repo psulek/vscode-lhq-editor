@@ -2,7 +2,7 @@ import path from 'path';
 import * as vscode from 'vscode';
 import fse from 'fs-extra';
 import { glob } from 'glob';
-import { AppToPageMessage, CheckAnyActiveDocumentCallback, IAppContext, ITreeContext, IVirtualLanguageElement, SelectionChangedCallback } from './types';
+import { AppToPageMessage, CheckAnyActiveDocumentCallback, ExtensionConfig, IAppContext, ITreeContext, IVirtualLanguageElement, SelectionChangedCallback } from './types';
 import { Generator, GeneratorInitialization, HbsTemplateManager, ITreeElement, ModelUtils, generatorUtils, isNullOrEmpty } from '@lhq/lhq-generators';
 import { VirtualTreeElement } from './elements';
 import {
@@ -64,6 +64,9 @@ export const ContextEvents = {
     isEditorActiveChanged: 'isEditorActiveChanged',
 };
 
+const configKeys = {
+    autoFocusEditor: 'lhqeditor.autoFocusEditor'
+} as const;
 
 export class AppContext implements IAppContext {
     private _ctx!: vscode.ExtensionContext;
@@ -192,6 +195,22 @@ export class AppContext implements IAppContext {
     //     }
     // }
 
+    public getConfig(): ExtensionConfig {
+        const cfg = vscode.workspace.getConfiguration();
+        const autoFocusEditor = cfg.get(configKeys.autoFocusEditor, false);
+        return {
+            autoFocusEditor: autoFocusEditor
+        };
+    }
+
+    public async updateConfig(newConfig: Partial<ExtensionConfig>): Promise<void> {
+        const cfg = await vscode.workspace.getConfiguration();
+        if (newConfig.autoFocusEditor) {
+            // cfg.update(configKeys.autoFocusEditor, newConfig.autoFocusEditor, vscode.ConfigurationTarget.Global);
+            cfg.update(configKeys.autoFocusEditor, newConfig.autoFocusEditor, vscode.ConfigurationTarget.Workspace);
+        }
+    }
+
     private async handleDidChangeTextDocument(e: vscode.TextDocumentChangeEvent) {
         if (!e.reason) {
             logger().log(this, 'debug', `onDidChangeTextDocument -> No reason provided, ignoring change for document: ${e.document?.fileName ?? '-'}`);
@@ -204,17 +223,7 @@ export class AppContext implements IAppContext {
 
         const docUri = e.document?.uri.toString() ?? '';
         if (isValidDocument(e.document)) {
-
             await this._lhqEditorProvider.onUndoRedo(e.document);
-
-            // const treeDocUri = this._lhqTreeDataProvider.documentUri;
-            // if (treeDocUri === docUri) {
-            //     // TODO: undo/redo support
-            //     /* await this._lhqTreeDataProvider.updateDocument(e.document, true);
-            //     this._lhqTreeDataProvider.requestPageReload(); */
-            // } else {
-            //     logger().log(this, 'debug', `onDidChangeTextDocument -> Document uri (${docUri}) is not same as treeview has (${treeDocUri}), ignoring change.`);
-            // }
         } else {
             logger().log(this, 'debug', `onDidChangeTextDocument -> Document (${docUri}) is not valid, ignoring change.`);
         }
