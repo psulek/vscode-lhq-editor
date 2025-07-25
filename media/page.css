@@ -125,6 +125,14 @@ tags[data-error].focus-border {
   outline-color: var(--vscode-inputValidation-errorBorder);
 }
 
+label[data-focused] {
+  outline-color: var(--vscode-focusBorder);
+  opacity: 1;
+  outline-offset: -1px;
+  outline-style: solid;
+  outline-width: 1px;
+}
+
 /* .focus-border:not([data-error]) {
   outline-color: var(--vscode-focusBorder);
 }

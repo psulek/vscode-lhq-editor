@@ -260,7 +260,7 @@ export type SelectionBackup = Array<{
 export type CodeGeneratorStatusInfo =
     | { kind: 'active'; filename: string; }
     | { kind: 'idle'; }
-    | { kind: 'error'; message: string; timeout?: number; }
+    | { kind: 'error'; message: string; error?: Error; timeout?: number; }
     | { kind: 'status'; message: string; success: boolean; timeout: number; };
 
 export type CodeGeneratorStatusKind = CodeGeneratorStatusInfo['kind'];

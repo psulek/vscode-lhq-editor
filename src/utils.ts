@@ -2,24 +2,25 @@ import * as vscode from 'vscode';
 import path from 'path';
 import fse from 'fs-extra';
 import type { FileInfo, ReadFileInfoOptions, ITreeElementPaths, ITreeElement, IRootModelElement, ICategoryLikeTreeElement, FormattingOptions } from '@lhq/lhq-generators';
-import { fileUtils, isNullOrEmpty, ModelUtils, strCompare } from '@lhq/lhq-generators';
+import { AppError, fileUtils, isNullOrEmpty, ModelUtils, strCompare } from '@lhq/lhq-generators';
 
 import { ILogger, LogType, VsCodeLogger } from './logger';
 import { CultureInfo, CulturesMap, MatchForSubstringResult, MessageBoxOptions } from './types';
 
 import 'reflect-metadata';
 
-import { instanceToPlain } from 'class-transformer';
 
 
-let _logger: VsCodeLogger = new VsCodeLogger();
+let _logger: VsCodeLogger = null!; //= new VsCodeLogger();
 let _cultures: CulturesMap = {};
 
 let _isDebugMode = false; // Default to false
 
-export function initializeDebugMode(mode: vscode.ExtensionMode) {
-    //_isDebugMode = mode === vscode.ExtensionMode.Development;
+export function initializeDebugMode(ctx: vscode.ExtensionContext) {
+    //_isDebugMode = ctx.mode === vscode.ExtensionMode.Development;
     // TODO: remove this when the extension is stable
+
+    _logger = new VsCodeLogger(ctx);
     _isDebugMode = false;
     _logger.updateDebugMode(_isDebugMode);
     if (_isDebugMode) {
@@ -27,6 +28,8 @@ export function initializeDebugMode(mode: vscode.ExtensionMode) {
     } else {
         _logger.log('extension', 'info', 'LHQ Editor extension activated');
     }
+
+    
 }
 
 export function getMessageBoxText(msg: string): string {
@@ -281,3 +284,7 @@ export const DefaultFormattingOptions: FormattingOptions = {
     indentation: { amount: 2, type: 'space', indent: '  ' },
     eol: '\n'
 };
+
+export function getGeneratorAppErrorMessage(err: Error): string {
+    return err instanceof AppError ? err.message : '';
+}

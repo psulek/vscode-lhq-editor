@@ -988,6 +988,28 @@
                 }
             },
 
+            focusOnAllowResources(event) {
+                if (!event.target) {
+                    return;
+                }
+
+                const label = event.target.closest('label');
+                if (label) {
+                    label.dataset['focused'] = 'true';
+                }
+            },
+
+            blurOnAllowResources() {
+                if (!event.target) {
+                    return;
+                }
+
+                const label = event.target.closest('label');
+                if (label) {
+                    delete label.dataset['focused'];
+                }
+            },
+
             createParametersTags() {
                 const input = this.$refs.parameters;
                 const self = this;
@@ -1199,6 +1221,10 @@
 
             showProperties() {
                 this.modelProperties.visible = true;
+
+                this.$nextTick(() => {
+                    this.$refs.layoutMode.focus();
+                });
             },
 
             cancelProperties() {

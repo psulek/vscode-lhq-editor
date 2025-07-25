@@ -34,6 +34,11 @@ export class VsCodeLogger implements ILogger {
     private static panel: vscode.OutputChannel | undefined;
     private _debugMode = true;
 
+    constructor(ctx: vscode.ExtensionContext) {
+        VsCodeLogger.panel = vscode.window.createOutputChannel('LHQ Editor', 'lhq-log');
+        ctx.subscriptions.push(VsCodeLogger.panel);
+    }
+
     public updateDebugMode(debug: boolean) {
         this._debugMode = debug;
     }
@@ -68,10 +73,10 @@ export class VsCodeLogger implements ILogger {
             return;
         }
 
-        if (!VsCodeLogger.panel) {
-            VsCodeLogger.panel = vscode.window.createOutputChannel('LHQ Editor');
-        }
+        // if (!VsCodeLogger.panel) {
+        //     VsCodeLogger.panel = vscode.window.createOutputChannel('LHQ Editor', 'lhq-log');
+        // }
 
-        VsCodeLogger.panel.appendLine(text);
+        VsCodeLogger.panel!.appendLine(text);
     }
 }

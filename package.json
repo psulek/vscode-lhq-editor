@@ -61,7 +61,7 @@
       {
         "command": "lhqTreeView.projectProperties",
         "category": "LHQ",
-        "title": "Properties",
+        "title": "Model Properties",
         "icon": "$(settings-gear)"
       },
       {
@@ -111,6 +111,12 @@
         "icon": "$(search)"
       },
       {
+        "command": "lhqTreeView.advancedFind",
+        "category": "LHQ",
+        "title": "Advanced Find",
+        "icon": "$(search)"
+      },
+      {
         "command": "lhqTreeView.markLanguageAsPrimary",
         "category": "LHQ",
         "title": "Mark language as primary",
@@ -142,6 +148,72 @@
       }
     ],
     "menus": {
+      "commandPalette": [
+        {
+          "command": "lhqTreeView.focusTree",
+          "when": "lhqEditorIsActive"
+        },
+        {
+          "command": "lhqTreeView.focusEditor",
+          "when": "lhqEditorIsActive"
+        },
+        {
+          "command": "lhqTreeView.projectProperties",
+          "when": "lhqEditorIsActive"
+        },
+        {
+          "command": "lhqTreeView.addElement",
+          "when": "false"
+        },
+        {
+          "command": "lhqTreeView.addLanguage",
+          "when": "lhqEditorIsActive"
+        },
+        {
+          "command": "lhqTreeView.addCategory",
+          "when": "false"
+        },
+        {
+          "command": "lhqTreeView.addResource",
+          "when": "false"
+        },
+        {
+          "command": "lhqTreeView.renameElement",
+          "when": "false"
+        },
+        {
+          "command": "lhqTreeView.deleteElement",
+          "when": "false"
+        },
+        {
+          "command": "lhqTreeView.deleteLanguage",
+          "when": "false"
+        },
+        {
+          "command": "lhqTreeView.findInTreeView",
+          "when": "false"
+        },
+        {
+          "command": "lhqTreeView.advancedFind",
+          "when": "lhqEditorIsActive"
+        },
+        {
+          "command": "lhqTreeView.markLanguageAsPrimary",
+          "when": "false"
+        },
+        {
+          "command": "lhqTreeView.showLanguages",
+          "when": "false"
+        },
+        {
+          "command": "lhqTreeView.hideLanguages",
+          "when": "false"
+        },
+        {
+          "command": "lhqTreeView.runGenerator",
+          "when": "lhqEditorIsActive"
+        }
+      ],
       "view/title": [
         {
           "command": "lhqTreeView.projectProperties",
@@ -222,7 +294,7 @@
         "command": "lhqTreeView.addResource",
         "key": "insert",
         "when": "lhqEditorIsActive && !lhqTreeHasMultiSelection && !lhqTreeHasLanguageSelection"
-      }, 
+      },
       {
         "command": "lhqTreeView.focusTree",
         "key": "f2",
@@ -234,18 +306,20 @@
         "when": "lhqEditorIsActive"
       }
     ],
-    "configuration": [{
+    "configuration": [
+      {
         "id": "common",
         "title": "LHQ Editor",
         "properties": {
-            "lhqeditor.autoFocusEditor": {
-                "type": "boolean",
-                "default": false,
-                "scope": "window",
-                "markdownDescription": "Automatically focus the `editor` when the tree view is focused."
-            }
+          "lhqeditor.autoFocusEditor": {
+            "type": "boolean",
+            "default": false,
+            "scope": "window",
+            "markdownDescription": "Automatically focus the `editor` when the tree view is focused."
+          }
         }
-    }]
+      }
+    ]
   },
   "scripts": {
     "vscode:prepublish": "pnpm run package",

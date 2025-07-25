@@ -3,7 +3,7 @@ import { isNullOrEmpty } from '@lhq/lhq-generators';
 
 import { CodeGeneratorStatusInfo, ICodeGenStatus, LastLhqStatus } from './types';
 import { Commands, ContextEvents, ContextKeys, GlobalCommands } from './context';
-import { logger } from './utils';
+import { getGeneratorAppErrorMessage, logger, showMessageBox } from './utils';
 
 export class CodeGenStatus implements ICodeGenStatus {
     private _lastLhqStatus: LastLhqStatus | undefined;
@@ -78,7 +78,7 @@ export class CodeGenStatus implements ICodeGenStatus {
 
             case 'idle':
                 textSuffix = false;
-                text = '$(run-all) LHQ';
+                text = '$(run-all) LHQ (template: ' + templateId + ')';
                 command = GlobalCommands.runGenerator;
                 tooltip = `Click to run code generator template **${templateId}**`;
                 break;
@@ -89,6 +89,12 @@ export class CodeGenStatus implements ICodeGenStatus {
                 colorId = 'statusBarItem.errorForeground';
                 command = GlobalCommands.showOutput;
                 tooltip = `Click to see error details in output panel `;
+
+                if (info.error) {
+                    info.message += `\n${getGeneratorAppErrorMessage(info.error as Error)}`;
+                }
+
+                void showMessageBox('err', info.message, { modal: false, logger: false });
                 break;
 
             case 'status':

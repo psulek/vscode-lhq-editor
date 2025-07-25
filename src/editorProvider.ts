@@ -1,7 +1,7 @@
 import path from 'node:path';
 import * as vscode from 'vscode';
 import { LhqTreeDataProvider } from './treeDataProvider';
-import { delay, isValidDocument, logger, showMessageBox } from './utils';
+import { delay, getGeneratorAppErrorMessage, isValidDocument, logger, showMessageBox } from './utils';
 import { AppToPageMessage, SelectionChangedCallback } from './types';
 import debounce from 'lodash.debounce';
 import { Generator, isNullOrEmpty, ITreeElement } from '@lhq/lhq-generators';
@@ -156,9 +156,10 @@ export class LhqEditorProvider implements vscode.CustomTextEditorProvider {
             }
         }
         catch (error) {
-            logger().log(this, 'error', `Code generator template '${templateId}' failed.`, error as Error);
+            const msg = `Code generator template '${templateId}' failed.`;
+            logger().log(this, 'error', msg, error as Error);
 
-            this._codeGenStatus.updateGeneratorStatus(templateId, { kind: 'error', message: `Error generating files.` });
+            this._codeGenStatus.updateGeneratorStatus(templateId, { kind: 'error', message: msg, error: error as Error });
         } finally {
             this._codeGenStatus.inProgress = false;
 

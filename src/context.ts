@@ -108,7 +108,7 @@ export class AppContext implements IAppContext {
         this.isEditorActive = false;
         this.setTreeSelection([]);
 
-        initializeDebugMode(ctx.extensionMode);
+        initializeDebugMode(ctx);
         await loadCultures(ctx);
 
         // const lhqFs = new LhqFileSystemProvider();
