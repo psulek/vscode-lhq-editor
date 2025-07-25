@@ -2,19 +2,20 @@ import * as vscode from 'vscode';
 import { isNullOrEmpty } from '@lhq/lhq-generators';
 
 import { CodeGeneratorStatusInfo, ICodeGenStatus, LastLhqStatus } from './types';
-import { Commands, ContextEvents, ContextKeys, GlobalCommands } from './context';
+import { ContextEvents, ContextKeys, GlobalCommands } from './context';
 import { getGeneratorAppErrorMessage, logger, showMessageBox } from './utils';
+import path from 'node:path';
 
 export class CodeGenStatus implements ICodeGenStatus {
     private _lastLhqStatus: LastLhqStatus | undefined;
     private _inProgress = false;
     private _codeGeneratorStatus: vscode.StatusBarItem;
 
-    constructor(private readonly context: vscode.ExtensionContext) {
+    constructor(context: vscode.ExtensionContext) {
         this.inProgress = false;
 
         this._codeGeneratorStatus = vscode.window.createStatusBarItem('lhq.codeGeneratorStatus', vscode.StatusBarAlignment.Left, 10);
-        this.updateGeneratorStatus('', { kind: 'idle' });
+        this.updateGeneratorStatus('', { kind: 'idle', filename: '' });
 
         // TODO: Maybe unsubscribe this status bar item when extension is deactivated?
         context.subscriptions.push(this._codeGeneratorStatus);
@@ -64,27 +65,32 @@ export class CodeGenStatus implements ICodeGenStatus {
 
         this._lastLhqStatus = {
             kind: info.kind,
+            filename: info.filename,
             uid: result
         };
 
         const suffix = ' (lhq-editor)';
         let textSuffix = true;
+        const filename = path.basename(info.filename);
 
         switch (info.kind) {
             case 'active':
-                text = `$(sync~spin) LHQ generating code for ${info.filename}`;
+                // text = `$(sync~spin) LHQ generating code for ${filename}`;
+                text = `$(sync~spin) ${filename}: generating code ...`;
                 tooltip = `Running code generator template **${templateId}** ...`;
                 break;
 
             case 'idle':
-                textSuffix = false;
-                text = '$(run-all) LHQ (template: ' + templateId + ')';
+                // textSuffix = false;
+                // text = '$(run-all) LHQ (template: ' + templateId + ')';
+                text = `$(run-all) ` + (isNullOrEmpty(info.filename) ? 'LHQ' : filename);
                 command = GlobalCommands.runGenerator;
                 tooltip = `Click to run code generator template **${templateId}**`;
                 break;
 
             case 'error':
-                text = `$(error) ${info.message}`;
+                // text = `$(error) ${info.message}`;
+                text = `$(error) ${filename}: ${info.message}`;
                 backgroundId = 'statusBarItem.errorBackground';
                 colorId = 'statusBarItem.errorForeground';
                 command = GlobalCommands.showOutput;
@@ -98,7 +104,9 @@ export class CodeGenStatus implements ICodeGenStatus {
                 break;
 
             case 'status':
-                text = info.success ? `$(check) ${info.message}` : `$(error) ${info.message}`;
+                const icon = info.success ? 'check' : 'error';
+                // text = info.success ? `$(check) ${info.message}` : `$(error) ${info.message}`;
+                text = `$(${icon}) ${filename}: ${info.message}`;
                 tooltip = '';
                 backgroundId = info.success
                     ? 'statusBarItem.prominentBackground'
@@ -115,7 +123,7 @@ export class CodeGenStatus implements ICodeGenStatus {
             const uid = this._lastLhqStatus!.uid;
             setTimeout(() => {
                 if (this._lastLhqStatus!.uid === uid) {
-                    this.updateGeneratorStatus(templateId, { kind: 'idle' });
+                    this.updateGeneratorStatus(templateId, { kind: 'idle', filename: info.filename });
                 }
             }, info.timeout);
         }

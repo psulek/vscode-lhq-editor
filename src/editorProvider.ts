@@ -1,7 +1,7 @@
 import path from 'node:path';
 import * as vscode from 'vscode';
 import { LhqTreeDataProvider } from './treeDataProvider';
-import { delay, getGeneratorAppErrorMessage, isValidDocument, logger, showMessageBox } from './utils';
+import { delay, isValidDocument, logger, showMessageBox } from './utils';
 import { AppToPageMessage, SelectionChangedCallback } from './types';
 import debounce from 'lodash.debounce';
 import { Generator, isNullOrEmpty, ITreeElement } from '@lhq/lhq-generators';
@@ -112,14 +112,14 @@ export class LhqEditorProvider implements vscode.CustomTextEditorProvider {
         logger().log(this, 'debug', `runCodeGenerator -> Running code generator for document ${activeDoc.documentUri}`);
 
 
-        const fileName = activeDoc.fileName;
-        if (isNullOrEmpty(fileName)) {
-            logger().log(this, 'debug', `runCodeGenerator -> Document fileName is not valid (${fileName}). Cannot run code generator.`);
+        const filename = activeDoc.fileName;
+        if (isNullOrEmpty(filename)) {
+            logger().log(this, 'debug', `runCodeGenerator -> Document fileName is not valid (${filename}). Cannot run code generator.`);
             return;
         }
 
         const templateId = activeDoc.codeGeneratorTemplateId;
-        logger().log(this, 'info', `Running code generator template '${templateId}' for document: ${fileName}`);
+        logger().log(this, 'info', `Running code generator template '${templateId}' for document: ${filename}`);
 
         this._codeGenStatus.inProgress = true;
 
@@ -127,11 +127,11 @@ export class LhqEditorProvider implements vscode.CustomTextEditorProvider {
         let idleStatusOnEnd = true;
 
         try {
-            beginStatusUid = this._codeGenStatus.updateGeneratorStatus(templateId, { kind: 'active', filename: fileName });
+            beginStatusUid = this._codeGenStatus.updateGeneratorStatus(templateId, { kind: 'active', filename });
 
             const startTime = Date.now();
             const generator = new Generator();
-            const result = generator.generate(fileName, activeDoc.jsonModel, {});
+            const result = generator.generate(filename, activeDoc.jsonModel, {});
             const generationTime = Date.now() - startTime;
 
             // artificially delay the status update to show the spinner ...
@@ -140,33 +140,44 @@ export class LhqEditorProvider implements vscode.CustomTextEditorProvider {
             }
 
             if (result.generatedFiles) {
-                const lhqFileFolder = path.dirname(fileName);
+                const lhqFileFolder = path.dirname(filename);
                 const fileNames = result.generatedFiles.map(f => path.join(lhqFileFolder, f.fileName));
                 logger().log(this, 'info', `Code generator template '${templateId}' successfully generated ${fileNames.length} files:\n` +
                     `${fileNames.join('\n')}`);
 
                 this._codeGenStatus.updateGeneratorStatus(templateId, {
                     kind: 'status',
-                    message: `Generated ${result.generatedFiles.length} files.`,
+                    message: `generated ${result.generatedFiles.length} files.`,
+                    filename,
                     success: true,
                     timeout: 2000
                 });
             } else {
-                this._codeGenStatus.updateGeneratorStatus(templateId, { kind: 'error', message: 'Error generating files.', timeout: 5000 });
+                this._codeGenStatus.updateGeneratorStatus(templateId, {
+                    kind: 'error',
+                    filename,
+                    message: 'error generating files.',
+                    timeout: 5000
+                });
             }
         }
         catch (error) {
-            const msg = `Code generator template '${templateId}' failed.`;
+            const msg = `code generator template '${templateId}' failed.`;
             logger().log(this, 'error', msg, error as Error);
 
-            this._codeGenStatus.updateGeneratorStatus(templateId, { kind: 'error', message: msg, error: error as Error });
+            this._codeGenStatus.updateGeneratorStatus(templateId, {
+                kind: 'error',
+                filename,
+                message: msg,
+                error: error as Error
+            });
         } finally {
             this._codeGenStatus.inProgress = false;
 
             if (idleStatusOnEnd) {
                 setTimeout(() => {
                     if (beginStatusUid === this._codeGenStatus.lastStatus?.uid) {
-                        this._codeGenStatus.updateGeneratorStatus('', { kind: 'idle' });
+                        this._codeGenStatus.updateGeneratorStatus('', { kind: 'idle', filename });
                     }
                 }, 2000);
             }
@@ -175,10 +186,10 @@ export class LhqEditorProvider implements vscode.CustomTextEditorProvider {
 
     public resetGeneratorStatus(): void {
         if (this._codeGenStatus.lastStatus === undefined || this._codeGenStatus.lastStatus.kind === 'error' || !this._codeGenStatus.inProgress) {
-            this._codeGenStatus.updateGeneratorStatus('', { kind: 'idle' });
+            const filename = this._codeGenStatus.lastStatus?.filename ?? '';
+            this._codeGenStatus.updateGeneratorStatus('', { kind: 'idle', filename });
         }
     }
-
 
     public async resolveCustomTextEditor(
         document: vscode.TextDocument,
@@ -200,8 +211,6 @@ export class LhqEditorProvider implements vscode.CustomTextEditorProvider {
                 // NOTE: Test if needed this delay thingy at all
                 setTimeout(async () => {
 
-                    //const treeHasActiveDoc = this.treeDataProvider.hasActiveDocument();
-                    // if (treeHasActiveDoc && !this.treeDataProvider.isSameDocument(document)) {
                     const docIsActive = doc?.isActive ?? false;
 
                     if (docIsActive && !doc?.isSameDocument(document)) {
@@ -213,7 +222,6 @@ export class LhqEditorProvider implements vscode.CustomTextEditorProvider {
 
                         // if not active document or not valid document, update tree data provider to clear/hide tree
                         if (!activeDocument || !isValidDocument(activeDocument)) {
-                            // await this.treeDataProvider.updateDocument(undefined);
                             const treeDoc = this.treeDataProvider.activeDocument;
                             if (!treeDoc || treeDoc.isSameDocument(document) || treeDoc === doc) {
                                 await doc!.update(undefined);
@@ -248,7 +256,6 @@ export class LhqEditorProvider implements vscode.CustomTextEditorProvider {
             logger().log(this, 'error', `resolveCustomTextEditor -> Error while resolving custom text editor: ${error}`);
 
             // clear and hide the tree if error occurs
-            // await this.treeDataProvider.updateDocument(undefined, false);
             await docCtx.update(undefined);
         }
     }
@@ -261,7 +268,7 @@ export class LhqEditorProvider implements vscode.CustomTextEditorProvider {
         }
 
         if (activeDoc.isSameDocument(event.document)) {
-            const validationError = activeDoc.lastValidationError;
+            const validationError = activeDoc.lastValidationError || activeDoc.validateDocument().error;
 
             // TODO: If error, run 'processBeforeSave' to edit with original content (with no error) to be saved to file!!
             if (validationError) {
@@ -283,7 +290,6 @@ export class LhqEditorProvider implements vscode.CustomTextEditorProvider {
             logger().log(this, 'debug', `onUndoRedo -> Document ${document.fileName} is active. Updating tree and webview.`);
 
             await activeDoc.update(document, { forceRefresh: true });
-            //activeDoc.sendMessageToHtmlPage({ command: 'requestPageReload' });
         } else {
             logger().log(this, 'debug', `onUndoRedo -> Document ${document.fileName} is not active. Skipping update.`);
         }

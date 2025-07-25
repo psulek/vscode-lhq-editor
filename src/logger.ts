@@ -3,7 +3,6 @@ import * as vscode from 'vscode';
 
 export type LogType = 'debug' | 'info' | 'warn' | 'error';
 
-
 export type ILogger = {
     log: (ctx: string | object, level: LogType, msg: string, err?: Error) => void;
 };
@@ -51,6 +50,7 @@ export class VsCodeLogger implements ILogger {
 
     log(ctx: string | object, level: LogType, msg: string, err?: Error | undefined): void {
         const toConsole = this._debugMode || level === 'debug';
+        const date = new Date().toISOString().replace('T', ' ').replace('Z', '');
 
         let errInfo = '';
         if (err) {
@@ -62,7 +62,10 @@ export class VsCodeLogger implements ILogger {
         }
 
         msg = `${msg} ${errInfo}`;
-        const text = `[${level}] ` + (toConsole ? getFormattedMsg(ctx, msg) : msg);
+        let text = (toConsole ? getFormattedMsg(ctx, msg) : msg);
+
+        // split text on new lines (cr/lf/crlf) and prepend each line with the date and level
+        text = text.split(/\r?\n/).map(line => `${date} [${level}] ${line}`).join('\n');
 
         if (toConsole) {
             if (err) {
@@ -72,10 +75,6 @@ export class VsCodeLogger implements ILogger {
             }
             return;
         }
-
-        // if (!VsCodeLogger.panel) {
-        //     VsCodeLogger.panel = vscode.window.createOutputChannel('LHQ Editor', 'lhq-log');
-        // }
 
         VsCodeLogger.panel!.appendLine(text);
     }

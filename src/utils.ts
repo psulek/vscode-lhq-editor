@@ -124,24 +124,6 @@ export function isSubsetOfArray(sourceArr: string[], subsetArr: string[], ignore
     return true;
 }
 
-// export function sequentialEquals(arr1: string[], arr2: string[], ignoreCase: boolean = false, maxLength?: number): boolean {
-//     const arr1Length = Math.max(0, Math.min(maxLength ?? 0, arr1.length));
-//     const arr2Length = Math.max(0, Math.min(maxLength ?? 0, arr2.length));
-
-//     if (arr1Length !== arr2Length) {
-//         return false;
-//     }
-
-//     for (let i = 0; i < arr1Length; i++) {
-//         if (!strCompare(arr1[i], arr2[i], ignoreCase)) {
-//             return false;
-//         }
-//     }
-
-//     return true;
-// }
-
-
 export function isCategoryLikeTreeElement(element: ITreeElement | undefined): element is ICategoryLikeTreeElement {
     if (!element) {
         return false;
@@ -177,11 +159,6 @@ export function findChildsByPaths(root: IRootModelElement, elementPaths: ITreeEl
             result.push(...res);
         } else {
             currentElement = currentElement.getCategory(path);
-            // if (currentElement) {
-            //     result.push({
-            //         element: currentElement, match: { match: 'equal' }, leaf: false
-            //     });
-            // }
         }
 
         path = paths.shift() ?? '';
@@ -208,13 +185,6 @@ export function matchForSubstring(value: string, searchString: string, ignoreCas
         }
 
         result.match = value.includes(searchString) ? 'contains' : 'none';
-        // if (result.match !== 'none') {
-        //     const startIndex = value.indexOf(searchString);
-        //     if (startIndex > -1) {
-        //         result.highlights ??= [];
-        //         result.highlights.push([startIndex, startIndex + searchString.length]);
-        //     }
-        // }
     }
 
     if (result.match !== 'none') {

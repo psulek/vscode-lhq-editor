@@ -111,32 +111,11 @@ export class AppContext implements IAppContext {
         initializeDebugMode(ctx);
         await loadCultures(ctx);
 
-        // const lhqFs = new LhqFileSystemProvider();
-        // const uriHandler = new LhqUriHandler();
-
-
-        // NOTE: For testing...
-        // context.subscriptions.push(vscode.commands.registerCommand('lhq-editor.open', () => {
-        //     const activeEditor = vscode.window.activeTextEditor;
-        //     if (activeEditor) {
-        //         const docUri = activeEditor.document.uri;
-        //         // This is the core logic: open the file with our custom editor's viewType.
-        //         vscode.commands.executeCommand('vscode.openWith', docUri, LhqEditorProvider.viewType);
-        //     }
-        // }));
-
         this._ctx.subscriptions.push(
             vscode.commands.registerCommand(GlobalCommands.showOutput, () => {
-                //vscode.commands.executeCommand('workbench.action.showOutput', 'LHQ Editor');
                 VsCodeLogger.showPanel();
-                //this._lhqTreeDataProvider.resetGeneratorStatus();
                 this._lhqEditorProvider.resetGeneratorStatus();
             }),
-
-            // vscode.workspace.registerFileSystemProvider('lhq', lhqFs, { isCaseSensitive: true, isReadonly: false }),
-            // vscode.window.registerUriHandler(uriHandler),
-
-            //vscode.workspace.onDidOpenTextDocument(this.handleDidOpenTextDocument.bind(this)),
 
             vscode.workspace.onDidChangeTextDocument(this.handleDidChangeTextDocument.bind(this)),
 
@@ -157,43 +136,9 @@ export class AppContext implements IAppContext {
             })
         );
 
-        //this._codeGenStatus = new CodeGenStatus(ctx);
-
         // commands
         vscode.commands.registerCommand(GlobalCommands.createNewLhqFile, () => this.createNewLhqFile());
     }
-
-    /* public runCodeGenerator(): void {
-        this._lhqEditorProvider.runCodeGenerator();
-    } */
-
-    /* private async processBeforeSave(document: vscode.TextDocument): Promise<vscode.TextEdit[]> {
-        const edits: vscode.TextEdit[] = [];
-
-        // Get the current content
-        const text = document.getText();
-
-        // Process the content (modify as needed)
-        const modifiedText = yourModificationFunction(text);
-
-        // Create a full document replace edit
-        const firstLine = document.lineAt(0);
-        const lastLine = document.lineAt(document.lineCount - 1);
-        const textRange = new vscode.Range(
-            firstLine.range.start,
-            lastLine.range.end
-        );
-
-        edits.push(vscode.TextEdit.replace(textRange, modifiedText));
-
-        return edits;
-    } */
-
-    // private handleDidOpenTextDocument(e: vscode.TextDocument): void {
-    //     if (isValidDocument(e)) {
-
-    //     }
-    // }
 
     public getConfig(): ExtensionConfig {
         const cfg = vscode.workspace.getConfiguration();
@@ -206,7 +151,6 @@ export class AppContext implements IAppContext {
     public async updateConfig(newConfig: Partial<ExtensionConfig>): Promise<void> {
         const cfg = await vscode.workspace.getConfiguration();
         if (newConfig.autoFocusEditor) {
-            // cfg.update(configKeys.autoFocusEditor, newConfig.autoFocusEditor, vscode.ConfigurationTarget.Global);
             cfg.update(configKeys.autoFocusEditor, newConfig.autoFocusEditor, vscode.ConfigurationTarget.Workspace);
         }
     }
@@ -218,7 +162,6 @@ export class AppContext implements IAppContext {
         }
 
         const reason = e.reason === vscode.TextDocumentChangeReason.Undo ? 'Undo' : 'Redo';
-        //const hasReason = e.reason !== undefined;
         logger().log(this, 'debug', `onDidChangeTextDocument -> document: ${e.document?.fileName ?? '-'}, reason: ${reason}`);
 
         const docUri = e.document?.uri.toString() ?? '';
@@ -299,7 +242,6 @@ export class AppContext implements IAppContext {
                 return;
             }
 
-            //const hbsMetadata = getHbsMetadata();
             const templates = Object.values(HbsTemplateManager.getTemplateDefinitions());
 
             interface TemplateQuickPickItem extends vscode.QuickPickItem {
@@ -452,7 +394,6 @@ export class AppContext implements IAppContext {
 
     public clearTreeContextValues() {
         for (const key of Object.values(ContextKeys)) {
-            // if (key !== contextKeys.isEditorActive) {
             if (key.indexOf('lhqTree') === 0) {
                 vscode.commands.executeCommand('setContext', key, false);
             }
@@ -496,17 +437,6 @@ export function getCurrentFolder(): vscode.Uri | undefined {
             folder = uri.scheme === 'file' ? vscode.workspace.getWorkspaceFolder(uri)?.uri : undefined;
         }
     }
-
-
-    // // Try to get from the explorer context menu selection (if available)
-    // const selected = vscode.window.activeTextEditor?.document.uri;
-    // if (selected) {
-    //     const stat = vscode.workspace.fs.stat(selected);
-    //     // If it's a folder, return it
-    //     if (stat && stat.then && typeof stat.then === 'function') {
-    //         return stat.then(info => info.type === vscode.FileType.Directory ? selected : undefined);
-    //     }
-    // }
 
     return folder;
 }

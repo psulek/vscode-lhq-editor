@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
-import { ICategoryLikeTreeElement, isNullOrEmpty, ITreeElement, ModelUtils } from '@lhq/lhq-generators';
-import { getElementFullPath, logger, toPascalCasing } from './utils';
-import { getTreeElementUid, isVirtualTreeElement, VirtualTreeElement } from './elements';
+import { ICategoryLikeTreeElement, ITreeElement, ModelUtils } from '@lhq/lhq-generators';
+import { getElementFullPath, toPascalCasing } from './utils';
+import { isVirtualTreeElement, VirtualTreeElement } from './elements';
 import { SearchTreeOptions, AppTreeElementType, IVirtualLanguageElement } from './types';
 
 // https://code.visualstudio.com/api/references/icons-in-labels#icon-listing
@@ -77,18 +77,9 @@ export class LhqTreeItem extends vscode.TreeItem {
 
         this.contextValue = elementType;
 
-        // if (!isVirtualElem) {
-        //     this.id = getTreeElementUid(element);
-        //     if (isNullOrEmpty(this.id)) {
-        //         throw new Error(`Element ${elementName} has no UID set!`);
-        //     }
-        //     logger().log(this, 'debug', `Created tree item for element: ${elementName} ${elementType} (${this.id})`);
-        // }
-
         let icon = icons[elementType];
 
         if (virtualElement) {
-            //const virtualElement = element as VirtualTreeElement;
             this.parentPath = '';
             if (virtualElement.virtualElementType === 'languages') {
                 this.tooltip = new vscode.MarkdownString(`**Languages**`, true);

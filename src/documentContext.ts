@@ -1,9 +1,9 @@
 import * as vscode from 'vscode';
 import { nextTick } from 'node:process';
 import { createTreeElementPaths, delay, findCulture, generateNonce, getCultureDesc, getElementFullPath, isValidDocument, loadCultures, logger, showConfirmBox, showMessageBox } from './utils';
-import { AppToPageMessage, ClientPageError, ClientPageModelProperties, ClientPageSettingsError, CultureInfo, ICodeGenStatus, IDocumentContext, IVirtualLanguageElement, IVirtualRootElement, PageToAppMessage, SelectionBackup, ValidationError } from './types';
+import { AppToPageMessage, ClientPageError, ClientPageModelProperties, ClientPageSettingsError, CultureInfo, ICodeGenStatus, IDocumentContext, IVirtualLanguageElement, IVirtualRootElement, PageToAppMessage, ValidationError } from './types';
 import { CategoryLikeTreeElementToJsonOptions, CategoryOrResourceType, CodeGeneratorGroupSettings, detectFormatting, FormattingOptions, generatorUtils, HbsTemplateManager, ICategoryLikeTreeElement, IResourceElement, IResourceParameterElement, IResourceValueElement, IRootModelElement, isNullOrEmpty, ITreeElement, LhqModel, LhqModelResourceTranslationState, LhqValidationResult, modelConst, ModelUtils, TreeElementType } from '@lhq/lhq-generators';
-import { filterTreeElements, filterVirtualTreeElements, getTreeElementUid, isVirtualTreeElement, setTreeElementUid, validateTreeElementName, VirtualRootElement } from './elements';
+import { filterTreeElements, filterVirtualTreeElements, isVirtualTreeElement, setTreeElementUid, validateTreeElementName, VirtualRootElement } from './elements';
 import { AvailableCommands, Commands } from './context';
 
 type LangTypeMode = 'all' | 'neutral' | 'country';
@@ -38,8 +38,7 @@ const LanguageTypeModes = [
 ] as LangTypeQuickPickItem[];
 
 type UpdateOptions = {
-    forceRefresh?: boolean
-    //hasAnyActiveDocument?: () => boolean;
+    forceRefresh?: boolean;
 };
 
 export class DocumentContext implements IDocumentContext {
@@ -304,11 +303,8 @@ export class DocumentContext implements IDocumentContext {
         const validationResult = this.validateDocument();
         if (!validationResult.success) {
             logger().log(this, 'warn', `commitChanges [${message}] -> Validation failed: ${validationResult.error?.message}`);
+            return false;
         }
-
-        // if (rootFix === true) {
-        //     ModelUtils.setTempData(this._rootModel, 'undoredo', true);
-        // }
 
         const newModel = ModelUtils.elementToModel<LhqModel>(this._rootModel!, { keepData: true, keepDataKeys: ['uid', 'undoredo'] });
         const serializedRoot = ModelUtils.serializeModel(newModel, this._documentFormatting);
@@ -392,16 +388,6 @@ export class DocumentContext implements IDocumentContext {
                         this._rootModel = ModelUtils.createRootElement(validateResult.model);
                         this._virtualRootElement = new VirtualRootElement(this._rootModel);
 
-                        //generate uids for tree elements to be used in treeview as unique id
-                        // this._rootModel!.iterateTree(elem => {
-                        //     const id = getTreeElementUid(elem);
-                        //     if (id === '') {
-                        //         ModelUtils.setTempData(elem, 'uid', crypto.randomUUID());
-                        //     } else {
-                        //         debugger;
-                        //     }
-                        // });
-
                     } else {
                         this._jsonModel = undefined;
                     }
@@ -419,7 +405,10 @@ export class DocumentContext implements IDocumentContext {
                     logger().log(this, 'error', `refresh failed -> ${error}`);
                     void showMessageBox('err', error);
                 } else {
-                    this._codeGenStatus.updateGeneratorStatus(this.codeGeneratorTemplateId, { kind: 'idle' });
+                    this._codeGenStatus.updateGeneratorStatus(this.codeGeneratorTemplateId, { 
+                        kind: 'idle',
+                        filename: this.fileName
+                     });
                 }
 
                 this.validateDocument();
@@ -431,7 +420,7 @@ export class DocumentContext implements IDocumentContext {
         }
     }
 
-    private validateDocument(): { success: boolean, error: ValidationError | undefined } {
+    public validateDocument(): { success: boolean, error: ValidationError | undefined } {
         this._validationError = undefined;
 
         if (this._rootModel) {
@@ -479,8 +468,6 @@ export class DocumentContext implements IDocumentContext {
                 logger().log(this, 'debug', `onDidDispose -> for: ${this.fileName}`);
                 viewStateSubscription.dispose();
                 didReceiveMessageSubscription.dispose();
-                //this._webviewPanel = undefined;
-                //this._disposed = true;
 
                 this._onDidDispose();
             })
@@ -506,7 +493,6 @@ export class DocumentContext implements IDocumentContext {
                 try {
                     const element = message.data;
                     if (element) {
-                        // await appContext.treeContext.updateElement(element);
                         await this.updateElement(element);
                     }
                 } catch (e) {
@@ -536,14 +522,11 @@ export class DocumentContext implements IDocumentContext {
                 break;
             }
             case 'confirmQuestion': {
-                //const rootModel = appContext.treeContext.currentRootModel!;
                 if (!this.rootModel) {
                     logger().log(this, 'error', `${header} No current root model found.`);
                     return;
                 }
 
-                // const text = 'Reset Code Generator Settings?';
-                // const detail = 'Are you sure you want to reset code generator settings to default values?';
                 const text = message.message;
                 const detail = message.detail;
                 const warn = message.warning ?? false;
@@ -571,7 +554,6 @@ export class DocumentContext implements IDocumentContext {
         }
 
         this._selectedElements = selectedElements ?? [];
-        //logger().log(this, 'debug', `onSelectionChanged -> ${selectedElements ? selectedElements.length : 0} elements selected.`);
         this.reflectSelectedElementToWebview();
     }
 
@@ -581,7 +563,6 @@ export class DocumentContext implements IDocumentContext {
             return;
         }
 
-        //logger().log(this, 'debug', `loadEmptyPage for: ${this.fileName}`);
         this._webviewPanel.webview.html = await this.getHtmlForWebview(true);
     }
 
@@ -591,11 +572,9 @@ export class DocumentContext implements IDocumentContext {
             return;
         }
 
-        //logger().log('debug', `[DocumentContext] updateWebviewContent for: ${this.fileName}`);
         this._webviewPanel.webview.html = await this.getHtmlForWebview(false);
 
         const templatesMetadata = HbsTemplateManager.getTemplateDefinitions();
-
         this.sendMessageToHtmlPage({ command: 'init', templatesMetadata });
     }
 
@@ -609,7 +588,6 @@ export class DocumentContext implements IDocumentContext {
             return;
         }
 
-        // const rootModel = appContext.treeContext.currentRootModel!;
         const rootModel = this.rootModel;
         const element = this._selectedElements.length > 0 ? this._selectedElements[0] : rootModel;
 
@@ -617,7 +595,6 @@ export class DocumentContext implements IDocumentContext {
             return;
         }
 
-        //appContext.treeContext.clearPageErrors();
         this.clearPageErrors();
 
         const cultures = rootModel.languages.map(lang => findCulture(lang)).filter(c => !!c);
@@ -648,10 +625,6 @@ export class DocumentContext implements IDocumentContext {
     }
 
     private async getHtmlForWebview(emptyPage: boolean): Promise<string> {
-        // if (!this._webviewPanel) {
-        //     return '';
-        // }
-
         const webview = this._webviewPanel.webview;
         let pageHtml = await appContext.getPageHtml();
 
@@ -704,7 +677,6 @@ export class DocumentContext implements IDocumentContext {
         try {
             if (this._webviewPanel && this._webviewPanel.webview) {
                 if (this._webviewPanel.active) {
-                    //logger().log(this, 'debug', `sendMessage -> ${message.command} ...`);
                     this._webviewPanel.webview.postMessage(message);
                 } else {
                     logger().log(this, 'debug', `sendMessage() skipped for message '${message.command}' -> WebviewPanel is not active.`);
@@ -1002,8 +974,6 @@ export class DocumentContext implements IDocumentContext {
 
             await this.commitChanges('addItemComplete');
 
-            // this._onDidChangeTreeData.fire([parent]);
-            // await this.revealElement(newElement, { expand: true, select: true, focus: true });
             this.treeContext.refreshTree([parent]);
             await this.treeContext.revealElement(newElement, { expand: true, select: true, focus: true });
 
@@ -1057,8 +1027,6 @@ export class DocumentContext implements IDocumentContext {
         element.name = newName;
         const success = await this.commitChanges('renameItem');
 
-        // this._onDidChangeTreeData.fire([element]);
-        // await this.revealElement(element, { expand: true, select: true, focus: true });
         this.treeContext.refreshTree([element]);
         await this.treeContext.revealElement(element, { expand: true, select: true, focus: true });
 
@@ -1127,10 +1095,8 @@ export class DocumentContext implements IDocumentContext {
         logger().log(this, 'debug', `Deleting ${elemIdent} ${success ? 'suceed' : 'failed'} where ${deletedCount} element(s) was deleted` +
             (notDeletedCount > 0 ? ` and failed to delete ${notDeletedCount} elements (no parent found).` : '.'));
 
-        // this._onDidChangeTreeData.fire([parentToSelect]);
         this.treeContext.refreshTree(parentToSelect ? [parentToSelect] : undefined);
         if (parentToSelect) {
-            // await this.revealElement(parentToSelect, { expand: true, select: true });
             await this.treeContext.revealElement(parentToSelect, { expand: true, select: true });
         }
 
@@ -1219,12 +1185,9 @@ export class DocumentContext implements IDocumentContext {
 
         await this.commitChanges('addLanguageComplete');
 
-        //await this.clearSelection(true);
         await this.treeContext.clearSelection(true);
         langRoot.refresh();
 
-        // this._onDidChangeTreeData.fire([langRoot]);
-        // await this.revealElement(langRoot, { expand: true, select: true, focus: true });
         this.treeContext.refreshTree([langRoot]);
         await this.treeContext.revealElement(langRoot, { expand: true, select: true, focus: true });
 
@@ -1295,15 +1258,11 @@ export class DocumentContext implements IDocumentContext {
 
         const success = await this.commitChanges('deleteLanguage');
 
-        //langRoot.refresh();
         const langRoot = this._virtualRootElement!.languagesRoot;
 
-        // await this.clearSelection(true);
         await this.treeContext.clearSelection(true);
         langRoot.refresh();
 
-        // this._onDidChangeTreeData.fire([langRoot]);
-        // await this.revealElement(langRoot, { expand: true, select: true, focus: true });
         this.treeContext.refreshTree([langRoot]);
         await this.treeContext.revealElement(langRoot, { expand: true, select: true, focus: true });
 
@@ -1349,11 +1308,8 @@ export class DocumentContext implements IDocumentContext {
         const success = await this.commitChanges('markLanguageAsPrimary');
 
         if (success) {
-            // await this.clearSelection(true);
             await this.treeContext.clearSelection(true);
 
-            // this._onDidChangeTreeData.fire([langRoot]);
-            // await this.revealElement(langRoot, { expand: true, select: true, focus: true });
             this.treeContext.refreshTree([langRoot]);
             await this.treeContext.revealElement(langRoot, { expand: true, select: true, focus: true });
 
@@ -1373,12 +1329,10 @@ export class DocumentContext implements IDocumentContext {
             return;
         }
 
-        // this._onDidChangeTreeData.fire(undefined);
         this.treeContext.refreshTree(undefined);
         this._virtualRootElement.refresh();
 
         const langRoot = this._virtualRootElement!.languagesRoot;
-        // await this.revealElement(langRoot, { select: true, focus: false, expand: true });
         await this.treeContext.revealElement(langRoot, { select: true, focus: false, expand: true });
     }
 

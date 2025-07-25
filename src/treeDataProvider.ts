@@ -49,7 +49,7 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
     private _loadingTreeElement: VirtualElementLoading;
     private _loadingNodeVisible = false;
 
-    constructor(private context: vscode.ExtensionContext) {
+    constructor(context: vscode.ExtensionContext) {
         this.view = vscode.window.createTreeView('lhqTreeView', {
             treeDataProvider: this,
             showCollapseAll: true,
@@ -103,8 +103,6 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
             : this.currentRootModel!.getElementByPath(paths, elementType as CategoryOrResourceType);
 
         if (elem) {
-            //await this.setSelectedItems([elem!]);
-
             await this.revealElement(elem, { select: true, focus: true, expand: expand ?? false });
         }
     }
@@ -261,15 +259,9 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
 
         if (itemToUse) {
             try {
-                // select/deselect trick
-                //await this.revealElement(itemToUse, { select: true, focus: false, expand: false });
-
                 // select 'lang root' to hack clear/set selection
                 const langRoot = this.currentVirtualRootElement!.languagesRoot;
                 await this.revealElement(langRoot, { select: true, focus: false, expand: false });
-
-
-                //await this.revealElement(itemToUse, { select: false, focus: false, expand: false });
 
                 if (reselect) {
                     await this.revealElement(itemToUse, { select: true, focus: true, expand: false });
@@ -300,13 +292,6 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
         }
 
         if (!itemsToSelect || itemsToSelect.length === 0) {
-            // If you want to clear selection, there isn't a direct API.
-            // One common way is to reveal a known "unselectable" or root item without selecting it,
-            // or if the last reveal with select:true clears previous selections,
-            // revealing a single item with select:true would effectively set the selection to just that item.
-            // For now, this method will only add to selection or set it if items are provided.
-            // To truly "clear" selection, you might need to manage it more complexly or rely on user interaction.
-            //logger().log('debug', '[LhqTreeDataProvider] setSelectedItems -> No items provided to select.');
             return;
         }
 
@@ -450,10 +435,6 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
             }
         });
 
-        // if (!await this.applyChangesToTextDocument()) {
-        //     return;
-        // }
-
         await this._activeDoc.commitChanges('handleDrop');
 
         this._onDidChangeTreeData.fire([target]);
@@ -579,4 +560,4 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
         // await this.clearSelection();
         await this.setSelectedItems(restoredElements);
     }
-} 
+}

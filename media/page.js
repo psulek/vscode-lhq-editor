@@ -124,6 +124,11 @@
         if (event.ctrlKey === true && event.keyCode === 13) {
             event.preventDefault();
             event.stopPropagation();
+
+            if (window.pageApp && window.pageApp.modelProperties.visible) {
+                window.pageApp.saveProperties();
+            }
+
         } else if (!event.ctrlKey && !event.shiftKey && !event.metaKey && event.keyCode === 27) {
 
             // Escape key pressed, close all tooltips
@@ -1257,6 +1262,10 @@
             },
 
             saveProperties() {
+                if (this.modelProperties.saving) {
+                    return;
+                }
+
                 this.modelProperties.saving = true;
                 this.modelProperties.codeGeneratorError = undefined;
 

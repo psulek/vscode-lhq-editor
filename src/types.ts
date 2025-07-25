@@ -1,4 +1,4 @@
-import type { CodeGeneratorGroupSettings, FormattingOptions, ICodeGeneratorElement, IRootModelElement, ITreeElement, LhqModel, LhqModelOptionsResources, TemplateMetadataDefinition, TreeElementType } from '@lhq/lhq-generators';
+import type { FormattingOptions, ICodeGeneratorElement, IRootModelElement, ITreeElement, LhqModel, LhqModelOptionsResources, TemplateMetadataDefinition, TreeElementType } from '@lhq/lhq-generators';
 import type { MessageOptions, TextDocument, Uri, Webview } from 'vscode';
 
 export type ExtensionConfig = {
@@ -122,9 +122,8 @@ export type AppToPageMessage = {
     id: ConfirmQuestionTypes;
     confirmed: boolean;
     result: unknown | undefined;
-    // settings: CodeGeneratorGroupSettings;
 } | {
-    command: 'requestPageReload' // usually after language(s) change
+    command: 'requestPageReload'
 } | {
     command: 'focus'
 }
@@ -148,12 +147,9 @@ export type PageToAppMessage = {
     warning?: boolean;
 };
 
-// | {
-//     command: 'resetSettings';
-// };
-
 export type LastLhqStatus = {
     kind: CodeGeneratorStatusKind;
+    filename: string;
     uid: string;
 }
 
@@ -166,7 +162,6 @@ export interface IAppContext {
     get selectedElements(): ITreeElement[];
 
     get isEditorActive(): boolean;
-    // set isEditorActive(active: boolean);
 
     get languagesVisible(): boolean;
     set languagesVisible(visible: boolean);
@@ -182,7 +177,6 @@ export interface IAppContext {
     setSelectionChangedCallback(callback: SelectionChangedCallback): void;
     setTreeSelection(selectedElements: ITreeElement[]): void;
 
-    // runCodeGenerator(): void;
     sendMessageToHtmlPage(message: AppToPageMessage): void;
 
     enableEditorActive(): void;
@@ -221,8 +215,6 @@ export interface IDocumentContext {
 
     get isActive(): boolean;
 
-    //get documentText(): string;
-
     get documentFormatting(): FormattingOptions;
 
     get jsonModel(): LhqModel | undefined;
@@ -259,9 +251,9 @@ export type SelectionBackup = Array<{
 
 export type CodeGeneratorStatusInfo =
     | { kind: 'active'; filename: string; }
-    | { kind: 'idle'; }
-    | { kind: 'error'; message: string; error?: Error; timeout?: number; }
-    | { kind: 'status'; message: string; success: boolean; timeout: number; };
+    | { kind: 'idle'; filename: string; }
+    | { kind: 'error'; filename: string; message: string; error?: Error; timeout?: number; }
+    | { kind: 'status'; filename: string; message: string; success: boolean; timeout: number; };
 
 export type CodeGeneratorStatusKind = CodeGeneratorStatusInfo['kind'];
 

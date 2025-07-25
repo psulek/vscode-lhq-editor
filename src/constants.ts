@@ -1,1 +1,0 @@
-// export const LhqEditorProvider_ViewType = 'lhq.customEditor';
