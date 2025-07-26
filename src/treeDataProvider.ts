@@ -92,15 +92,19 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
         this._onDidChangeTreeData.fire(elements);
     }
 
-    public async selectElementByPath(elementType: TreeElementType, path: string[], expand?: boolean): Promise<void> {
-        if (!this.checkActiveDoc('selectElementByPath')) {
-            return;
+    public getElementByPath(elementType: TreeElementType, path: string[]): ITreeElement | undefined {
+        if (!this.checkActiveDoc('getElementByPath')) {
+            return undefined;
         }
 
         const paths = createTreeElementPaths('/' + path.join('/'), true);
-        const elem = elementType === 'model'
+        return elementType === 'model'
             ? this.currentRootModel
             : this.currentRootModel!.getElementByPath(paths, elementType as CategoryOrResourceType);
+    }
+
+    public async selectElementByPath(elementType: TreeElementType, path: string[], expand?: boolean): Promise<void> {
+        const elem = this.getElementByPath(elementType, path);
 
         if (elem) {
             await this.revealElement(elem, { select: true, focus: true, expand: expand ?? false });

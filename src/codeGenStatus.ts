@@ -3,7 +3,7 @@ import { isNullOrEmpty } from '@lhq/lhq-generators';
 
 import { CodeGeneratorStatusInfo, ICodeGenStatus, LastLhqStatus } from './types';
 import { ContextEvents, ContextKeys, GlobalCommands } from './context';
-import { getGeneratorAppErrorMessage, logger, showMessageBox } from './utils';
+import { logger, showMessageBox } from './utils';
 import path from 'node:path';
 
 export class CodeGenStatus implements ICodeGenStatus {
@@ -96,8 +96,8 @@ export class CodeGenStatus implements ICodeGenStatus {
                 command = GlobalCommands.showOutput;
                 tooltip = `Click to see error details in output panel `;
 
-                if (info.error) {
-                    info.message += `\n${getGeneratorAppErrorMessage(info.error as Error)}`;
+                if (info.detail) {
+                    info.message += `\n${info.detail}`;
                 }
 
                 void showMessageBox('err', info.message, { modal: false, logger: false });

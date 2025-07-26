@@ -64,8 +64,17 @@ export class VsCodeLogger implements ILogger {
         msg = `${msg} ${errInfo}`;
         let text = (toConsole ? getFormattedMsg(ctx, msg) : msg);
 
-        // split text on new lines (cr/lf/crlf) and prepend each line with the date and level
-        text = text.split(/\r?\n/).map(line => `${date} [${level}] ${line}`).join('\n');
+        // text = text.split(/\r?\n/).map(line => `${date} [${level}] ${line}`).join('\n');
+        const lines = text.split(/\r?\n/);
+        if (lines.length > 0) {
+            const prefix = `${date} [${level}]`;
+            text = `${prefix} ${lines[0]}`;
+            if (lines.length > 1) {
+                for (let i = 1; i < lines.length; i++) {
+                    text += `\n${' '.repeat(prefix.length)} ${lines[i]}`;
+                }
+            }
+        }
 
         if (toConsole) {
             if (err) {

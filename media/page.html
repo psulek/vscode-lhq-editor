@@ -64,7 +64,9 @@
                 <td>
                     <div style="display: flex; flex-direction: row; align-items: center; gap: 1em; width: 100%;">
                         <input type="text" id="name" v-model="item.name" ref="name" autocomplete="off"
-                            style="flex-basis: 60%;" @focus="focusOnName" >
+                            @focus="focusOnName" readonly="readonly" :style="{ 'flex-basis': isResource ? '60%' : '' }">
+
+                        <button type="button" @click="editElementName">Edit</button>
 
                         <template v-if="isResource">
                             <label for="state">State:</label>
@@ -157,8 +159,9 @@
             </template>
         </table>
 
-        <div class="modal-dialog-block" v-if="modelProperties.visible">
-            <div class="modal-dialog">
+        <!-- <div class="modal-dialog-block" v-if="modelProperties.visible"> -->
+        <div class="modal-dialog-block" v-if="blockPanelVisible">
+            <div class="modal-dialog" v-if="modelProperties.visible">
                 <div>
                     <table style="width: 100%;">
                         <tr>
@@ -197,9 +200,8 @@
                             <td style="padding-top: 0;">
                                 <label title="Allows/disallow resources under root">
                                     <input type="checkbox" v-model="modelProperties.resources" style="width: auto;"
-                                    @focus="focusOnAllowResources"
-                                    @blur="blurOnAllowResources"
-                                        :true-value="'All'" :false-value="'Categories'">
+                                        @focus="focusOnAllowResources" @blur="blurOnAllowResources" :true-value="'All'"
+                                        :false-value="'Categories'">
                                     Allow resources under root
                                 </label>
                             </td>

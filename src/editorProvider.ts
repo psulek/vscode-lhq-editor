@@ -1,10 +1,10 @@
 import path from 'node:path';
 import * as vscode from 'vscode';
 import { LhqTreeDataProvider } from './treeDataProvider';
-import { delay, isValidDocument, logger, showMessageBox } from './utils';
+import { delay, getGeneratorAppErrorMessage, isValidDocument, logger, showMessageBox } from './utils';
 import { AppToPageMessage, SelectionChangedCallback } from './types';
 import debounce from 'lodash.debounce';
-import { Generator, isNullOrEmpty, ITreeElement } from '@lhq/lhq-generators';
+import { AppError, Generator, isNullOrEmpty, ITreeElement } from '@lhq/lhq-generators';
 import { DocumentContext } from './documentContext';
 import { AvailableCommands, Commands, GlobalCommands } from './context';
 import { CodeGenStatus } from './codeGenStatus';
@@ -111,7 +111,6 @@ export class LhqEditorProvider implements vscode.CustomTextEditorProvider {
 
         logger().log(this, 'debug', `runCodeGenerator -> Running code generator for document ${activeDoc.documentUri}`);
 
-
         const filename = activeDoc.fileName;
         if (isNullOrEmpty(filename)) {
             logger().log(this, 'debug', `runCodeGenerator -> Document fileName is not valid (${filename}). Cannot run code generator.`);
@@ -128,6 +127,23 @@ export class LhqEditorProvider implements vscode.CustomTextEditorProvider {
 
         try {
             beginStatusUid = this._codeGenStatus.updateGeneratorStatus(templateId, { kind: 'active', filename });
+
+            const validationErr = activeDoc.validateDocument(false);
+            if (validationErr) {
+                let msg = `Code generator template '${templateId}' failed.`;
+                const detail = `${validationErr.message}\n${validationErr.detail ?? ''}`;
+                this._codeGenStatus.updateGeneratorStatus(templateId, {
+                    kind: 'error',
+                    filename,
+                    message: msg,
+                    detail: detail,
+                });
+
+                msg += detail;
+                logger().log('this', 'error', msg);
+                return;
+            }
+
 
             const startTime = Date.now();
             const generator = new Generator();
@@ -147,7 +163,7 @@ export class LhqEditorProvider implements vscode.CustomTextEditorProvider {
 
                 this._codeGenStatus.updateGeneratorStatus(templateId, {
                     kind: 'status',
-                    message: `generated ${result.generatedFiles.length} files.`,
+                    message: `Generated ${result.generatedFiles.length} files.`,
                     filename,
                     success: true,
                     timeout: 2000
@@ -156,20 +172,20 @@ export class LhqEditorProvider implements vscode.CustomTextEditorProvider {
                 this._codeGenStatus.updateGeneratorStatus(templateId, {
                     kind: 'error',
                     filename,
-                    message: 'error generating files.',
+                    message: 'Error generating files.',
                     timeout: 5000
                 });
             }
         }
         catch (error) {
-            const msg = `code generator template '${templateId}' failed.`;
+            const msg = `Code generator template '${templateId}' failed.`;
             logger().log(this, 'error', msg, error as Error);
 
             this._codeGenStatus.updateGeneratorStatus(templateId, {
                 kind: 'error',
                 filename,
                 message: msg,
-                error: error as Error
+                detail: getGeneratorAppErrorMessage(error as Error)
             });
         } finally {
             this._codeGenStatus.inProgress = false;
@@ -268,14 +284,7 @@ export class LhqEditorProvider implements vscode.CustomTextEditorProvider {
         }
 
         if (activeDoc.isSameDocument(event.document)) {
-            const validationError = activeDoc.lastValidationError || activeDoc.validateDocument().error;
-
-            // TODO: If error, run 'processBeforeSave' to edit with original content (with no error) to be saved to file!!
-            if (validationError) {
-                void showMessageBox('warn', validationError.message, { detail: validationError.detail, modal: true });
-            } else {
-                // event.waitUntil(this.processBeforeSave(event.document));
-            }
+            activeDoc.validateDocument();
         }
     }
 

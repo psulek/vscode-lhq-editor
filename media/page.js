@@ -52,10 +52,12 @@
      * @property {boolean} loading
      * @property {boolean} paramsEnabled
      * @property {InvalidDataInfo} invalidData
-     * @property {boolean} supressOnChange
+     * @property {'onetime' | 'infinite' | undefined} supressOnChange
+     * @property {boolean} forceOnChange
      * @property {ModelProperties} modelProperties
      * @property {ModelProperties} modelPropertiesBackup
      * @property {TemplateMetadataDefinition} templateDefinition
+     * @property {boolean} blockPanelVisible
      */
 
     /**
@@ -209,13 +211,11 @@
                 */
 
                 if (window.pageApp.item && message.paths) {
-                    window.pageApp.supressOnChange = true;
+                    // window.pageApp.supressOnChange = true;
+                    window.pageApp.supressOnChange = 'onetime';
 
                     window.pageApp.$nextTick(() => {
                         window.pageApp.item.paths = message.paths;
-                        //window.pageApp.supressOnChange = undefined;
-
-                        //handleRequestPageReload();
                     });
                 }
 
@@ -253,9 +253,10 @@
                 window.pageApp.item = undefined;
                 window.pageApp.paramsEnabled = false;
                 window.pageApp.supressOnChange = undefined;
+                window.pageApp.forceOnChange = false;
+                window.pageApp.blockPanelVisible = false;
 
                 window.pageApp.modelProperties = getDefaultModelProperties();
-                // window.pageApp.modelPropertiesBackup = Object.assign({}, getDefaultModelProperties());
                 window.pageApp.modelPropertiesBackup = structuredClone(getDefaultModelProperties());
                 window.pageApp.templateDefinition = {};
 
@@ -330,6 +331,20 @@
 
             case 'focus': {
                 window.pageApp.focusEditor();
+                break;
+            }
+
+            case 'showInputBoxResult': {
+                /*
+                command: 'showInputBoxResult';
+                id: string;
+                result: string | undefined;
+                */
+
+                if (message.id === 'editElementName') {
+                    window.pageApp.completeEditElementName(message.result);
+                }
+
                 break;
             }
         }
@@ -638,6 +653,7 @@
             errors: []
         },
         supressOnChange: undefined,
+        forceOnChange: false,
         modelProperties: {
             visible: false,
             saving: false,
@@ -654,7 +670,8 @@
             },
             codeGeneratorError: undefined
         },
-        templateDefinition: {}
+        templateDefinition: {},
+        blockPanelVisible: false
     };
 
     window.pageApp = createApp({
@@ -671,6 +688,14 @@
 
             isResource() {
                 return this.item && this.item.elementType === 'resource';
+            },
+
+            isModelRoot() {
+                return this.item && this.item.elementType === 'model';
+            },
+
+            isCategoryLike() {
+                return this.item && this.item.elementType === 'category' || this.item.elementType === 'model';
             },
 
             getCodeGeneratorPropertyReadonly() {
@@ -758,9 +783,13 @@
 
         methods: {
             onChange(value, oldValue) {
-                const supressed = this.supressOnChange !== undefined;
+                const supressOnChange = this.supressOnChange;
+                const forceOnChange = this.forceOnChange;
+                const supressed = supressOnChange !== undefined;
+                const canChange = oldValue !== undefined || forceOnChange;
+
                 try {
-                    if (this.item && oldValue !== undefined && !this.loading && !supressed) {
+                    if (this.item && canChange && !this.loading && !supressed) {
                         const data = toRaw(this.item);
 
                         /** @type {InvalidDataInfo} */
@@ -788,8 +817,12 @@
                         }
                     }
                 } finally {
-                    if (supressed) {
+                    if (supressed && supressOnChange === 'onetime') {
                         this.supressOnChange = undefined;
+                    }
+
+                    if (forceOnChange) {
+                        this.forceOnChange = false;
                     }
                 }
             },
@@ -894,6 +927,29 @@
                             this.updateInvalidData(error);
                         }
                     });
+                }
+            },
+
+            editElementName() {
+                this.blockPanelVisible = true;
+
+                const data = { elementType: this.item.elementType, paths: toRaw(this.item.paths) };
+                postMessage({
+                    command: 'showInputBox',
+                    id: 'editElementName',
+                    prompt: `Enter new name for ${this.item.elementType}`,
+                    placeHolder: this.item.elementType.toPascalCase() + ' name',
+                    title: `Edit ${this.item.elementType} name (${this.fullPath})`,
+                    value: this.item.name,
+                    data
+                }, `Requesting showinputbox for ${this.item.elementType} name`);
+            },
+
+            completeEditElementName(name) {
+                debugger;
+                this.blockPanelVisible = false;
+                if (name !== undefined && name !== null) {
+                    this.item.name = name;
                 }
             },
 
@@ -1225,6 +1281,7 @@
             },
 
             showProperties() {
+                this.blockPanelVisible = true;
                 this.modelProperties.visible = true;
 
                 this.$nextTick(() => {
@@ -1259,6 +1316,7 @@
                     this.modelProperties = structuredClone(toRaw(this.modelPropertiesBackup));
                 }
                 this.modelProperties.visible = false;
+                this.blockPanelVisible = false;
             },
 
             saveProperties() {

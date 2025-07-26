@@ -126,7 +126,11 @@ export type AppToPageMessage = {
     command: 'requestPageReload'
 } | {
     command: 'focus'
-}
+} | {
+    command: 'showInputBoxResult';
+    id: string;
+    result: string | undefined;
+};
 
 export type PageToAppMessage = {
     command: 'update';
@@ -145,6 +149,14 @@ export type PageToAppMessage = {
     message: string;
     detail?: string;
     warning?: boolean;
+} | {
+    command: 'showInputBox';
+    id: 'editElementName' | string;
+    data: unknown;
+    prompt: string;
+    placeHolder?: string;
+    title?: string;
+    value?: string;
 };
 
 export type LastLhqStatus = {
@@ -193,6 +205,8 @@ export interface ITreeContext {
 
     clearSelection(reselect?: boolean): Promise<void>;
 
+    getElementByPath(elementType: TreeElementType, path: string[]): ITreeElement | undefined;
+
     selectElementByPath(elementType: TreeElementType, path: string[], expand?: boolean): Promise<void>;
 
     refreshTree(elements: ITreeElement[] | undefined): unknown;
@@ -207,7 +221,7 @@ export interface ITreeContext {
 }
 
 export interface IDocumentContext {
-    get lastValidationError(): ValidationError | undefined;
+    //get lastValidationError(): ValidationError | undefined;
 
     get documentUri(): Uri | undefined;
 
@@ -252,11 +266,12 @@ export type SelectionBackup = Array<{
 export type CodeGeneratorStatusInfo =
     | { kind: 'active'; filename: string; }
     | { kind: 'idle'; filename: string; }
-    | { kind: 'error'; filename: string; message: string; error?: Error; timeout?: number; }
+    | { kind: 'error'; filename: string; message: string; detail?: string, timeout?: number; }
     | { kind: 'status'; filename: string; message: string; success: boolean; timeout: number; };
 
 export type CodeGeneratorStatusKind = CodeGeneratorStatusInfo['kind'];
 
 export type MessageBoxOptions = MessageOptions & {
     logger?: boolean
+    showDetail?: 'auto' | 'always';
 }

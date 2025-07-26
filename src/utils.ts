@@ -29,7 +29,7 @@ export function initializeDebugMode(ctx: vscode.ExtensionContext) {
         _logger.log('extension', 'info', 'LHQ Editor extension activated');
     }
 
-    
+
 }
 
 export function getMessageBoxText(msg: string): string {
@@ -76,7 +76,7 @@ export async function showConfirmBox(message: string, detail?: string, warn?: bo
 
 
 export async function showMessageBox(type: 'warn' | 'info' | 'err', message: string, options?: MessageBoxOptions): Promise<void> {
-    const msg = getMessageBoxText(message);
+    let msg = getMessageBoxText(message);
 
     if (type === 'err' && isNullOrEmpty(options)) {
         options = { modal: true };
@@ -84,12 +84,18 @@ export async function showMessageBox(type: 'warn' | 'info' | 'err', message: str
 
     options = options ?? {};
     const addToLogger = options.logger ?? true;
+    const showDetail = options.showDetail ?? 'auto';
     delete options.logger;
+    delete options.showDetail;
+
+    if (showDetail === 'always' && (isNullOrEmpty(options.modal) || !options.modal) && !isNullOrEmpty(options.detail)) {
+        msg += `\n${options.detail!}`;
+    }
 
     if (addToLogger) {
         const logType: LogType = type === 'err' ? 'error' : type === 'warn' ? 'warn' : 'info';
         logger().log('', logType, msg);
-    } 
+    }
 
     if (type === 'warn') {
         await vscode.window.showWarningMessage(msg, options);

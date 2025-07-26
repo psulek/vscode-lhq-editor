@@ -57,7 +57,7 @@ export class DocumentContext implements IDocumentContext {
     private _documentFormatting!: FormattingOptions;
     private _rootModel!: IRootModelElement | undefined;
     private _virtualRootElement: IVirtualRootElement | undefined;
-    private _validationError: ValidationError | undefined;
+    //private _validationError: ValidationError | undefined;
     private _pageErrors: ClientPageError[] = [];
 
     constructor(context: vscode.ExtensionContext, webviewPanel: vscode.WebviewPanel,
@@ -79,9 +79,9 @@ export class DocumentContext implements IDocumentContext {
         this.setupEvents();
     }
 
-    public get lastValidationError(): ValidationError | undefined {
-        return this._validationError;
-    }
+    // public get lastValidationError(): ValidationError | undefined {
+    //     return this._validationError;
+    // }
 
     public get jsonModel(): LhqModel | undefined {
         return this._jsonModel;
@@ -300,11 +300,11 @@ export class DocumentContext implements IDocumentContext {
             return false;
         }
 
-        const validationResult = this.validateDocument();
-        if (!validationResult.success) {
-            logger().log(this, 'warn', `commitChanges [${message}] -> Validation failed: ${validationResult.error?.message}`);
-            return false;
-        }
+        this.validateDocument();
+        // if (!validationResult.success) {
+        //     logger().log(this, 'warn', `commitChanges [${message}] -> Validation failed: ${validationResult.error?.message}`);
+        //     return false;
+        // }
 
         const newModel = ModelUtils.elementToModel<LhqModel>(this._rootModel!, { keepData: true, keepDataKeys: ['uid', 'undoredo'] });
         const serializedRoot = ModelUtils.serializeModel(newModel, this._documentFormatting);
@@ -345,7 +345,7 @@ export class DocumentContext implements IDocumentContext {
 
             appContext.treeContext.updateDocument(this);
         } else if (appContext.isEditorActive) {
-            this._validationError = undefined;
+            //this._validationError = undefined;
             this._textDocument = undefined;
             this.refresh();
 
@@ -405,10 +405,10 @@ export class DocumentContext implements IDocumentContext {
                     logger().log(this, 'error', `refresh failed -> ${error}`);
                     void showMessageBox('err', error);
                 } else {
-                    this._codeGenStatus.updateGeneratorStatus(this.codeGeneratorTemplateId, { 
+                    this._codeGenStatus.updateGeneratorStatus(this.codeGeneratorTemplateId, {
                         kind: 'idle',
                         filename: this.fileName
-                     });
+                    });
                 }
 
                 this.validateDocument();
@@ -420,47 +420,41 @@ export class DocumentContext implements IDocumentContext {
         }
     }
 
-    public validateDocument(): { success: boolean, error: ValidationError | undefined } {
-        this._validationError = undefined;
+    public validateDocument(showError: boolean = true): ValidationError | undefined {
+        let error = undefined;
 
         if (this._rootModel) {
             if (!this.resourcesUnderRoot && this._rootModel.resources.length > 0) {
-                this._validationError = {
+                error = {
                     message: `Resources are not allowed under root!`,
                     detail: `Please change project properties to 'Allow resources under root' or move resources to categories.`
                 };
             } else if (!this.isTreeStructure && this._rootModel.categories.length > 0) {
-                this._validationError = {
+                error = {
                     message: `Categories are not allowed in flat structure!`,
                     detail: `Please change project properties 'Layout' to 'Hierarchical tree structure' or remove categories from the root.`
                 };
             }
         }
 
-        return { success: this._validationError === undefined, error: this._validationError };
+        if (error) {
+            if (showError === true) {
+                void showMessageBox('warn', error.message, { detail: error.detail, modal: false, showDetail: 'always' });
+            } else {
+                // let msg = error.message;
+                // if (!isNullOrEmpty(error.detail)) {
+                //     msg += `\n${error.detail}`;
+                // }
+                // logger().log('this', 'error', msg);
+            }
+        }
+
+        return error;
     }
 
     private setupEvents(): void {
         const didReceiveMessageSubscription = this._webviewPanel!.webview.onDidReceiveMessage(this.handleClientCommands.bind(this));
-        const viewStateSubscription = this._webviewPanel!.onDidChangeViewState(async e => {
-            const changedPanel = e.webviewPanel;
-            logger().log(this, 'debug', `webviewPanel.onDidChangeViewState for ${this.fileName}. Active: ${changedPanel.active}, Visible: ${changedPanel.visible}`);
-
-            if (changedPanel.active) {
-                logger().log(this, 'debug', `webviewPanel.onDidChangeViewState for ${this.fileName} became active. Updating tree and context.`);
-                appContext.enableEditorActive();
-                appContext.treeContext.updateDocument(this);
-
-                if (this._selectedElements.length > 0) {
-                    void appContext.treeContext.setSelectedItems(this._selectedElements);
-                }
-            } else {
-                nextTick(() => {
-                    appContext.disableEditorActive();
-                });
-            }
-        });
-
+        const viewStateSubscription = this._webviewPanel!.onDidChangeViewState(this.handleChangeViewState.bind(this));
 
         this._context.subscriptions.push(
             this._webviewPanel!.onDidDispose(() => {
@@ -474,6 +468,24 @@ export class DocumentContext implements IDocumentContext {
         );
     }
 
+    private async handleChangeViewState(e: vscode.WebviewPanelOnDidChangeViewStateEvent): Promise<void> {
+        const changedPanel = e.webviewPanel;
+        logger().log(this, 'debug', `webviewPanel.onDidChangeViewState for ${this.fileName}. Active: ${changedPanel.active}, Visible: ${changedPanel.visible}`);
+
+        if (changedPanel.active) {
+            logger().log(this, 'debug', `webviewPanel.onDidChangeViewState for ${this.fileName} became active. Updating tree and context.`);
+            appContext.enableEditorActive();
+            appContext.treeContext.updateDocument(this);
+
+            if (this._selectedElements.length > 0) {
+                void appContext.treeContext.setSelectedItems(this._selectedElements);
+            }
+        } else {
+            nextTick(() => {
+                appContext.disableEditorActive();
+            });
+        }
+    }
 
     private async handleClientCommands(message: PageToAppMessage): Promise<void> {
         let header = `handleClientCommand '${message.command}'`;
@@ -485,6 +497,11 @@ export class DocumentContext implements IDocumentContext {
 
         if (this._disposed) {
             logger().log(this, 'debug', `${header} -> DocumentContext is disposed. Ignoring message.`);
+            return;
+        }
+
+        if (!this.rootModel) {
+            logger().log(this, 'error', `${header} No current root model found.`);
             return;
         }
 
@@ -522,11 +539,6 @@ export class DocumentContext implements IDocumentContext {
                 break;
             }
             case 'confirmQuestion': {
-                if (!this.rootModel) {
-                    logger().log(this, 'error', `${header} No current root model found.`);
-                    return;
-                }
-
                 const text = message.message;
                 const detail = message.detail;
                 const warn = message.warning ?? false;
@@ -542,6 +554,29 @@ export class DocumentContext implements IDocumentContext {
                 }
 
                 this.sendMessageToHtmlPage({ command: 'confirmQuestionResult', id: message.id, confirmed, result });
+                break;
+            }
+            case 'showInputBox': {
+                const result = await vscode.window.showInputBox({
+                    prompt: message.prompt,
+                    placeHolder: message.placeHolder,
+                    title: message.title,
+                    value: message.value,
+                    ignoreFocusOut: true,
+                    validateInput: value => {
+                        if (message.id === 'editElementName') {
+                            const data = message.data as { elementType: TreeElementType, paths: string[] };
+                            const elem = appContext.treeContext.getElementByPath(data.elementType, data.paths);
+                            if (elem) {
+                                return validateTreeElementName(elem.elementType, value, elem.parent);
+                            }
+                        }
+
+                        return undefined;
+                    }
+                });
+
+                this.sendMessageToHtmlPage({ command: 'showInputBoxResult', id: message.id, result });
                 break;
             }
         }
