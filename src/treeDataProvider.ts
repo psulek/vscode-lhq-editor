@@ -155,6 +155,7 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
             this._currentSearch = { type: 'language', searchText, elems: [], filter: searchText.substring(1), uid: searchUid };
         } else if (searchText.startsWith('!')) { // by translation
             this._currentSearch = { type: 'translation', searchText, elems: [], filter: searchText.substring(1), uid: searchUid };
+            // TODO: implement translation search
         } else { // by name 
             // # or other...
             const filter = searchText.startsWith('#') ? searchText.substring(1) : searchText;

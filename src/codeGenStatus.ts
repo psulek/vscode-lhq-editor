@@ -1,33 +1,39 @@
 import * as vscode from 'vscode';
 import { isNullOrEmpty } from '@lhq/lhq-generators';
 
-import { CodeGeneratorStatusInfo, ICodeGenStatus, LastLhqStatus } from './types';
-import { ContextEvents, ContextKeys, GlobalCommands } from './context';
+import { CodeGeneratorStatusInfo, CodeGeneratorStatusKind, ICodeGenStatus, IDocumentContext, StatusBarItemUpdateInfo, StatusBarItemUpdateRequestCallback } from './types';
+import { ContextKeys, GlobalCommands } from './context';
 import { logger, showMessageBox } from './utils';
 import path from 'node:path';
 
-export class CodeGenStatus implements ICodeGenStatus {
-    private _lastLhqStatus: LastLhqStatus | undefined;
-    private _inProgress = false;
-    private _codeGeneratorStatus: vscode.StatusBarItem;
+type LastStatusInfo = {
+    kind: CodeGeneratorStatusKind;
+    updateInfo: StatusBarItemUpdateInfo;
+};
 
-    constructor(context: vscode.ExtensionContext) {
+export class CodeGenStatus implements ICodeGenStatus {
+    private _docContext: IDocumentContext;
+    private _inProgress = false;
+    //private _lastStatus: CodeGeneratorStatusInfo | undefined;
+    private _lastStatus: LastStatusInfo | undefined;
+    private _uid = '';
+    // private _statusBar: vscode.StatusBarItem;
+    private readonly _requestStatusBarItemUpdate: StatusBarItemUpdateRequestCallback;
+
+    constructor(docContext: IDocumentContext, requestStatusBarItemUpdate: StatusBarItemUpdateRequestCallback) {
+        if (!docContext) {
+            throw new Error('Document context is required for CodeGenStatus initialization.');
+        }
+
+        this._docContext = docContext;
+        this._requestStatusBarItemUpdate = requestStatusBarItemUpdate;
         this.inProgress = false;
 
-        this._codeGeneratorStatus = vscode.window.createStatusBarItem('lhq.codeGeneratorStatus', vscode.StatusBarAlignment.Left, 10);
-        this.updateGeneratorStatus('', { kind: 'idle', filename: '' });
+        this.update({ kind: 'idle' });
+    }
 
-        // TODO: Maybe unsubscribe this status bar item when extension is deactivated?
-        context.subscriptions.push(this._codeGeneratorStatus);
-
-        appContext.on(ContextEvents.isEditorActiveChanged, (active: boolean) => {
-            if (active) {
-                this._codeGeneratorStatus.show();
-            } else {
-                this._codeGeneratorStatus.hide();
-            }
-        });
-
+    public get lastUid(): string {
+        return this._uid;
     }
 
     public get inProgress(): boolean {
@@ -39,39 +45,32 @@ export class CodeGenStatus implements ICodeGenStatus {
 
         vscode.commands.executeCommand('setContext', ContextKeys.generatorIsRunning, value);
     }
-
-    public get lastStatus(): LastLhqStatus | undefined {
-        return this._lastLhqStatus;
-    }
-
-    public set lastStatus(value: LastLhqStatus | undefined) {
-        this._lastLhqStatus = value;
-    }
-
-    public updateGeneratorStatus(templateId: string, info: CodeGeneratorStatusInfo): string {
-        // updateGeneratorStatus -> returns uid of this status update
-
-        templateId = templateId ?? '';
-        if (isNullOrEmpty(info.kind)) {
-            templateId = '';
+    
+    public restoreLastStatus(): void {
+        if (this._lastStatus && this._lastStatus.updateInfo) {
+            //this.update(this._lastStatus);
+            this._requestStatusBarItemUpdate(this._docContext, this._lastStatus.updateInfo);
         }
+    }
+
+    public update(info: CodeGeneratorStatusInfo): string {
+        // updateGeneratorStatus -> returns uid of this status update
 
         let text = '';
         let tooltip: string | undefined;
         let command: string | undefined;
         let backgroundId: string | undefined;
         let colorId: string | undefined;
-        const result = crypto.randomUUID();
 
-        this._lastLhqStatus = {
-            kind: info.kind,
-            filename: info.filename,
-            uid: result
-        };
+        const result = crypto.randomUUID();
+        //this._lastStatus = info;
+        this._uid = result;
 
         const suffix = ' (lhq-editor)';
         let textSuffix = true;
-        const filename = path.basename(info.filename);
+        //const filename = this._docContext.fileName;
+        const filename = path.basename(this._docContext.fileName);
+        const templateId = this._docContext.codeGeneratorTemplateId;
 
         switch (info.kind) {
             case 'active':
@@ -83,7 +82,7 @@ export class CodeGenStatus implements ICodeGenStatus {
             case 'idle':
                 // textSuffix = false;
                 // text = '$(run-all) LHQ (template: ' + templateId + ')';
-                text = `$(run-all) ` + (isNullOrEmpty(info.filename) ? 'LHQ' : filename);
+                text = `$(run-all) ` + (isNullOrEmpty(filename) ? 'LHQ' : filename);
                 command = GlobalCommands.runGenerator;
                 tooltip = `Click to run code generator template **${templateId}**`;
                 break;
@@ -120,20 +119,38 @@ export class CodeGenStatus implements ICodeGenStatus {
         }
 
         if ((info.kind === 'error' || info.kind === 'status') && info.timeout && info.timeout > 0) {
-            const uid = this._lastLhqStatus!.uid;
+            const uid = this.lastUid;
             setTimeout(() => {
-                if (this._lastLhqStatus!.uid === uid) {
-                    this.updateGeneratorStatus(templateId, { kind: 'idle', filename: info.filename });
+                if (this.lastUid === uid) {
+                    this.update({ kind: 'idle' });
                 }
             }, info.timeout);
         }
 
-        this._codeGeneratorStatus.text = text + (textSuffix ? suffix : '');
-        this._codeGeneratorStatus.backgroundColor = backgroundId === undefined ? undefined : new vscode.ThemeColor(backgroundId);
-        this._codeGeneratorStatus.color = colorId === undefined ? undefined : new vscode.ThemeColor(colorId);
-        this._codeGeneratorStatus.command = command;
-        this._codeGeneratorStatus.tooltip = isNullOrEmpty(tooltip) ? '' : new vscode.MarkdownString(tooltip + suffix, true);
+        const updateInfo = {
+            text: text + (textSuffix ? suffix : ''),
+            backgroundColor: backgroundId === undefined ? undefined : new vscode.ThemeColor(backgroundId),
+            color: colorId === undefined ? undefined : new vscode.ThemeColor(colorId),
+            command: command,
+            tooltip: isNullOrEmpty(tooltip) ? '' : new vscode.MarkdownString(tooltip + suffix, true)
+        };
+
+        this._lastStatus = {
+            kind: info.kind,
+            updateInfo: updateInfo
+        };
+
+        this._requestStatusBarItemUpdate(this._docContext, updateInfo);
 
         return result;
+    }
+
+    public resetGeneratorStatus(): void {
+        if (this._lastStatus === undefined || this._lastStatus.kind === 'error' || !this.inProgress) {
+            logger().log(this, 'debug', `resetGeneratorStatus -> Resetting generator status to idle`);
+            this.update({ kind: 'idle' });
+        } else {
+            logger().log(this, 'debug', `resetGeneratorStatus -> Not resetting generator status`);
+        }
     }
 }

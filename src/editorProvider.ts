@@ -1,32 +1,45 @@
-import path from 'node:path';
 import * as vscode from 'vscode';
-import { LhqTreeDataProvider } from './treeDataProvider';
-import { delay, getGeneratorAppErrorMessage, isValidDocument, logger, showMessageBox } from './utils';
-import { AppToPageMessage, SelectionChangedCallback } from './types';
 import debounce from 'lodash.debounce';
-import { AppError, Generator, isNullOrEmpty, ITreeElement } from '@lhq/lhq-generators';
+import { ITreeElement } from '@lhq/lhq-generators';
+
+import { LhqTreeDataProvider } from './treeDataProvider';
+import { isValidDocument, logger, showMessageBox } from './utils';
+import { AppToPageMessage, IDocumentContext, SelectionChangedCallback, StatusBarItemUpdateInfo } from './types';
 import { DocumentContext } from './documentContext';
-import { AvailableCommands, Commands, GlobalCommands } from './context';
-import { CodeGenStatus } from './codeGenStatus';
+import { AvailableCommands, Commands, ContextEvents, GlobalCommands } from './context';
 
 export class LhqEditorProvider implements vscode.CustomTextEditorProvider {
     public static readonly viewType = 'lhq.customEditor';
 
-    private readonly _editors = new Map<string, DocumentContext>();
+    private readonly _documents = new Map<string, DocumentContext>();
     private readonly _debouncedOnSelectionChanged: SelectionChangedCallback = undefined!;
 
-    private _codeGenStatus!: CodeGenStatus;
+    private _statusBar: vscode.StatusBarItem;
+
     private _debouncedRunCodeGenerator: () => void;
 
     constructor(
         private readonly context: vscode.ExtensionContext,
         private readonly treeDataProvider: LhqTreeDataProvider
     ) {
+        this._statusBar = vscode.window.createStatusBarItem('lhq.codeGeneratorStatus', vscode.StatusBarAlignment.Left, 10);
+
+        appContext.on(ContextEvents.isEditorActiveChanged, (active: boolean) => {
+            if (active) {
+                this._statusBar.show();
+            } else {
+                this._statusBar.hide();
+            }
+        });
+
+        // TODO: Maybe unsubscribe this status bar item when extension is deactivated?
+        context.subscriptions.push(this._statusBar);
+
         this._debouncedOnSelectionChanged = debounce(this.onSelectionChanged.bind(this), 200, { leading: false, trailing: true });
         appContext.setSelectionChangedCallback(this._debouncedOnSelectionChanged);
         appContext.setCheckAnyActiveDocumentCallback(this.hasAnyActiveDocument);
 
-        this._codeGenStatus = new CodeGenStatus(context);
+        // this._codeGenStatus = new CodeGenStatus(context);
         this._debouncedRunCodeGenerator = debounce(this.runCodeGenerator.bind(this), 200, { leading: true, trailing: false });
 
         for (const command of Object.values(Commands)) {
@@ -51,7 +64,7 @@ export class LhqEditorProvider implements vscode.CustomTextEditorProvider {
     }
 
     private get activeDocument(): DocumentContext | undefined {
-        for (const editor of this._editors.values()) {
+        for (const editor of this._documents.values()) {
             if (editor.isActive) {
                 return editor;
             }
@@ -60,7 +73,7 @@ export class LhqEditorProvider implements vscode.CustomTextEditorProvider {
     }
 
     hasAnyActiveDocument = (): boolean => {
-        for (const editor of this._editors.values()) {
+        for (const editor of this._documents.values()) {
             if (editor.isActive) {
                 return true;
             }
@@ -94,117 +107,20 @@ export class LhqEditorProvider implements vscode.CustomTextEditorProvider {
         const activeDoc = this.activeDocument;
         if (!activeDoc) {
             logger().log(this, 'warn', 'runCodeGenerator -> No active document context found. Cannot run code generator.');
-            void showMessageBox('warn', 'No active lhq document found. Please open a lhq file to run the code generator.');
             return;
         }
 
-        if (!activeDoc.jsonModel) {
-            logger().log(this, 'debug', 'runCodeGenerator -> No current document or model found.');
-            return;
-        }
-
-        if (this._codeGenStatus.inProgress) {
-            logger().log(this, 'debug', 'runCodeGenerator -> Code generator is already in progress.');
-            void showMessageBox('info', 'Code generator is already running ...');
-            return;
-        }
-
-        logger().log(this, 'debug', `runCodeGenerator -> Running code generator for document ${activeDoc.documentUri}`);
-
-        const filename = activeDoc.fileName;
-        if (isNullOrEmpty(filename)) {
-            logger().log(this, 'debug', `runCodeGenerator -> Document fileName is not valid (${filename}). Cannot run code generator.`);
-            return;
-        }
-
-        const templateId = activeDoc.codeGeneratorTemplateId;
-        logger().log(this, 'info', `Running code generator template '${templateId}' for document: ${filename}`);
-
-        this._codeGenStatus.inProgress = true;
-
-        let beginStatusUid = '';
-        let idleStatusOnEnd = true;
-
-        try {
-            beginStatusUid = this._codeGenStatus.updateGeneratorStatus(templateId, { kind: 'active', filename });
-
-            const validationErr = activeDoc.validateDocument(false);
-            if (validationErr) {
-                let msg = `Code generator template '${templateId}' failed.`;
-                const detail = `${validationErr.message}\n${validationErr.detail ?? ''}`;
-                this._codeGenStatus.updateGeneratorStatus(templateId, {
-                    kind: 'error',
-                    filename,
-                    message: msg,
-                    detail: detail,
-                });
-
-                msg += detail;
-                logger().log('this', 'error', msg);
-                return;
-            }
-
-
-            const startTime = Date.now();
-            const generator = new Generator();
-            const result = generator.generate(filename, activeDoc.jsonModel, {});
-            const generationTime = Date.now() - startTime;
-
-            // artificially delay the status update to show the spinner ...
-            if (generationTime < 500) {
-                await delay(500 - generationTime);
-            }
-
-            if (result.generatedFiles) {
-                const lhqFileFolder = path.dirname(filename);
-                const fileNames = result.generatedFiles.map(f => path.join(lhqFileFolder, f.fileName));
-                logger().log(this, 'info', `Code generator template '${templateId}' successfully generated ${fileNames.length} files:\n` +
-                    `${fileNames.join('\n')}`);
-
-                this._codeGenStatus.updateGeneratorStatus(templateId, {
-                    kind: 'status',
-                    message: `Generated ${result.generatedFiles.length} files.`,
-                    filename,
-                    success: true,
-                    timeout: 2000
-                });
-            } else {
-                this._codeGenStatus.updateGeneratorStatus(templateId, {
-                    kind: 'error',
-                    filename,
-                    message: 'Error generating files.',
-                    timeout: 5000
-                });
-            }
-        }
-        catch (error) {
-            const msg = `Code generator template '${templateId}' failed.`;
-            logger().log(this, 'error', msg, error as Error);
-
-            this._codeGenStatus.updateGeneratorStatus(templateId, {
-                kind: 'error',
-                filename,
-                message: msg,
-                detail: getGeneratorAppErrorMessage(error as Error)
-            });
-        } finally {
-            this._codeGenStatus.inProgress = false;
-
-            if (idleStatusOnEnd) {
-                setTimeout(() => {
-                    if (beginStatusUid === this._codeGenStatus.lastStatus?.uid) {
-                        this._codeGenStatus.updateGeneratorStatus('', { kind: 'idle', filename });
-                    }
-                }, 2000);
-            }
-        }
+        return activeDoc.runCodeGenerator();
     }
 
     public resetGeneratorStatus(): void {
-        if (this._codeGenStatus.lastStatus === undefined || this._codeGenStatus.lastStatus.kind === 'error' || !this._codeGenStatus.inProgress) {
-            const filename = this._codeGenStatus.lastStatus?.filename ?? '';
-            this._codeGenStatus.updateGeneratorStatus('', { kind: 'idle', filename });
+        const activeDoc = this.activeDocument;
+        if (!activeDoc) {
+            logger().log(this, 'warn', 'resetGeneratorStatus -> No active document context found. Cannot reset generator status.');
+            return;
         }
+
+        return activeDoc.resetGeneratorStatus();
     }
 
     public async resolveCustomTextEditor(
@@ -215,14 +131,14 @@ export class LhqEditorProvider implements vscode.CustomTextEditorProvider {
         logger().log(this, 'debug', `resolveCustomTextEditor -> for document: ${document.fileName}`);
 
         const documentUri = document.uri.toString();
-        if (this._editors.has(documentUri)) {
+        if (this._documents.has(documentUri)) {
             return await showMessageBox('err', `Editor for ${document.fileName} is already open.`, { modal: true });
         }
 
         const onDocContextDisposed = () => {
-            if (this._editors.has(documentUri)) {
-                const doc = this._editors.get(documentUri);
-                this._editors.delete(documentUri);
+            if (this._documents.has(documentUri)) {
+                const doc = this._documents.get(documentUri);
+                this._documents.delete(documentUri);
 
                 // NOTE: Test if needed this delay thingy at all
                 setTimeout(async () => {
@@ -249,8 +165,39 @@ export class LhqEditorProvider implements vscode.CustomTextEditorProvider {
             }
         };
 
-        const docCtx = new DocumentContext(this.context, webviewPanel, this._codeGenStatus, onDocContextDisposed);
-        this._editors.set(documentUri, docCtx);
+        const onStatusBarItemUpdateRequest = (docContext: IDocumentContext, updateInfo: StatusBarItemUpdateInfo, forceUpdate?: boolean) => {
+            const activeDoc = this.activeDocument;
+
+            // if (!activeDoc || docContext === activeDoc || forceUpdate === true) {
+            if (!activeDoc || docContext === activeDoc) {
+                logger().log(this, 'debug', `onStatusBarItemUpdateRequest -> Updating status bar item '${updateInfo.text}' for document: ${docContext.fileName}`);
+
+                this._statusBar.text = updateInfo.text;
+                this._statusBar.backgroundColor = updateInfo.backgroundColor;
+                this._statusBar.color = updateInfo.color;
+                this._statusBar.command = updateInfo.command;
+                this._statusBar.tooltip = updateInfo.tooltip;
+            } else {
+                logger().log(this, 'debug', `onStatusBarItemUpdateRequest -> Ignoring status bar update for document: ${docContext.fileName} (doc is not active)`);
+            }
+        };
+
+        const onNotifyDocumentActiveChanged = (docContext: IDocumentContext, isActive: boolean) => {
+            logger().log(this, 'debug', `onNotifyDocumentActiveChanged -> Document ${docContext.fileName} is now ${isActive ? 'active' : 'inactive'}.`);
+
+            if (isActive) {
+                for (const doc of this._documents.values()) {
+                    if (doc !== docContext) {
+                        doc.isActive = false;
+                    }
+                }
+            }
+        };
+
+        const docCtx = new DocumentContext(this.context, webviewPanel, onDocContextDisposed,
+            onStatusBarItemUpdateRequest, onNotifyDocumentActiveChanged);
+
+        this._documents.set(documentUri, docCtx);
 
         try {
 
@@ -298,7 +245,7 @@ export class LhqEditorProvider implements vscode.CustomTextEditorProvider {
         if (activeDoc.isSameDocument(document)) {
             logger().log(this, 'debug', `onUndoRedo -> Document ${document.fileName} is active. Updating tree and webview.`);
 
-            await activeDoc.update(document, { forceRefresh: true });
+            await activeDoc.update(document, { forceRefresh: true, undoRedo: true });
         } else {
             logger().log(this, 'debug', `onUndoRedo -> Document ${document.fileName} is not active. Skipping update.`);
         }

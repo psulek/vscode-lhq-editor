@@ -180,7 +180,6 @@
                 */
 
                 if (!window.pageApp.item || window.pageApp.fullPath !== message.fullPath) {
-                    debugger;
                     return;
                 }
 
@@ -345,6 +344,11 @@
                     window.pageApp.completeEditElementName(message.result);
                 }
 
+                break;
+            }
+
+            case 'requestRename': {
+                window.pageApp.editElementName();
                 break;
             }
         }
@@ -931,6 +935,11 @@
             },
 
             editElementName() {
+                if (this.blockPanelVisible) {
+                    logMsg('Block panel is already visible, ignoring "editElementName"');
+                    return;
+                }
+                
                 this.blockPanelVisible = true;
 
                 const data = { elementType: this.item.elementType, paths: toRaw(this.item.paths) };
@@ -946,7 +955,6 @@
             },
 
             completeEditElementName(name) {
-                debugger;
                 this.blockPanelVisible = false;
                 if (name !== undefined && name !== null) {
                     this.item.name = name;
@@ -1281,6 +1289,11 @@
             },
 
             showProperties() {
+                if (this.blockPanelVisible) {
+                    logMsg('Block panel is already visible, ignoring "showProperties"');
+                    return;
+                }
+
                 this.blockPanelVisible = true;
                 this.modelProperties.visible = true;
 

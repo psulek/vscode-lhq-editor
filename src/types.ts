@@ -1,5 +1,5 @@
 import type { FormattingOptions, ICodeGeneratorElement, IRootModelElement, ITreeElement, LhqModel, LhqModelOptionsResources, TemplateMetadataDefinition, TreeElementType } from '@lhq/lhq-generators';
-import type { MessageOptions, TextDocument, Uri, Webview } from 'vscode';
+import type { MarkdownString, MessageOptions, TextDocument, ThemeColor, Uri, Webview } from 'vscode';
 
 export type ExtensionConfig = {
     autoFocusEditor: boolean;
@@ -130,6 +130,8 @@ export type AppToPageMessage = {
     command: 'showInputBoxResult';
     id: string;
     result: string | undefined;
+} | {
+    command: 'requestRename'
 };
 
 export type PageToAppMessage = {
@@ -159,11 +161,11 @@ export type PageToAppMessage = {
     value?: string;
 };
 
-export type LastLhqStatus = {
-    kind: CodeGeneratorStatusKind;
-    filename: string;
-    uid: string;
-}
+// export type LastLhqStatus = {
+//     kind: CodeGeneratorStatusKind;
+//     filename: string;
+//     uid: string;
+// }
 
 export interface IAppContext {
     getConfig(): ExtensionConfig;
@@ -220,14 +222,16 @@ export interface ITreeContext {
     restoreSelection(selection: SelectionBackup): Promise<void>;
 }
 
-export interface IDocumentContext {
-    //get lastValidationError(): ValidationError | undefined;
+export type NotifyDocumentActiveChangedCallback = (docContext: IDocumentContext, active: boolean) => void;
 
+export interface IDocumentContext {
     get documentUri(): Uri | undefined;
 
     get fileName(): string;
 
     get isActive(): boolean;
+
+    get codeGeneratorTemplateId(): string;
 
     get documentFormatting(): FormattingOptions;
 
@@ -246,15 +250,6 @@ export interface IDocumentContext {
     isSameDocument(document: TextDocument): boolean;
 }
 
-export interface ICodeGenStatus {
-    get inProgress(): boolean;
-    set inProgress(value: boolean);
-
-    get lastStatus(): LastLhqStatus | undefined;
-
-    updateGeneratorStatus(templateId: string, info: CodeGeneratorStatusInfo): string
-}
-
 export type SelectionChangedCallback = (selectedElements: ITreeElement[]) => void;
 export type CheckAnyActiveDocumentCallback = () => boolean;
 
@@ -263,15 +258,38 @@ export type SelectionBackup = Array<{
     fullPath: string;
 }>;
 
-export type CodeGeneratorStatusInfo =
-    | { kind: 'active'; filename: string; }
-    | { kind: 'idle'; filename: string; }
-    | { kind: 'error'; filename: string; message: string; detail?: string, timeout?: number; }
-    | { kind: 'status'; filename: string; message: string; success: boolean; timeout: number; };
-
-export type CodeGeneratorStatusKind = CodeGeneratorStatusInfo['kind'];
-
 export type MessageBoxOptions = MessageOptions & {
     logger?: boolean
     showDetail?: 'auto' | 'always';
 }
+
+export interface ICodeGenStatus {
+    get inProgress(): boolean;
+    set inProgress(value: boolean);
+
+    update(info: CodeGeneratorStatusInfo): string
+}
+
+export type CodeGeneratorStatusInfo =
+    | { kind: 'active'; }
+    | { kind: 'idle'; }
+    | { kind: 'error'; message: string; detail?: string, timeout?: number; }
+    | { kind: 'status'; message: string; success: boolean; timeout: number; };
+
+// export type CodeGeneratorStatusInfo =
+//     | { kind: 'active'; filename: string; }
+//     | { kind: 'idle'; filename: string; }
+//     | { kind: 'error'; filename: string; message: string; detail?: string, timeout?: number; }
+//     | { kind: 'status'; filename: string; message: string; success: boolean; timeout: number; };
+
+export type CodeGeneratorStatusKind = CodeGeneratorStatusInfo['kind'];
+
+export type StatusBarItemUpdateInfo = {
+    text: string;
+    tooltip: string | MarkdownString | undefined;
+    command?: string;
+    backgroundColor: ThemeColor | undefined;
+    color: string | ThemeColor | undefined;
+};
+
+export type StatusBarItemUpdateRequestCallback = (docContext: IDocumentContext, updateInfo: StatusBarItemUpdateInfo) => void;

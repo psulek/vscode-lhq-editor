@@ -56,6 +56,7 @@ export const ContextKeys = {
     hasLanguageSelection: 'lhqTreeHasLanguageSelection',
     hasPrimaryLanguageSelected: 'lhqTreeHasPrimaryLanguageSelected',
     hasSelectedResource: 'lhqTreeHasSelectedResource',
+    hasSelectedModelRoot: 'lhqTreeHasSelectedModelRoot',
     hasLanguagesVisible: 'lhqTreeHasLanguagesVisible',
     generatorIsRunning: 'lhqGeneratorIsRunning'
 };
@@ -371,7 +372,8 @@ export class AppContext implements IAppContext {
         let hasSelectedDiffParents = false;
         let hasLanguageSelection = false;
         let hasPrimaryLanguageSelected = false;
-        let hasSelectedResource = hasSelectedItem && selectedElements[0].elementType === 'resource';
+        const hasSelectedResource = hasSelectedItem && selectedElements[0].elementType === 'resource';
+        const hasSelectedModelRoot = hasSelectedItem && selectedElements[0].elementType === 'model';
 
         if (selectedElements.length > 1) {
             const firstParent = selectedElements[0].parent;
@@ -390,6 +392,7 @@ export class AppContext implements IAppContext {
         vscode.commands.executeCommand('setContext', ContextKeys.hasLanguageSelection, hasLanguageSelection);
         vscode.commands.executeCommand('setContext', ContextKeys.hasPrimaryLanguageSelected, hasPrimaryLanguageSelected);
         vscode.commands.executeCommand('setContext', ContextKeys.hasSelectedResource, hasSelectedResource);
+        vscode.commands.executeCommand('setContext', ContextKeys.hasSelectedModelRoot, hasSelectedModelRoot);
     }
 
     public clearTreeContextValues() {

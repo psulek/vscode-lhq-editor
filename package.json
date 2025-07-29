@@ -304,6 +304,21 @@
         "command": "lhqTreeView.focusEditor",
         "key": "ctrl+enter",
         "when": "lhqEditorIsActive"
+      },
+      {
+        "command": "lhqTreeView.deleteElement",
+        "key": "delete",
+        "when": "lhqEditorIsActive && !lhqTreeHasSelectedDiffParents && !lhqTreeHasLanguageSelection && !lhqTreeHasSelectedModelRoot"
+      },
+      {
+        "command": "lhqTreeView.deleteLanguage",
+        "key": "delete",
+        "when": "lhqEditorIsActive && lhqTreeHasLanguageSelection"
+      },
+      {
+        "command": "lhqTreeView.renameElement",
+        "key": "Ctrl+R",
+        "when": "lhqEditorIsActive && !lhqTreeHasSelectedDiffParents && !lhqTreeHasLanguageSelection"
       }
     ],
     "configuration": [
@@ -354,7 +369,7 @@
     "typescript": "^5.8.3"
   },
   "dependencies": {
-    "@lhq/lhq-generators": "1.0.0-rc.80",
+    "@lhq/lhq-generators": "1.0.0-rc.82",
     "class-transformer": "^0.5.1",
     "fs-extra": "11.3.0",
     "lodash.debounce": "4.0.8",

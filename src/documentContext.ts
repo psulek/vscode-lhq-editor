@@ -1,10 +1,12 @@
 import * as vscode from 'vscode';
 import { nextTick } from 'node:process';
-import { createTreeElementPaths, delay, findCulture, generateNonce, getCultureDesc, getElementFullPath, isValidDocument, loadCultures, logger, showConfirmBox, showMessageBox } from './utils';
-import { AppToPageMessage, ClientPageError, ClientPageModelProperties, ClientPageSettingsError, CultureInfo, ICodeGenStatus, IDocumentContext, IVirtualLanguageElement, IVirtualRootElement, PageToAppMessage, ValidationError } from './types';
-import { CategoryLikeTreeElementToJsonOptions, CategoryOrResourceType, CodeGeneratorGroupSettings, detectFormatting, FormattingOptions, generatorUtils, HbsTemplateManager, ICategoryLikeTreeElement, IResourceElement, IResourceParameterElement, IResourceValueElement, IRootModelElement, isNullOrEmpty, ITreeElement, LhqModel, LhqModelResourceTranslationState, LhqValidationResult, modelConst, ModelUtils, TreeElementType } from '@lhq/lhq-generators';
-import { filterTreeElements, filterVirtualTreeElements, isVirtualTreeElement, setTreeElementUid, validateTreeElementName, VirtualRootElement } from './elements';
+import { createTreeElementPaths, delay, findCulture, generateNonce, getCultureDesc, getElementFullPath, getGeneratorAppErrorMessage, isValidDocument, loadCultures, logger, showConfirmBox, showMessageBox } from './utils';
+import { AppToPageMessage, ClientPageError, ClientPageModelProperties, ClientPageSettingsError, CultureInfo, ICodeGenStatus, IDocumentContext, IVirtualLanguageElement, IVirtualRootElement, NotifyDocumentActiveChangedCallback, PageToAppMessage, StatusBarItemUpdateRequestCallback, ValidationError } from './types';
+import { CategoryLikeTreeElementToJsonOptions, CategoryOrResourceType, CodeGeneratorGroupSettings, detectFormatting, FormattingOptions, Generator, generatorUtils, HbsTemplateManager, ICategoryLikeTreeElement, IResourceElement, IResourceParameterElement, IResourceValueElement, IRootModelElement, isNullOrEmpty, ITreeElement, LhqModel, LhqModelResourceTranslationState, LhqValidationResult, modelConst, ModelUtils, TreeElementType } from '@lhq/lhq-generators';
+import { filterTreeElements, filterVirtualTreeElements, isVirtualTreeElement, validateTreeElementName, VirtualRootElement } from './elements';
 import { AvailableCommands, Commands } from './context';
+import { CodeGenStatus } from './codeGenStatus';
+import path from 'node:path';
 
 type LangTypeMode = 'all' | 'neutral' | 'country';
 
@@ -39,13 +41,15 @@ const LanguageTypeModes = [
 
 type UpdateOptions = {
     forceRefresh?: boolean;
+    undoRedo?: boolean;
 };
 
 export class DocumentContext implements IDocumentContext {
     private readonly _context: vscode.ExtensionContext;
     private readonly _webviewPanel: vscode.WebviewPanel;
-    private readonly _codeGenStatus: ICodeGenStatus;
+    private readonly _codeGenStatus: CodeGenStatus;
     private readonly _onDidDispose: () => void;
+    private readonly _notifyDocumentActiveChangedCallback: NotifyDocumentActiveChangedCallback;
 
     private _textDocument: vscode.TextDocument | undefined;
     private _selectedElements: ITreeElement[] = [];
@@ -57,16 +61,18 @@ export class DocumentContext implements IDocumentContext {
     private _documentFormatting!: FormattingOptions;
     private _rootModel!: IRootModelElement | undefined;
     private _virtualRootElement: IVirtualRootElement | undefined;
-    //private _validationError: ValidationError | undefined;
     private _pageErrors: ClientPageError[] = [];
+    private _isActive = false;
+    private _lastRequestPageReload = '';
 
-    constructor(context: vscode.ExtensionContext, webviewPanel: vscode.WebviewPanel,
-        codeGenStatus: ICodeGenStatus, onDidDispose: () => void
+    constructor(context: vscode.ExtensionContext, webviewPanel: vscode.WebviewPanel, onDidDispose: () => void,
+        requestStatusBarItemUpdate: StatusBarItemUpdateRequestCallback,
+        notifyDocumentActiveChangedCallback: NotifyDocumentActiveChangedCallback
     ) {
         this._context = context;
         this._webviewPanel = webviewPanel;
-        this._codeGenStatus = codeGenStatus;
         this._onDidDispose = onDidDispose;
+        this._notifyDocumentActiveChangedCallback = notifyDocumentActiveChangedCallback;
 
         webviewPanel.webview.options = {
             enableScripts: true,
@@ -76,12 +82,11 @@ export class DocumentContext implements IDocumentContext {
             ]
         };
 
+        this.isActive = true;
+        this._codeGenStatus = new CodeGenStatus(this, requestStatusBarItemUpdate);
+
         this.setupEvents();
     }
-
-    // public get lastValidationError(): ValidationError | undefined {
-    //     return this._validationError;
-    // }
 
     public get jsonModel(): LhqModel | undefined {
         return this._jsonModel;
@@ -92,7 +97,7 @@ export class DocumentContext implements IDocumentContext {
     }
 
     public get fileName(): string {
-        return this._fileName ?? '-';
+        return this._fileName ?? '';
     }
 
     public get documentUri(): vscode.Uri | undefined {
@@ -104,10 +109,32 @@ export class DocumentContext implements IDocumentContext {
             return false;
         }
 
+        return this._isActive;
+
+        // try {
+        //     return this._webviewPanel?.active === true;
+        // } catch (error) {
+        //     return false;
+        // }
+    }
+
+    public set isActive(value: boolean) {
+        if (this._disposed) {
+            logger().log(this, 'debug', `set isActive -> DocumentContext is disposed. Ignoring active state change.`);
+            return;
+        }
+
+        // this is here only to trigger the error if webviewPanel is not available
         try {
-            return this._webviewPanel?.active === true;
+            const panelActive = this._webviewPanel?.active === true;
         } catch (error) {
-            return false;
+            return;
+        }
+
+        if (this._isActive !== value) {
+            this._isActive = value;
+            logger().log(this, 'debug', `set isActive -> DocumentContext(${this.fileName}) is now ${value ? 'active' : 'inactive'}.`);
+            this._notifyDocumentActiveChangedCallback(this, value);
         }
     }
 
@@ -127,7 +154,7 @@ export class DocumentContext implements IDocumentContext {
         return this._rootModel?.options.categories === true;
     }
 
-    public get codeGeneratorTemplateId(): string | '' {
+    public get codeGeneratorTemplateId(): string {
         return this._rootModel?.codeGenerator?.templateId ?? '';
     }
 
@@ -306,7 +333,8 @@ export class DocumentContext implements IDocumentContext {
         //     return false;
         // }
 
-        const newModel = ModelUtils.elementToModel<LhqModel>(this._rootModel!, { keepData: true, keepDataKeys: ['uid', 'undoredo'] });
+        // const newModel = ModelUtils.elementToModel<LhqModel>(this._rootModel!, { keepData: true, keepDataKeys: ['uid', 'undoredo'] });
+        const newModel = ModelUtils.elementToModel<LhqModel>(this._rootModel!);
         const serializedRoot = ModelUtils.serializeModel(newModel, this._documentFormatting);
 
         const edit = new vscode.WorkspaceEdit();
@@ -331,19 +359,48 @@ export class DocumentContext implements IDocumentContext {
         if (document && isValidDocument(document)) {
             const sameDoc = this.isSameDocument(document);
 
-            options = Object.assign({}, { forceRefresh: false } as UpdateOptions, options);
+            options = Object.assign({}, { forceRefresh: false, undoRedo: false } as UpdateOptions, options);
 
             this._textDocument = document;
             this._fileName = newFileName;
             this._documentUri = document.uri;
             appContext.enableEditorActive();
 
+            let requestPageReload = false;
             if (sameDoc || !this._rootModel || options.forceRefresh) {
-                logger().log(this, 'debug', `update() for: ${this.fileName}, forceRefresh: ${options.forceRefresh}`);
+                logger().log(this, 'debug', `update() for: ${this.fileName}, forceRefresh: ${options.forceRefresh}, undoRedo: ${options.undoRedo}`);
+
+                let oldLangData: { primaryLang: string, langCount: number } | undefined;
+                // if selected elem is resource, check if count of languages changed after undo/redo
+                if (this._rootModel && this._selectedElements.length > 0 &&
+                    this._selectedElements[0].elementType === 'resource' && options.undoRedo) {
+                    oldLangData = {
+                        primaryLang: this._rootModel.primaryLanguage,
+                        langCount: this._rootModel.languages.length
+                    };
+                }
+
                 this.refresh(document);
+
+                if (oldLangData && this._rootModel) {
+                    // if primary language changed, reload page
+                    if (this._rootModel.primaryLanguage !== oldLangData.primaryLang ||
+                        this._rootModel.languages.length !== oldLangData.langCount) {
+                        requestPageReload = true;
+                    }
+                }
             }
 
+            const lastRPRuid = this._lastRequestPageReload;
+
             appContext.treeContext.updateDocument(this);
+
+            if (lastRPRuid === this._lastRequestPageReload && requestPageReload) {
+                logger().log(this, 'debug', `update() -> Requesting page reload for: ${this.fileName} (for undoRedo)`);
+                //this.sendMessageToHtmlPage({ command: 'requestPageReload' });
+                this.reflectSelectedElementToWebview();
+            } 
+
         } else if (appContext.isEditorActive) {
             //this._validationError = undefined;
             this._textDocument = undefined;
@@ -405,10 +462,7 @@ export class DocumentContext implements IDocumentContext {
                     logger().log(this, 'error', `refresh failed -> ${error}`);
                     void showMessageBox('err', error);
                 } else {
-                    this._codeGenStatus.updateGeneratorStatus(this.codeGeneratorTemplateId, {
-                        kind: 'idle',
-                        filename: this.fileName
-                    });
+                    this._codeGenStatus.update({ kind: 'idle' });
                 }
 
                 this.validateDocument();
@@ -417,6 +471,108 @@ export class DocumentContext implements IDocumentContext {
             this._jsonModel = undefined;
             this._rootModel = undefined;
             this._virtualRootElement = undefined;
+        }
+    }
+
+    public resetGeneratorStatus(): void {
+        this._codeGenStatus.resetGeneratorStatus();
+    }
+
+    public async runCodeGenerator(): Promise<void> {
+        if (!this.jsonModel) {
+            logger().log(this, 'debug', 'runCodeGenerator -> No current document or model found.');
+            return;
+        }
+
+        if (this._codeGenStatus.inProgress) {
+            logger().log(this, 'debug', 'runCodeGenerator -> Code generator is already in progress.');
+            void showMessageBox('info', 'Code generator is already running ...');
+            return;
+        }
+
+        logger().log(this, 'debug', `runCodeGenerator -> Running code generator for document ${this.documentUri}`);
+
+        const filename = this.fileName;
+        if (isNullOrEmpty(filename)) {
+            logger().log(this, 'debug', `runCodeGenerator -> Document fileName is not valid (${filename}). Cannot run code generator.`);
+            return;
+        }
+
+        const templateId = this.codeGeneratorTemplateId;
+        logger().log(this, 'info', `Running code generator template '${templateId}' for: ${filename}`);
+
+        this._codeGenStatus.inProgress = true;
+
+        let beginStatusUid = '';
+        let idleStatusOnEnd = true;
+
+        try {
+            beginStatusUid = this._codeGenStatus.update({ kind: 'active' });
+
+            const validationErr = this.validateDocument(false);
+            if (validationErr) {
+                let msg = `Code generator failed.`;
+                const detail = `${validationErr.message}\n${validationErr.detail ?? ''} for: ${filename}`;
+                this._codeGenStatus.update({
+                    kind: 'error',
+                    message: msg,
+                    detail: detail,
+                });
+
+                msg = `Code generator template '${templateId}' failed.${detail}`;
+                logger().log('this', 'error', msg);
+                return;
+            }
+
+
+            const startTime = Date.now();
+            const generator = new Generator();
+            const result = generator.generate(filename, this.jsonModel, {});
+            const generationTime = Date.now() - startTime;
+
+            // artificially delay the status update to show the spinner ...
+            if (generationTime < 500) {
+                await delay(500 - generationTime);
+            }
+
+            if (result.generatedFiles) {
+                const lhqFileFolder = path.dirname(filename);
+                const fileNames = result.generatedFiles.map(f => path.join(lhqFileFolder, f.fileName));
+                logger().log(this, 'info', `Code generator template '${templateId}' for: ${filename} successfully generated ${fileNames.length} files:\n` +
+                    `${fileNames.join('\n')}`);
+
+                this._codeGenStatus.update({
+                    kind: 'status',
+                    message: `Generated ${result.generatedFiles.length} files.`,
+                    success: true,
+                    timeout: 2000
+                });
+            } else {
+                this._codeGenStatus.update({
+                    kind: 'error',
+                    message: 'Error generating files.',
+                    timeout: 5000
+                });
+            }
+        }
+        catch (error) {
+            logger().log(this, 'error', `Code generator template '${templateId}' failed for: ${filename}.`, error as Error);
+
+            this._codeGenStatus.update({
+                kind: 'error',
+                message: 'Code generator failed.',
+                detail: getGeneratorAppErrorMessage(error as Error) + `\n For file: ${filename}.`
+            });
+        } finally {
+            this._codeGenStatus.inProgress = false;
+
+            if (idleStatusOnEnd) {
+                setTimeout(() => {
+                    if (beginStatusUid === this._codeGenStatus.lastUid) {
+                        this._codeGenStatus.update({ kind: 'idle' });
+                    }
+                }, 2000);
+            }
         }
     }
 
@@ -472,9 +628,15 @@ export class DocumentContext implements IDocumentContext {
         const changedPanel = e.webviewPanel;
         logger().log(this, 'debug', `webviewPanel.onDidChangeViewState for ${this.fileName}. Active: ${changedPanel.active}, Visible: ${changedPanel.visible}`);
 
+        //this._notifyDocumentActiveChangedCallback(this, changedPanel.active);
+        this.isActive = changedPanel.active;
+
         if (changedPanel.active) {
             logger().log(this, 'debug', `webviewPanel.onDidChangeViewState for ${this.fileName} became active. Updating tree and context.`);
             appContext.enableEditorActive();
+
+            this._codeGenStatus.restoreLastStatus();
+
             appContext.treeContext.updateDocument(this);
 
             if (this._selectedElements.length > 0) {
@@ -854,6 +1016,8 @@ export class DocumentContext implements IDocumentContext {
             return;
         }
 
+        this._lastRequestPageReload = crypto.randomUUID();
+
         // reload actual page with element data
         this.sendMessageToHtmlPage({ command: 'requestPageReload' });
     }
@@ -1005,7 +1169,7 @@ export class DocumentContext implements IDocumentContext {
                 newElement = parentCategory.addCategory(itemName);
             }
 
-            setTreeElementUid(newElement);
+            //setTreeElementUid(newElement);
 
             await this.commitChanges('addItemComplete');
 
@@ -1033,44 +1197,47 @@ export class DocumentContext implements IDocumentContext {
             return;
         }
 
-        const originalName = element.name;
-        const elemPath = getElementFullPath(element);
+        this.sendMessageToHtmlPage({ command: 'requestRename' });
 
-        const elementType = element.elementType;
-        const parentElement = this.getCategoryLikeParent(element);
-        const newName = await vscode.window.showInputBox({
-            prompt: `Enter new name for ${elementType} '${originalName}' (${elemPath})`,
-            value: originalName,
-            ignoreFocusOut: true,
-            validateInput: value => validateTreeElementName(elementType, value, parentElement, elemPath)
-        });
+        // const originalName = element.name;
+        // const elemPath = getElementFullPath(element);
 
-        if (!newName || newName === originalName) {
-            return;
-        }
+        // const elementType = element.elementType;
+        // const parentElement = this.getCategoryLikeParent(element);
+        // const newName = await vscode.window.showInputBox({
+        //     prompt: `Enter new name for ${elementType} '${originalName}' (${elemPath})`,
+        //     value: originalName,
+        //     ignoreFocusOut: true,
+        //     validateInput: value => validateTreeElementName(elementType, value, parentElement, elemPath)
+        // });
 
-        const validationError = validateTreeElementName(elementType, newName, parentElement, elemPath);
-        if (validationError) {
-            return showMessageBox('warn', validationError);
-        }
+        // if (!newName || newName === originalName) {
+        //     return;
+        // }
 
-        // after previous await, document can be closed now...
-        if (!this._rootModel) {
-            return;
-        }
+        // const validationError = validateTreeElementName(elementType, newName, parentElement, elemPath);
+        // if (validationError) {
+        //     return showMessageBox('warn', validationError);
+        // }
 
-        element.name = newName;
-        const success = await this.commitChanges('renameItem');
+        // // after previous await, document can be closed now...
+        // if (!this._rootModel) {
+        //     return;
+        // }
 
-        this.treeContext.refreshTree([element]);
-        await this.treeContext.revealElement(element, { expand: true, select: true, focus: true });
+        // element.name = newName;
+        // const success = await this.commitChanges('renameItem');
+
+        // await appContext.treeContext.showLoading('Renaming ...');
+        // this.treeContext.refreshTree([element]);
+        // await this.treeContext.revealElement(element, { expand: true, select: true, focus: true });
 
 
-        if (!success) {
-            const err = `Failed to rename ${elementType} '${originalName}' to '${newName}' (${elemPath})`;
-            logger().log(this, 'error', err);
-            return await showMessageBox('err', err);
-        }
+        // if (!success) {
+        //     const err = `Failed to rename ${elementType} '${originalName}' to '${newName}' (${elemPath})`;
+        //     logger().log(this, 'error', err);
+        //     return await showMessageBox('err', err);
+        // }
     }
 
     private async deleteElement(element: ITreeElement): Promise<void> {
