@@ -2,7 +2,7 @@ import type { FormattingOptions, ICodeGeneratorElement, IRootModelElement, ITree
 import type { MarkdownString, MessageOptions, TextDocument, ThemeColor, Uri, Webview } from 'vscode';
 
 export type ExtensionConfig = {
-    autoFocusEditor: boolean;
+    //autoFocusEditor: boolean;
 }
 
 export type SearchTreeKind = 'path' | 'name' | 'translation' | 'language';
@@ -103,6 +103,7 @@ export type AppToPageMessage = {
     primaryLang: string;
     modelProperties: ClientPageModelProperties;
     autoFocus: boolean;
+    restoreFocusedInput?: boolean;
 } | {
     command: 'invalidData';
     action: 'add' | 'remove';
@@ -159,6 +160,10 @@ export type PageToAppMessage = {
     placeHolder?: string;
     title?: string;
     value?: string;
+} | {
+    command: 'focusTree';
+    paths: string[];
+    elementType: TreeElementType;
 };
 
 // export type LastLhqStatus = {
@@ -220,6 +225,8 @@ export interface ITreeContext {
     backupSelection(): SelectionBackup;
 
     restoreSelection(selection: SelectionBackup): Promise<void>;
+
+    getElementsFromSelection(selection: SelectionBackup): ITreeElement[];
 }
 
 export type NotifyDocumentActiveChangedCallback = (docContext: IDocumentContext, active: boolean) => void;

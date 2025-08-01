@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { nextTick } from 'node:process';
 import { createTreeElementPaths, delay, findCulture, generateNonce, getCultureDesc, getElementFullPath, getGeneratorAppErrorMessage, isValidDocument, loadCultures, logger, showConfirmBox, showMessageBox } from './utils';
-import { AppToPageMessage, ClientPageError, ClientPageModelProperties, ClientPageSettingsError, CultureInfo, ICodeGenStatus, IDocumentContext, IVirtualLanguageElement, IVirtualRootElement, NotifyDocumentActiveChangedCallback, PageToAppMessage, StatusBarItemUpdateRequestCallback, ValidationError } from './types';
+import { AppToPageMessage, ClientPageError, ClientPageModelProperties, ClientPageSettingsError, CultureInfo, ICodeGenStatus, IDocumentContext, IVirtualLanguageElement, IVirtualRootElement, NotifyDocumentActiveChangedCallback, PageToAppMessage, SelectionBackup, StatusBarItemUpdateRequestCallback, ValidationError } from './types';
 import { CategoryLikeTreeElementToJsonOptions, CategoryOrResourceType, CodeGeneratorGroupSettings, detectFormatting, FormattingOptions, Generator, generatorUtils, HbsTemplateManager, ICategoryLikeTreeElement, IResourceElement, IResourceParameterElement, IResourceValueElement, IRootModelElement, isNullOrEmpty, ITreeElement, LhqModel, LhqModelResourceTranslationState, LhqValidationResult, modelConst, ModelUtils, TreeElementType } from '@lhq/lhq-generators';
 import { filterTreeElements, filterVirtualTreeElements, isVirtualTreeElement, validateTreeElementName, VirtualRootElement } from './elements';
 import { AvailableCommands, Commands } from './context';
@@ -328,12 +328,6 @@ export class DocumentContext implements IDocumentContext {
         }
 
         this.validateDocument();
-        // if (!validationResult.success) {
-        //     logger().log(this, 'warn', `commitChanges [${message}] -> Validation failed: ${validationResult.error?.message}`);
-        //     return false;
-        // }
-
-        // const newModel = ModelUtils.elementToModel<LhqModel>(this._rootModel!, { keepData: true, keepDataKeys: ['uid', 'undoredo'] });
         const newModel = ModelUtils.elementToModel<LhqModel>(this._rootModel!);
         const serializedRoot = ModelUtils.serializeModel(newModel, this._documentFormatting);
 
@@ -366,43 +360,31 @@ export class DocumentContext implements IDocumentContext {
             this._documentUri = document.uri;
             appContext.enableEditorActive();
 
-            let requestPageReload = false;
+            let backupSelection: SelectionBackup | undefined;
             if (sameDoc || !this._rootModel || options.forceRefresh) {
                 logger().log(this, 'debug', `update() for: ${this.fileName}, forceRefresh: ${options.forceRefresh}, undoRedo: ${options.undoRedo}`);
 
-                let oldLangData: { primaryLang: string, langCount: number } | undefined;
-                // if selected elem is resource, check if count of languages changed after undo/redo
-                if (this._rootModel && this._selectedElements.length > 0 &&
-                    this._selectedElements[0].elementType === 'resource' && options.undoRedo) {
-                    oldLangData = {
-                        primaryLang: this._rootModel.primaryLanguage,
-                        langCount: this._rootModel.languages.length
-                    };
-                }
-
                 this.refresh(document);
 
-                if (oldLangData && this._rootModel) {
-                    // if primary language changed, reload page
-                    if (this._rootModel.primaryLanguage !== oldLangData.primaryLang ||
-                        this._rootModel.languages.length !== oldLangData.langCount) {
-                        requestPageReload = true;
-                    }
-                }
+                // after undo/redo, current this._selectedElements folds obsolete refs to elements, 
+                // needs to find actual based on elem type and paths (from backupSelection as tree holds actual elements)
+                backupSelection = appContext.treeContext.backupSelection();
             }
 
             const lastRPRuid = this._lastRequestPageReload;
 
             appContext.treeContext.updateDocument(this);
 
-            if (lastRPRuid === this._lastRequestPageReload && requestPageReload) {
-                logger().log(this, 'debug', `update() -> Requesting page reload for: ${this.fileName} (for undoRedo)`);
-                //this.sendMessageToHtmlPage({ command: 'requestPageReload' });
-                this.reflectSelectedElementToWebview();
-            } 
+            if (backupSelection) {
+                this._selectedElements = appContext.treeContext.getElementsFromSelection(backupSelection);
+            }
 
+            // if requestPageReload was not send already and undo/redo was requested, then we need to do 'loadpage'
+            if (lastRPRuid === this._lastRequestPageReload && options.undoRedo === true) {
+                logger().log(this, 'debug', `update() -> Requesting page reload for: ${this.fileName} (for undoRedo)`);
+                this.reflectSelectedElementToWebview(true);
+            }
         } else if (appContext.isEditorActive) {
-            //this._validationError = undefined;
             this._textDocument = undefined;
             this.refresh();
 
@@ -414,6 +396,14 @@ export class DocumentContext implements IDocumentContext {
             });
         }
     }
+
+    // private restoreSelection(backupSelection: SelectionBackup) {
+    //     if (!this.rootModel || !backupSelection || this._disposed) {
+    //         return;
+    //     }
+
+    //     this._selectedElements = appContext.treeContext.getElementsFromSelection(backupSelection);
+    // }
 
     private refresh(document?: vscode.TextDocument): void {
         this.clearPageErrors();
@@ -719,7 +709,9 @@ export class DocumentContext implements IDocumentContext {
                 break;
             }
             case 'showInputBox': {
-                const result = await vscode.window.showInputBox({
+                const data = message.data as { elementType: TreeElementType, paths: string[] };
+                const oldValue = message.value;
+                let result = await vscode.window.showInputBox({
                     prompt: message.prompt,
                     placeHolder: message.placeHolder,
                     title: message.title,
@@ -727,7 +719,6 @@ export class DocumentContext implements IDocumentContext {
                     ignoreFocusOut: true,
                     validateInput: value => {
                         if (message.id === 'editElementName') {
-                            const data = message.data as { elementType: TreeElementType, paths: string[] };
                             const elem = appContext.treeContext.getElementByPath(data.elementType, data.paths);
                             if (elem) {
                                 return validateTreeElementName(elem.elementType, value, elem.parent);
@@ -738,7 +729,21 @@ export class DocumentContext implements IDocumentContext {
                     }
                 });
 
+                if (!isNullOrEmpty(result) && data.elementType === 'model' && result !== oldValue) {
+                    await delay(100); // wait for input box to close
+                    if (!(await showConfirmBox(`Do you want to rename the model?`,
+                        `Associated code generator usually use model name as file name.\n` +
+                        'After renaming the model, you may need to manually delete the old file(s).'))) {
+                        result = undefined;
+                    }
+                }
+
                 this.sendMessageToHtmlPage({ command: 'showInputBoxResult', id: message.id, result });
+                break;
+            }
+            case 'focusTree': {
+                await this.focusTree(false);
+                await appContext.treeContext.selectElementByPath(message.elementType, message.paths, true);
                 break;
             }
         }
@@ -775,7 +780,7 @@ export class DocumentContext implements IDocumentContext {
         this.sendMessageToHtmlPage({ command: 'init', templatesMetadata });
     }
 
-    public reflectSelectedElementToWebview(): void {
+    public reflectSelectedElementToWebview(restoreFocusedInput: boolean = false): void {
         if (this._disposed) {
             logger().log(this, 'debug', `reflectSelectedElementToWebview -> DocumentContext is disposed. Ignoring selection change.`);
             return;
@@ -800,7 +805,7 @@ export class DocumentContext implements IDocumentContext {
             includeResources: false
         };
 
-        const autoFocus = appContext.getConfig().autoFocusEditor;
+        // const autoFocus = appContext.getConfig().autoFocusEditor;
 
         const message: AppToPageMessage = {
             command: 'loadPage',
@@ -815,7 +820,8 @@ export class DocumentContext implements IDocumentContext {
                 visible: false,
                 codeGenerator: rootModel.codeGenerator ?? { templateId: '', settings: {} as CodeGeneratorGroupSettings, version: modelConst.ModelVersions.codeGenerator }
             },
-            autoFocus
+            autoFocus: false,
+            restoreFocusedInput
         };
 
         this.sendMessageToHtmlPage(message);
@@ -977,6 +983,8 @@ export class DocumentContext implements IDocumentContext {
                 return this.renameItem(treeElement);
             case Commands.deleteElement:
                 return this.deleteElement(treeElement);
+            case Commands.duplicateElement:
+                return this.duplicateElement(treeElement);
             case Commands.findInTreeView:
                 return this.findInTreeView();
             case Commands.advancedFind:
@@ -1120,13 +1128,27 @@ export class DocumentContext implements IDocumentContext {
         }, 100);
     }
 
-    private async addItemComplete(parent: ITreeElement, elementType: TreeElementType) {
+    private async addItemComplete(parent: ITreeElement, elementType: TreeElementType, duplicateElement?: ITreeElement): Promise<void> {
         try {
             const isResource = elementType === 'resource';
             const parentCategory = parent as ICategoryLikeTreeElement;
             const elemPath = getElementFullPath(parent);
+            const prompt = duplicateElement
+                ? `Enter new for ${duplicateElement.elementType}`
+                : `Enter new ${elementType} name (${elemPath})`;
+
+            const title = duplicateElement
+                ? `Duplicate ${duplicateElement.elementType} '${duplicateElement.name}' (${getElementFullPath(duplicateElement)})`
+                : undefined;
+
+            const value = duplicateElement
+                ? duplicateElement.name
+                : undefined;
+
             const itemName = await vscode.window.showInputBox({
-                prompt: `Enter new ${elementType} name (${elemPath})`,
+                prompt,
+                title,
+                value,
                 ignoreFocusOut: true,
                 validateInput: value => validateTreeElementName(elementType, value, parentCategory)
             });
@@ -1163,13 +1185,16 @@ export class DocumentContext implements IDocumentContext {
             }
 
             let newElement: ITreeElement;
-            if (isResource) {
-                newElement = parentCategory.addResource(itemName);
-            } else {
-                newElement = parentCategory.addCategory(itemName);
-            }
 
-            //setTreeElementUid(newElement);
+            if (duplicateElement) {
+                newElement = ModelUtils.cloneElement(duplicateElement, itemName);
+            } else {
+                if (isResource) {
+                    newElement = parentCategory.addResource(itemName);
+                } else {
+                    newElement = parentCategory.addCategory(itemName);
+                }
+            }
 
             await this.commitChanges('addItemComplete');
 
@@ -1198,46 +1223,6 @@ export class DocumentContext implements IDocumentContext {
         }
 
         this.sendMessageToHtmlPage({ command: 'requestRename' });
-
-        // const originalName = element.name;
-        // const elemPath = getElementFullPath(element);
-
-        // const elementType = element.elementType;
-        // const parentElement = this.getCategoryLikeParent(element);
-        // const newName = await vscode.window.showInputBox({
-        //     prompt: `Enter new name for ${elementType} '${originalName}' (${elemPath})`,
-        //     value: originalName,
-        //     ignoreFocusOut: true,
-        //     validateInput: value => validateTreeElementName(elementType, value, parentElement, elemPath)
-        // });
-
-        // if (!newName || newName === originalName) {
-        //     return;
-        // }
-
-        // const validationError = validateTreeElementName(elementType, newName, parentElement, elemPath);
-        // if (validationError) {
-        //     return showMessageBox('warn', validationError);
-        // }
-
-        // // after previous await, document can be closed now...
-        // if (!this._rootModel) {
-        //     return;
-        // }
-
-        // element.name = newName;
-        // const success = await this.commitChanges('renameItem');
-
-        // await appContext.treeContext.showLoading('Renaming ...');
-        // this.treeContext.refreshTree([element]);
-        // await this.treeContext.revealElement(element, { expand: true, select: true, focus: true });
-
-
-        // if (!success) {
-        //     const err = `Failed to rename ${elementType} '${originalName}' to '${newName}' (${elemPath})`;
-        //     logger().log(this, 'error', err);
-        //     return await showMessageBox('err', err);
-        // }
     }
 
     private async deleteElement(element: ITreeElement): Promise<void> {
@@ -1303,6 +1288,24 @@ export class DocumentContext implements IDocumentContext {
         }
 
         await showMessageBox(success ? 'info' : 'err', success ? `Successfully deleted ${elemIdent}.` : `Failed to delete ${elemIdent}.`);
+    }
+
+    private async duplicateElement(element: ITreeElement): Promise<void> {
+        const selectedCount = this._selectedElements.length;
+        if (selectedCount > 1) {
+            return;
+        }
+
+        if (element && selectedCount === 1 && element !== this._selectedElements[0]) {
+            await this.treeContext.setSelectedItems([element], { focus: true, expand: false });
+        }
+
+        element = element || (this._selectedElements.length > 0 ? this._selectedElements[0] : undefined);
+        if (!this._rootModel || !element) {
+            return;
+        }
+
+        await this.addItemComplete(element.parent!, element.elementType, element);
     }
 
     private async findInTreeView(): Promise<void> {
@@ -1546,8 +1549,11 @@ export class DocumentContext implements IDocumentContext {
         appContext.sendMessageToHtmlPage({ command: 'showProperties' });
     }
 
-    private async focusTree(): Promise<void> {
-        await this.treeContext.clearSelection(true);
+    private async focusTree(reselect: boolean = true): Promise<void> {
+        await vscode.commands.executeCommand('lhqTreeView.focus');
+        if (reselect) {
+            await this.treeContext.clearSelection(true);
+        }
     }
 
     private focusEditor(): Promise<void> {

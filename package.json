@@ -99,6 +99,12 @@
         "icon": "$(trash)"
       },
       {
+        "command": "lhqTreeView.duplicateElement",
+        "category": "LHQ",
+        "title": "Duplicate element",
+        "icon": "$(copy)"
+      },
+      {
         "command": "lhqTreeView.deleteLanguage",
         "category": "LHQ",
         "title": "Delete language(s)",
@@ -186,6 +192,10 @@
           "when": "false"
         },
         {
+          "command": "lhqTreeView.duplicateElement",
+          "when": "false"
+        },
+        {
           "command": "lhqTreeView.deleteLanguage",
           "when": "false"
         },
@@ -270,6 +280,10 @@
           "when": "view == lhqTreeView && (viewItem == category || viewItem == resource) && !lhqTreeHasSelectedDiffParents && !lhqTreeHasLanguageSelection"
         },
         {
+          "command": "lhqTreeView.duplicateElement",
+          "when": "view == lhqTreeView && lhqTreeHasSelectedItem && !lhqTreeHasLanguageSelection && !lhqTreeHasSelectedModelRoot"
+        },
+        {
           "command": "lhqTreeView.deleteLanguage",
           "when": "view == lhqTreeView && viewItem == language"
         },
@@ -296,6 +310,11 @@
         "when": "lhqEditorIsActive && !lhqTreeHasMultiSelection && !lhqTreeHasLanguageSelection"
       },
       {
+        "command": "lhqTreeView.addLanguage",
+        "key": "insert",
+        "when": "lhqEditorIsActive && lhqTreeHasLanguageSelection"
+      },
+      {
         "command": "lhqTreeView.focusTree",
         "key": "f2",
         "when": "lhqEditorIsActive"
@@ -319,6 +338,11 @@
         "command": "lhqTreeView.renameElement",
         "key": "Ctrl+R",
         "when": "lhqEditorIsActive && !lhqTreeHasSelectedDiffParents && !lhqTreeHasLanguageSelection"
+      },
+      {
+        "command": "lhqTreeView.duplicateElement",
+        "key": "Ctrl+D",
+        "when": "lhqEditorIsActive && lhqTreeHasSelectedItem && !lhqTreeHasLanguageSelection && !lhqTreeHasSelectedModelRoot"
       }
     ],
     "configuration": [
@@ -369,7 +393,7 @@
     "typescript": "^5.8.3"
   },
   "dependencies": {
-    "@lhq/lhq-generators": "1.0.0-rc.82",
+    "@lhq/lhq-generators": "1.0.0-rc.87",
     "class-transformer": "^0.5.1",
     "fs-extra": "11.3.0",
     "lodash.debounce": "4.0.8",

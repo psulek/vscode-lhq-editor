@@ -80,6 +80,11 @@
     let currentPrimaryLang = 'en';
     let templatesMetadata = {};
     let savePropertiesTimer = undefined;
+    let cancelSettingsChangesRequestSent = false;
+
+    /** @type {{type: 'input' | 'tags' | 'translation', id?: string} | undefined} */
+    let lastFocusedElement = undefined;
+
 
     function getCultureName(lang) {
         if (lang && lang !== '') {
@@ -102,6 +107,10 @@
         };
     }
 
+    function isParametersEditableSpan(htmlElem) {
+        return htmlElem.tagName === 'SPAN' && htmlElem.contentEditable === 'true' && htmlElem.closest('tags.tagify') !== undefined;
+    }
+
     function postMessage(message, logText) {
         if (message === undefined || message === null) {
             throw new Error('[postMessage] message is undefined or null!');
@@ -121,9 +130,46 @@
         vscode.postMessage(message);
     }
 
+    document.addEventListener('focusin', (event) => {
+        const target = event.target;
+        if (!target) {
+            return;
+        }
+
+        const divApp = target.closest('div#app');
+        if (!divApp) {
+            return;
+        }
+
+        if (['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON'].includes(target.tagName)) {
+            let type = 'input';
+            let id = target.id;
+            if (target.tagName === 'TEXTAREA' && !id) {
+                type = 'translation';
+                id = target.dataset['lang'];
+            }
+
+            if (!id) {
+                console.warn(`Focused element '${target.tagName}' does not have an id!`, target);
+                throw new Error(`Focused element '${target.tagName}' does not have an id nor data-lang!`);
+            }
+
+            lastFocusedElement = {
+                type: type,
+                id: id,
+            };
+            console.log(`Last focused element changed to: `, lastFocusedElement);
+        } else if (isParametersEditableSpan(target)) {
+            lastFocusedElement = {
+                type: 'tags'
+            };
+            console.log(`Last focused element changed to: `, lastFocusedElement);
+        }
+    });
+
     document.addEventListener('keydown', (event) => {
         // filter out Ctrl+Enter key combination so vscode does not handle it and forward it to tree which will send 'focus' back to this page :-)
-        if (event.ctrlKey === true && event.keyCode === 13) {
+        if (event.ctrlKey === true && event.keyCode === 13) { // ENTER
             event.preventDefault();
             event.stopPropagation();
 
@@ -131,22 +177,39 @@
                 window.pageApp.saveProperties();
             }
 
-        } else if (!event.ctrlKey && !event.shiftKey && !event.metaKey && event.keyCode === 27) {
+        } else if (!event.ctrlKey && !event.shiftKey && !event.metaKey) {
+            if (event.keyCode === 27) { // ESC
+                // Escape key pressed, close all tooltips
+                if (isAnyTooltipVisible()) {
+                    logMsg('Escape key pressed, closing all tooltips');
+                    tooltipsMap.forEach(item => {
+                        removeTooltip(item);
+                    });
+                }
 
-            // Escape key pressed, close all tooltips
-            if (isAnyTooltipVisible()) {
-                logMsg('Escape key pressed, closing all tooltips');
-                tooltipsMap.forEach(item => {
-                    removeTooltip(item);
-                });
+                if (window.pageApp && window.pageApp.modelProperties.visible) {
+                    window.pageApp.cancelProperties();
+                }
+
+                if (isParametersEditableSpan(event.target)) {
+                    window.pageApp.internalEditParameters(true);
+                    document.getElementById('editParameters').focus();
+                }
+
+                // event.preventDefault();
+                // event.stopPropagation();
+            } else if (event.key === 'F2') {
+                // const item = window.pageApp.item;
+                // const data = { elementType: item.elementType, paths: toRaw(item.paths) };
+                // postMessage({ command: 'focusTree', ...data }, 'Focus tree on F2 key press');
+
+                const item = window.pageApp.item;
+                const data = { elementType: item.elementType, paths: toRaw(item.paths) };
+                postMessage({ command: 'select', reload: false, ...data }, `Page reload for ${item.elementType} (${window.pageApp.fullPath})`);
+
+                event.preventDefault();
+                event.stopPropagation();
             }
-
-            if (window.pageApp && window.pageApp.modelProperties.visible) {
-                window.pageApp.cancelProperties();
-            }
-
-            event.preventDefault();
-            event.stopPropagation();
         }
     });
 
@@ -229,11 +292,13 @@
                 primaryLang: string;
                 modelProperties: PageModelProperties;
                 autoFocus: boolean;
+                restoreFocusedInput?: boolean;
                 */
                 domBody.dataset['loading'] = 'true';
                 const element = message.element;
                 const modelProperties = message.modelProperties;
                 const autoFocus = message.autoFocus ?? false;
+                const restoreFocusedInput = message.restoreFocusedInput ?? false;
                 //const file = message.file;
                 usedCultures = message.cultures || [];
                 if (usedCultures.length === 0) {
@@ -267,6 +332,7 @@
                         window.pageApp.bindTagParameters(oldElement);
                         window.pageApp.recheckInvalidData();
                         window.pageApp.debouncedResize();
+                        window.pageApp.restoreLastFocused(restoreFocusedInput);
 
                         if (autoFocus) {
                             window.pageApp.focusEditor();
@@ -309,6 +375,7 @@
                         break;
                     }
                     case 'cancelSettingsChanges': {
+                        cancelSettingsChangesRequestSent = false;
                         if (message.confirmed) {
                             window.pageApp.closePropertiesDialog(true);
                         } else {
@@ -356,6 +423,9 @@
 
     function setNewElement(element, modelProperties) {
         if (!element) { return; }
+
+        // backup focused element on document to global 'focusedElem' and restore that elem to be focused on end of this fn
+        //const focusedElem = document.activeElement;
 
         /** @type TranslationItem[] */
         const translations = [];
@@ -939,7 +1009,7 @@
                     logMsg('Block panel is already visible, ignoring "editElementName"');
                     return;
                 }
-                
+
                 this.blockPanelVisible = true;
 
                 const data = { elementType: this.item.elementType, paths: toRaw(this.item.paths) };
@@ -963,6 +1033,10 @@
 
             editParameters(e) {
                 const isCancel = e.target.dataset['cancel'] === 'true';
+                this.internalEditParameters(isCancel);
+            },
+
+            internalEditParameters(isCancel) {
                 this.paramsEnabled = !this.paramsEnabled;
                 tagifyParams.setDisabled(!this.paramsEnabled);
 
@@ -1178,6 +1252,7 @@
 
                         self.$nextTick(() => {
                             self.editParameters({ target: { dataset: { cancel: 'false' } } });
+                            document.getElementById('editParameters').focus();
                         });
                     }
                 });
@@ -1303,6 +1378,11 @@
             },
 
             cancelProperties() {
+                if (cancelSettingsChangesRequestSent) {
+                    logMsg('Cancel settings changes request already sent, ignoring "cancelProperties"');
+                    return;
+                }
+
                 const prop1 = structuredClone(toRaw(this.modelPropertiesBackup));
                 prop1.visible = false;
                 const prop2 = structuredClone(toRaw(this.modelProperties));
@@ -1310,6 +1390,7 @@
                 const equals = JSON.stringify(prop1) === JSON.stringify(prop2);
 
                 if (!equals) {
+                    cancelSettingsChangesRequestSent = true;
                     postMessage({
                         command: 'confirmQuestion',
                         id: 'cancelSettingsChanges',
@@ -1434,6 +1515,41 @@
                     }
                 } else {
                     this.$refs.name.focus();
+                }
+            },
+
+            restoreLastFocused(restoreFocusedInput) {
+                if (!restoreFocusedInput) {
+                    lastFocusedElement = undefined;
+                    return;
+                }
+
+                // set back focused elem on document
+                if (lastFocusedElement) {
+                    switch (lastFocusedElement.type) {
+                        case 'tags': {
+                            if (this.paramsEnabled) {
+                                // focus span
+                                const span = document.querySelector('tags>span[contenteditable="true"].tagify__input');
+                                span.focus();
+                            } else {
+                                this.internalEditParameters(false);
+                            }
+                            break;
+                        }
+                        case 'input': {
+                            document.getElementById(lastFocusedElement.id)?.focus();
+                            break;
+                        }
+                        case 'translation': {
+                            document.querySelector(`textarea[data-lang="${lastFocusedElement.id}"]`)?.focus();
+                            break;
+                        }
+                        default: {
+                            logMsg(`Unknown last focused element type: ${lastFocusedElement.type}`);
+                            break;
+                        }
+                    }
                 }
             }
         }

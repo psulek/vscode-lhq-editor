@@ -180,7 +180,8 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
             }
         }
 
-        this._onDidChangeTreeData.fire(undefined);
+        //this._onDidChangeTreeData.fire(undefined);
+        this.refreshTree(undefined);
 
         if (this.currentRootModel) {
             let elemToFocus: ITreeElement | undefined;
@@ -331,7 +332,11 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
 
         // after previous await, document can be closed now...
         if (!this.checkActiveDoc('handleDrag')) {
-            return;
+            return Promise.reject();
+        }
+
+        if (items.length === 1) {
+            logger().log(this, 'debug', `handleDrag -> Dragging single item: ${items[0].path} [${items[0].type}]`);
         }
 
         treeDataTransfer.set('application/vnd.code.tree.lhqTreeView', new vscode.DataTransferItem(items));
@@ -393,6 +398,8 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
         const firstParent = sourceItems[0].parent;
         const elemText = `${itemCount} element(s)`;
 
+        logger().log(this, 'debug', `handleDrop -> Dropped single item: ${items[0].path} [${items[0].type}]`);
+
         if (target.elementType === 'model' && !this.resourcesUnderRoot && sourceItems.some(x => x.elementType === 'resource')) {
             return await showMessageBox('warn', `Resources are not allowed under root!`,
                 {
@@ -440,19 +447,19 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
             }
         });
 
-        await this._activeDoc.commitChanges('handleDrop');
-
-        this._onDidChangeTreeData.fire([target]);
-        const toFocus = sourceItems.length === 1 ? sourceItems[0] : targetElement;
-        await this.revealElement(toFocus, { expand: true, select: true, focus: true });
-
         if (changedCount > 0) {
+            await this._activeDoc.commitChanges('handleDrop');
+
+            this.refreshTree(undefined);
+            const toFocus = sourceItems.length === 1 ? sourceItems[0] : targetElement;
+            await this.revealElement(toFocus, { expand: true, select: true, focus: true });
+
             const moved = sourceItems.length === 1
                 ? `${sourceItems[0].elementType} '${getElementFullPath(sourceItems[0])}'`
                 : `${sourceItems.length} element(s)`;
 
             await showMessageBox('info', `Moved ${moved} under '${getElementFullPath(target)}'`);
-        }
+        } 
     }
 
     public updateDocument(docCtx: IDocumentContext): void {
@@ -467,7 +474,8 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
         }
 
         // refresh whole tree view
-        this._onDidChangeTreeData.fire(undefined);
+        //this._onDidChangeTreeData.fire(undefined);
+        this.refreshTree(undefined);
     }
 
     getTreeItem(element: ITreeElement): vscode.TreeItem {
@@ -547,11 +555,7 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
         }));
     }
 
-    public async restoreSelection(selection: SelectionBackup): Promise<void> {
-        if (!this.checkActiveDoc('restoreSelection') || !selection || selection.length === 0) {
-            return;
-        }
-
+    public getElementsFromSelection(selection: SelectionBackup): ITreeElement[] {
         const root = this.currentRootModel!;
         const restoredElements: ITreeElement[] = [];
         selection.forEach(item => {
@@ -562,6 +566,15 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
             }
         });
 
+        return restoredElements;
+    }
+
+    public async restoreSelection(selection: SelectionBackup): Promise<void> {
+        if (!this.checkActiveDoc('restoreSelection') || !selection || selection.length === 0) {
+            return;
+        }
+
+        const restoredElements = this.getElementsFromSelection(selection);
         // await this.clearSelection();
         await this.setSelectedItems(restoredElements);
     }

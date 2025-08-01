@@ -23,6 +23,7 @@ export const Commands = {
     addElement: 'lhqTreeView.addElement',
     renameElement: 'lhqTreeView.renameElement',
     deleteElement: 'lhqTreeView.deleteElement',
+    duplicateElement: 'lhqTreeView.duplicateElement',
     findInTreeView: 'lhqTreeView.findInTreeView',
     advancedFind: 'lhqTreeView.advancedFind',
     addCategory: 'lhqTreeView.addCategory',
@@ -151,9 +152,9 @@ export class AppContext implements IAppContext {
 
     public async updateConfig(newConfig: Partial<ExtensionConfig>): Promise<void> {
         const cfg = await vscode.workspace.getConfiguration();
-        if (newConfig.autoFocusEditor) {
-            cfg.update(configKeys.autoFocusEditor, newConfig.autoFocusEditor, vscode.ConfigurationTarget.Workspace);
-        }
+        // if (newConfig.autoFocusEditor) {
+        //     cfg.update(configKeys.autoFocusEditor, newConfig.autoFocusEditor, vscode.ConfigurationTarget.Workspace);
+        // }
     }
 
     private async handleDidChangeTextDocument(e: vscode.TextDocumentChangeEvent) {
