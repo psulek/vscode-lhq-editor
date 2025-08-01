@@ -2,7 +2,7 @@ import path from 'path';
 import * as vscode from 'vscode';
 import fse from 'fs-extra';
 import { glob } from 'glob';
-import { AppToPageMessage, CheckAnyActiveDocumentCallback, ExtensionConfig, IAppContext, ITreeContext, IVirtualLanguageElement, SelectionChangedCallback } from './types';
+import { AppToPageMessage, CheckAnyActiveDocumentCallback, IAppConfig, IAppContext, ITreeContext, IVirtualLanguageElement, SelectionChangedCallback } from './types';
 import { Generator, GeneratorInitialization, HbsTemplateManager, ITreeElement, ModelUtils, generatorUtils, isNullOrEmpty } from '@lhq/lhq-generators';
 import { VirtualTreeElement } from './elements';
 import {
@@ -14,9 +14,11 @@ import { LhqTreeDataProvider } from './treeDataProvider';
 import { HostEnvironmentCli } from './hostEnv';
 import EventEmitter from 'events';
 import { VsCodeLogger } from './logger';
+import { AppConfig } from './config';
 
 const globalStateKeys = {
-    languagesVisible: 'languagesVisible'
+    languagesVisible: 'lhqeditor.languagesVisible',
+    firstTimeRun: 'lhqeditor.firstTimeRun'
 };
 
 export const Commands = {
@@ -66,9 +68,16 @@ export const ContextEvents = {
     isEditorActiveChanged: 'isEditorActiveChanged',
 };
 
+const configSection = 'lhqeditor';
+
 const configKeys = {
-    autoFocusEditor: 'lhqeditor.autoFocusEditor'
+    //autoFocusEditor: 'lhqeditor.autoFocusEditor'
+    //runGeneratorOnSave: 'lhqeditor.runGeneratorOnSave'
 } as const;
+
+// const defaultExtensionConfig: ExtensionConfig = Object.freeze({
+//     runGeneratorOnSave: true
+// });
 
 export class AppContext implements IAppContext {
     private _ctx!: vscode.ExtensionContext;
@@ -81,6 +90,8 @@ export class AppContext implements IAppContext {
     private _pageHtml: string = '';
     private _eventEmitter = new EventEmitter();
     private _checkAnyActiveDocumentCallback: CheckAnyActiveDocumentCallback | undefined;
+    private _firstTimeRunCached: boolean | undefined;
+    private _appConfig: AppConfig = null!;
 
     public setSelectionChangedCallback(callback: SelectionChangedCallback): void {
         this._onSelectionChanged = callback;
@@ -100,8 +111,26 @@ export class AppContext implements IAppContext {
         return this;
     }
 
-    public async init(ctx: vscode.ExtensionContext): Promise<void> {
+    public async init(ctx: vscode.ExtensionContext, reset: boolean = false): Promise<void> {
         this._ctx = ctx;
+
+        this._appConfig = new AppConfig();
+        (globalThis as any).appConfig = this._appConfig;
+
+        // reset global state
+        if (ctx.extensionMode === vscode.ExtensionMode.Production && reset) {
+            reset = false;
+        }
+
+        if (reset) {
+            const keys = Object.values(globalStateKeys);
+            await Promise.all(keys.map(key => ctx.globalState.update(key, undefined)));
+        }
+
+        this._firstTimeRunCached = this.firstTimeRun;
+        if (this._firstTimeRunCached) {
+            this.firstTimeRun = false;
+        }
 
         await this.initGenerator(ctx);
 
@@ -123,6 +152,10 @@ export class AppContext implements IAppContext {
 
             vscode.workspace.onWillSaveTextDocument((event: vscode.TextDocumentWillSaveEvent) => {
                 this._lhqEditorProvider.onWillSaveTextDocument(event);
+            }),
+
+            vscode.workspace.onDidSaveTextDocument((document: vscode.TextDocument) => {
+                this._lhqEditorProvider.onDidSaveTextDocument(document);
             })
         );
 
@@ -142,20 +175,32 @@ export class AppContext implements IAppContext {
         vscode.commands.registerCommand(GlobalCommands.createNewLhqFile, () => this.createNewLhqFile());
     }
 
-    public getConfig(): ExtensionConfig {
-        const cfg = vscode.workspace.getConfiguration();
-        const autoFocusEditor = cfg.get(configKeys.autoFocusEditor, false);
-        return {
-            autoFocusEditor: autoFocusEditor
-        };
+    // public getConfig(): ExtensionConfig {
+    //     const cfg = vscode.workspace.getConfiguration();
+    //     const res = cfg.get(configSection, defaultExtensionConfig);
+    //     return res;
+
+    //     //const autoFocusEditor = cfg.get(configKeys.autoFocusEditor, false);
+    //     // const runGeneratorOnSave = cfg.get(configKeys.runGeneratorOnSave, true);
+    //     // return {
+    //     //     runGeneratorOnSave
+    //     // } as ExtensionConfig;
+    // }
+
+    public async updateConfig(newConfig: Partial<IAppConfig>): Promise<void> {
+        await this._appConfig.updateConfig(newConfig);
     }
 
-    public async updateConfig(newConfig: Partial<ExtensionConfig>): Promise<void> {
-        const cfg = await vscode.workspace.getConfiguration();
-        // if (newConfig.autoFocusEditor) {
-        //     cfg.update(configKeys.autoFocusEditor, newConfig.autoFocusEditor, vscode.ConfigurationTarget.Workspace);
-        // }
-    }
+    // public async updateConfig(newConfig: Partial<IAppConfig>): Promise<void> {
+    //     const cfg = await vscode.workspace.getConfiguration();
+
+    //     // iterate over all keys in newConfig and update them
+    //     for (const key of Object.keys(newConfig) as (keyof IAppConfig)[]) {
+    //         if (newConfig[key] !== undefined) {
+    //             await cfg.update(`${configSection}.${key}`, newConfig[key], vscode.ConfigurationTarget.Global);
+    //         }
+    //     }
+    // }
 
     private async handleDidChangeTextDocument(e: vscode.TextDocumentChangeEvent) {
         if (!e.reason) {
@@ -317,6 +362,18 @@ export class AppContext implements IAppContext {
     public set languagesVisible(visible: boolean) {
         this._ctx.globalState.update(globalStateKeys.languagesVisible, visible);
         vscode.commands.executeCommand('setContext', ContextKeys.hasLanguagesVisible, visible);
+    }
+
+    public get firstTimeRun(): boolean {
+        if (this._firstTimeRunCached === undefined) {
+            return this._ctx.globalState.get<boolean>(globalStateKeys.firstTimeRun, true);
+        }
+
+        return this._firstTimeRunCached;
+    }
+
+    public set firstTimeRun(value: boolean) {
+        this._ctx.globalState.update(globalStateKeys.firstTimeRun, value);
     }
 
     public get isEditorActive(): boolean {

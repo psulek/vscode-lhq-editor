@@ -1,10 +1,11 @@
 import * as vscode from 'vscode';
+import fse from 'fs-extra';
 import { nextTick } from 'node:process';
 import { createTreeElementPaths, delay, findCulture, generateNonce, getCultureDesc, getElementFullPath, getGeneratorAppErrorMessage, isValidDocument, loadCultures, logger, showConfirmBox, showMessageBox } from './utils';
 import { AppToPageMessage, ClientPageError, ClientPageModelProperties, ClientPageSettingsError, CultureInfo, ICodeGenStatus, IDocumentContext, IVirtualLanguageElement, IVirtualRootElement, NotifyDocumentActiveChangedCallback, PageToAppMessage, SelectionBackup, StatusBarItemUpdateRequestCallback, ValidationError } from './types';
-import { CategoryLikeTreeElementToJsonOptions, CategoryOrResourceType, CodeGeneratorGroupSettings, detectFormatting, FormattingOptions, Generator, generatorUtils, HbsTemplateManager, ICategoryLikeTreeElement, IResourceElement, IResourceParameterElement, IResourceValueElement, IRootModelElement, isNullOrEmpty, ITreeElement, LhqModel, LhqModelResourceTranslationState, LhqValidationResult, modelConst, ModelUtils, TreeElementType } from '@lhq/lhq-generators';
+import { CategoryLikeTreeElementToJsonOptions, CategoryOrResourceType, CodeGeneratorGroupSettings, detectFormatting, FormattingOptions, GeneratedFile, Generator, generatorUtils, HbsTemplateManager, ICategoryLikeTreeElement, IResourceElement, IResourceParameterElement, IResourceValueElement, IRootModelElement, isNullOrEmpty, ITreeElement, LhqModel, LhqModelResourceTranslationState, LhqValidationResult, modelConst, ModelUtils, TreeElementType } from '@lhq/lhq-generators';
 import { filterTreeElements, filterVirtualTreeElements, isVirtualTreeElement, validateTreeElementName, VirtualRootElement } from './elements';
-import { AvailableCommands, Commands } from './context';
+import { AvailableCommands, Commands, getCurrentFolder } from './context';
 import { CodeGenStatus } from './codeGenStatus';
 import path from 'node:path';
 
@@ -526,8 +527,27 @@ export class DocumentContext implements IDocumentContext {
             }
 
             if (result.generatedFiles) {
-                const lhqFileFolder = path.dirname(filename);
-                const fileNames = result.generatedFiles.map(f => path.join(lhqFileFolder, f.fileName));
+                //const lhqFileFolder = path.dirname(filename);
+                //const fileNames = result.generatedFiles.map(f => path.join(lhqFileFolder, f.fileName));
+
+                const fileNames: string[] = [];
+                const folder = getCurrentFolder();
+                if (!folder) {
+                    return showMessageBox('err', 'No folder selected. Please select a folder in the Explorer view.');
+                }
+
+                const output = folder.fsPath;
+                if (await fse.pathExists(output) === false) {
+                    return showMessageBox('err', `Output folder '${output}' does not exist. Please select a valid folder.`);
+                }
+
+                const saveFilesMap = result.generatedFiles.map(async (file) => {
+                    const filename = await this.saveGenFile(file, output);
+                    fileNames.push(filename);
+                });
+                await Promise.all(saveFilesMap);
+
+
                 logger().log(this, 'info', `Code generator template '${templateId}' for: ${filename} successfully generated ${fileNames.length} files:\n` +
                     `${fileNames.join('\n')}`);
 
@@ -564,6 +584,19 @@ export class DocumentContext implements IDocumentContext {
                 }, 2000);
             }
         }
+    }
+
+    private async saveGenFile(generatedFile: GeneratedFile, outputPath?: string): Promise<string> {
+        const content = generatorUtils.getGeneratedFileContent(generatedFile, true);
+        const bom = generatedFile.bom ? '\uFEFF' : '';
+        const encodedText = Buffer.from(bom + content, 'utf8');
+
+        const fileName = !outputPath ? generatedFile.fileName : path.join(outputPath, generatedFile.fileName);
+        const dir = path.dirname(fileName);
+
+        await fse.ensureDir(dir);
+        await fse.writeFile(fileName, encodedText, { encoding: 'utf8' });
+        return fileName;
     }
 
     public validateDocument(showError: boolean = true): ValidationError | undefined {
@@ -696,7 +729,7 @@ export class DocumentContext implements IDocumentContext {
                 const warn = message.warning ?? false;
 
                 await delay(100);
-                const confirmed = await showConfirmBox(text, detail, warn);
+                const confirmed = await showConfirmBox(text, detail, warn) === true;
 
                 let result: unknown | undefined;
                 switch (message.id) {
@@ -729,8 +762,9 @@ export class DocumentContext implements IDocumentContext {
                     }
                 });
 
-                if (!isNullOrEmpty(result) && data.elementType === 'model' && result !== oldValue) {
+                if (!isNullOrEmpty(result) && message.id === 'editElementName' && data.elementType === 'model' && result !== oldValue) {
                     await delay(100); // wait for input box to close
+                    
                     if (!(await showConfirmBox(`Do you want to rename the model?`,
                         `Associated code generator usually use model name as file name.\n` +
                         'After renaming the model, you may need to manually delete the old file(s).'))) {

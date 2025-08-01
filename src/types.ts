@@ -1,10 +1,6 @@
 import type { FormattingOptions, ICodeGeneratorElement, IRootModelElement, ITreeElement, LhqModel, LhqModelOptionsResources, TemplateMetadataDefinition, TreeElementType } from '@lhq/lhq-generators';
 import type { MarkdownString, MessageOptions, TextDocument, ThemeColor, Uri, Webview } from 'vscode';
 
-export type ExtensionConfig = {
-    //autoFocusEditor: boolean;
-}
-
 export type SearchTreeKind = 'path' | 'name' | 'translation' | 'language';
 
 export type SearchTreeOptionsBase = {
@@ -166,15 +162,12 @@ export type PageToAppMessage = {
     elementType: TreeElementType;
 };
 
-// export type LastLhqStatus = {
-//     kind: CodeGeneratorStatusKind;
-//     filename: string;
-//     uid: string;
-// }
+export interface IAppConfig {
+    get runGeneratorOnSave(): boolean;
+}
 
 export interface IAppContext {
-    getConfig(): ExtensionConfig;
-    updateConfig(newConfig: ExtensionConfig): Promise<void>;
+    updateConfig(newConfig: Partial<IAppConfig>): Promise<void>;
 
     get treeContext(): ITreeContext;
 
@@ -184,6 +177,9 @@ export interface IAppContext {
 
     get languagesVisible(): boolean;
     set languagesVisible(visible: boolean);
+
+    get firstTimeRun(): boolean;
+    set firstTimeRun(value: boolean);
 
     on(event: string, listener: (...args: any[]) => void): this;
     off(event: string, listener: (...args: any[]) => void): this;
@@ -282,12 +278,6 @@ export type CodeGeneratorStatusInfo =
     | { kind: 'idle'; }
     | { kind: 'error'; message: string; detail?: string, timeout?: number; }
     | { kind: 'status'; message: string; success: boolean; timeout: number; };
-
-// export type CodeGeneratorStatusInfo =
-//     | { kind: 'active'; filename: string; }
-//     | { kind: 'idle'; filename: string; }
-//     | { kind: 'error'; filename: string; message: string; detail?: string, timeout?: number; }
-//     | { kind: 'status'; filename: string; message: string; success: boolean; timeout: number; };
 
 export type CodeGeneratorStatusKind = CodeGeneratorStatusInfo['kind'];
 

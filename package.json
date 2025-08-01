@@ -350,11 +350,11 @@
         "id": "common",
         "title": "LHQ Editor",
         "properties": {
-          "lhqeditor.autoFocusEditor": {
+          "lhqeditor.runGeneratorOnSave": {
             "type": "boolean",
-            "default": false,
+            "default": true,
             "scope": "window",
-            "markdownDescription": "Automatically focus the `editor` when the tree view is focused."
+            "markdownDescription": "Run associated code generator after `*.lhq` file is saved. When disabled, you will need to run it manually using the command `LHQ: Run Code Generator`."
           }
         }
       }

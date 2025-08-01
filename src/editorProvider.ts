@@ -3,7 +3,7 @@ import debounce from 'lodash.debounce';
 import { ITreeElement } from '@lhq/lhq-generators';
 
 import { LhqTreeDataProvider } from './treeDataProvider';
-import { isValidDocument, logger, showMessageBox } from './utils';
+import { isValidDocument, logger, showConfirmBox, showMessageBox } from './utils';
 import { AppToPageMessage, IDocumentContext, SelectionChangedCallback, StatusBarItemUpdateInfo } from './types';
 import { DocumentContext } from './documentContext';
 import { AvailableCommands, Commands, ContextEvents, GlobalCommands } from './context';
@@ -232,6 +232,25 @@ export class LhqEditorProvider implements vscode.CustomTextEditorProvider {
 
         if (activeDoc.isSameDocument(event.document)) {
             activeDoc.validateDocument();
+        }
+    }
+
+    public onDidSaveTextDocument(document: vscode.TextDocument) {
+        if (isValidDocument(document)) {
+            if (!appConfig.runGeneratorOnSave) {
+                return;
+            }
+
+            void this.runCodeGenerator().finally(async () => {
+                if (appContext.firstTimeRun) {
+                    const runGeneratorOnSave = await showConfirmBox('Associated code generator was run automatically after save.',
+                        'Do you want to always run code generator on save?');
+
+                    if (runGeneratorOnSave !== undefined) {
+                        await appContext.updateConfig({ runGeneratorOnSave });
+                    }
+                }
+            });
         }
     }
 

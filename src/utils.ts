@@ -65,13 +65,14 @@ export function createTreeElementPaths(parentPath: string, anySlash: boolean = f
     return ModelUtils.createTreePaths(parentPath, '/');
 }
 
-export async function showConfirmBox(message: string, detail?: string, warn?: boolean): Promise<boolean> {
+export async function showConfirmBox(message: string, detail?: string, warn?: boolean): Promise<boolean | undefined> {
     const msg = getMessageBoxText(message);
     warn = warn ?? false;
-    return (warn ?
+    const result = warn ?
         await vscode.window.showWarningMessage(msg, { modal: true, detail }, 'Yes', 'No') :
-        await vscode.window.showInformationMessage(msg, { modal: true, detail }, 'Yes', 'No'))
-        === 'Yes';
+        await vscode.window.showInformationMessage(msg, { modal: true, detail }, 'Yes', 'No');
+
+    return result === undefined ? undefined : result === 'Yes';
 }
 
 

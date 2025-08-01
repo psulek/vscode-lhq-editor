@@ -334,9 +334,9 @@
                         window.pageApp.debouncedResize();
                         window.pageApp.restoreLastFocused(restoreFocusedInput);
 
-                        if (autoFocus) {
-                            window.pageApp.focusEditor();
-                        }
+                        // if (autoFocus) {
+                        //     window.pageApp.focusEditor();
+                        // }
                     });
                 });
                 delete domBody.dataset['loading'];
