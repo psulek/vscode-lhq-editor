@@ -32,6 +32,13 @@ export class LhqEditorProvider implements vscode.CustomTextEditorProvider {
             }
         });
 
+        appContext.on(ContextEvents.isReadonlyModeChanged, (readonly: boolean) => {
+            const activeDoc = this.activeDocument;
+            if (activeDoc) {
+                activeDoc.setReadonlyMode(readonly);
+            }
+        });
+
         // TODO: Maybe unsubscribe this status bar item when extension is deactivated?
         context.subscriptions.push(this._statusBar);
 
@@ -50,6 +57,8 @@ export class LhqEditorProvider implements vscode.CustomTextEditorProvider {
 
         context.subscriptions.push(
             vscode.commands.registerCommand(GlobalCommands.runGenerator, () => this._debouncedRunCodeGenerator()),
+            
+            vscode.commands.registerCommand(GlobalCommands.importFromFile, this.importModelFromFile.bind(this)),
         );
     }
 
@@ -101,6 +110,16 @@ export class LhqEditorProvider implements vscode.CustomTextEditorProvider {
             logger().log(this, 'warn', '[LhqEditorProvider] sendMessageToHtmlPage -> No active document context found. Cannot send message.');
             //void showMessageBox('warn', 'No active lhq document found. Please reopen lhq file.');
         }
+    }
+
+    private async importModelFromFile(): Promise<void> {
+        const activeDoc = this.activeDocument;
+        if (!activeDoc) {
+            logger().log(this, 'warn', 'importModelFromFile -> No active document context found. Cannot import from Excel.');
+            return;
+        }
+
+        return activeDoc.importModelFromFile();
     }
 
     public async runCodeGenerator(): Promise<void> {

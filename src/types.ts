@@ -62,7 +62,7 @@ export type CultureInfo = {
     isNeutral: boolean;
 }
 
-export type CulturesMap = Record<string, CultureInfo>;
+//export type CulturesMap = Record<string, CultureInfo>;
 
 export type ValidationError = { message: string, detail?: string };
 
@@ -129,6 +129,9 @@ export type AppToPageMessage = {
     result: string | undefined;
 } | {
     command: 'requestRename'
+} | {
+    command: 'blockEditor',
+    block: boolean
 };
 
 export type PageToAppMessage = {
@@ -166,8 +169,13 @@ export interface IAppConfig {
     get runGeneratorOnSave(): boolean;
 }
 
+
 export interface IAppContext {
     updateConfig(newConfig: Partial<IAppConfig>): Promise<void>;
+
+    getAllCultures(): CultureInfo[];
+    findCulture(name: string, ignoreCase?: boolean): CultureInfo | undefined;
+    getCultureDesc(name: string): string;
 
     get treeContext(): ITreeContext;
 
@@ -180,6 +188,9 @@ export interface IAppContext {
 
     get firstTimeRun(): boolean;
     set firstTimeRun(value: boolean);
+
+    get readonlyMode(): boolean;
+    set readonlyMode(value: boolean);
 
     on(event: string, listener: (...args: any[]) => void): this;
     off(event: string, listener: (...args: any[]) => void): this;
@@ -201,6 +212,8 @@ export interface IAppContext {
 
 export interface ITreeContext {
     updateDocument(docCtx: IDocumentContext | undefined): void;
+
+    selectRootElement(): Promise<void>;
 
     setSelectedItems(itemsToSelect: ITreeElement[], options?: { focus?: boolean; expand?: boolean | number }): Promise<void>;
 
@@ -231,6 +244,8 @@ export interface IDocumentContext {
     get documentUri(): Uri | undefined;
 
     get fileName(): string;
+
+    get isReadonly(): boolean;
 
     get isActive(): boolean;
 

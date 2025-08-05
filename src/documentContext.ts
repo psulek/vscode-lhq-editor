@@ -1,13 +1,16 @@
 import * as vscode from 'vscode';
+import path from 'node:path';
 import fse from 'fs-extra';
 import { nextTick } from 'node:process';
-import { createTreeElementPaths, delay, findCulture, generateNonce, getCultureDesc, getElementFullPath, getGeneratorAppErrorMessage, isValidDocument, loadCultures, logger, showConfirmBox, showMessageBox } from './utils';
-import { AppToPageMessage, ClientPageError, ClientPageModelProperties, ClientPageSettingsError, CultureInfo, ICodeGenStatus, IDocumentContext, IVirtualLanguageElement, IVirtualRootElement, NotifyDocumentActiveChangedCallback, PageToAppMessage, SelectionBackup, StatusBarItemUpdateRequestCallback, ValidationError } from './types';
-import { CategoryLikeTreeElementToJsonOptions, CategoryOrResourceType, CodeGeneratorGroupSettings, detectFormatting, FormattingOptions, GeneratedFile, Generator, generatorUtils, HbsTemplateManager, ICategoryLikeTreeElement, IResourceElement, IResourceParameterElement, IResourceValueElement, IRootModelElement, isNullOrEmpty, ITreeElement, LhqModel, LhqModelResourceTranslationState, LhqValidationResult, modelConst, ModelUtils, TreeElementType } from '@lhq/lhq-generators';
+import { createTreeElementPaths, delay, generateNonce, getElementFullPath, getGeneratorAppErrorMessage, isValidDocument, logger, showConfirmBox, showMessageBox } from './utils';
+import { AppToPageMessage, ClientPageError, ClientPageModelProperties, ClientPageSettingsError, CultureInfo, IDocumentContext, IVirtualLanguageElement, IVirtualRootElement, NotifyDocumentActiveChangedCallback, PageToAppMessage, SelectionBackup, StatusBarItemUpdateRequestCallback, ValidationError } from './types';
+import { CategoryLikeTreeElementToJsonOptions, CategoryOrResourceType, CodeGeneratorGroupSettings, detectFormatting, FormattingOptions, GeneratedFile, Generator, generatorUtils, HbsTemplateManager, ICategoryLikeTreeElement, ImportModelErrorKind, ImportModelMode, ImportModelResult, IResourceElement, IResourceParameterElement, IResourceValueElement, IRootModelElement, isNullOrEmpty, ITreeElement, LhqModel, LhqModelResourceTranslationState, LhqValidationResult, modelConst, ModelUtils, TreeElementType } from '@lhq/lhq-generators';
 import { filterTreeElements, filterVirtualTreeElements, isVirtualTreeElement, validateTreeElementName, VirtualRootElement } from './elements';
 import { AvailableCommands, Commands, getCurrentFolder } from './context';
 import { CodeGenStatus } from './codeGenStatus';
-import path from 'node:path';
+import { ImportFileSelector } from './impExp/importFileSelector';
+import { ImportFileSelectedData } from './impExp/types';
+import { ImportExportManager } from './impExp/manager';
 
 type LangTypeMode = 'all' | 'neutral' | 'country';
 
@@ -65,6 +68,13 @@ export class DocumentContext implements IDocumentContext {
     private _pageErrors: ClientPageError[] = [];
     private _isActive = false;
     private _lastRequestPageReload = '';
+    private _isReadonly = false;
+
+    private _importFileSelectedData: ImportFileSelectedData = {
+        engine: 'MsExcel',
+        mode: 'merge',
+        file: undefined,
+    };
 
     constructor(context: vscode.ExtensionContext, webviewPanel: vscode.WebviewPanel, onDidDispose: () => void,
         requestStatusBarItemUpdate: StatusBarItemUpdateRequestCallback,
@@ -103,6 +113,16 @@ export class DocumentContext implements IDocumentContext {
 
     public get documentUri(): vscode.Uri | undefined {
         return this._documentUri;
+    }
+
+    public get isReadonly(): boolean {
+        return this._isReadonly;
+    }
+
+    public setReadonlyMode(readonly: boolean) {
+        this._isReadonly = readonly;
+
+        this.sendMessageToHtmlPage({command: 'blockEditor', block: readonly});
     }
 
     public get isActive(): boolean {
@@ -360,6 +380,10 @@ export class DocumentContext implements IDocumentContext {
             this._fileName = newFileName;
             this._documentUri = document.uri;
             appContext.enableEditorActive();
+            appContext.readonlyMode = false;
+
+            //TODO: 1st time open, check for missing/invalid languages
+            // checkMissingLanguages;
 
             let backupSelection: SelectionBackup | undefined;
             if (sameDoc || !this._rootModel || options.forceRefresh) {
@@ -467,6 +491,121 @@ export class DocumentContext implements IDocumentContext {
 
     public resetGeneratorStatus(): void {
         this._codeGenStatus.resetGeneratorStatus();
+    }
+
+    public async importModelFromFile(): Promise<void> {
+        if (!this.rootModel) {
+            logger().log(this, 'debug', 'importModelFromFile -> No root model found. Cannot import from file.');
+            return;
+        }
+
+        if (this._codeGenStatus.inProgress) {
+            logger().log(this, 'debug', 'importModelFromFile -> Code generator is already in progress. Cannot import from file.');
+            return;
+        }
+
+        let file = '';
+
+        try {
+
+            const importInfo = await ImportFileSelector.showRoot(this._importFileSelectedData);
+            if (!importInfo) {
+                return;
+            }
+
+            this._importFileSelectedData = importInfo;
+            const fileInfo = importInfo.file;
+            if (!fileInfo || (!(await fse.pathExists(fileInfo)))) {
+                const err = isNullOrEmpty(fileInfo) ? 'No file selected.' : `File '${fileInfo}' does not exist.`;
+                await showMessageBox('err', err, { modal: true });
+                return;
+            }
+
+            file = fileInfo;
+
+            const engine = importInfo.engine;
+
+            const rootModel = this.rootModel;
+            let importResult: ImportModelResult | undefined;
+
+            appContext.readonlyMode = true;
+
+            await vscode.window.withProgress({
+                location: vscode.ProgressLocation.Notification,
+                cancellable: false,
+                title: `Importing file: ${file} (${engine}) ...`
+            }, async () => {
+                const importData = await ImportExportManager.getDataFromFile(file, engine);
+                if (isNullOrEmpty(importData.error) || isNullOrEmpty(importData.importLines)) {
+                    //await delay(10 * 1000);
+                    importResult = ModelUtils.importModel(rootModel, importInfo.mode, {
+                        sourceKind: 'rows',
+                        source: importData.importLines!,
+                        cloneSource: false,
+                        importNewLanguages: true
+                    });
+                } else {
+                    await showMessageBox('err', `Error importing model from '${engine}' file: ${file}`, { detail: importData.error, modal: true });
+                }
+            });
+
+            if (!importResult) {
+                return;
+            }
+
+            if (importResult.errorKind) {
+                logger().log(this, 'error', `importModelFromFile(${file}) -> Error importing model from '${engine}' -> '${importResult.error}' (${importResult.errorKind})`);
+                const importError = this.getImportError(importResult.errorKind, importInfo);
+                return await showMessageBox('err', `Error importing model from '${engine}' file: ${file}`, { detail: importError, modal: true });
+            }
+
+            await this.commitChanges('importModelFromFile');
+
+            const langRoot = this._virtualRootElement!.languagesRoot;
+            await this.treeContext.clearSelection(true);
+            langRoot.refresh();
+            this._virtualRootElement!.refresh();
+
+            this.treeContext.refreshTree(undefined);
+
+            // reload actual page with element data to show new primary language
+            //this.requestPageReload();
+
+            const fileBase = path.basename(file);
+            let successMsg = `Resources were successfully imported from '${fileBase}' file.`;
+            let successDetail = 'Resource(s) were merged into existing resources.';
+            if (importInfo.mode === 'merge' || isNullOrEmpty(importResult.newCategoryPaths)) {
+                await this.treeContext.selectRootElement();
+            } else {
+                const fullPath = getElementFullPath(importResult.newCategoryPaths);
+                successDetail = `Resource(s) were imported into new category: ${fullPath}.`;
+                await appContext.treeContext.selectElementByPath('category', importResult.newCategoryPaths.getPaths(true), true);
+            }
+
+            appContext.readonlyMode = false;
+            await showMessageBox('info', successMsg, { detail: successDetail, modal: true });
+        } catch (error) {
+            logger().log(this, 'error', `importModelFromFile -> Error while importing model from file: ${error}`);
+            await showMessageBox('err', `Error importing model from file: ${file}`, { detail: error instanceof Error ? error.message : String(error), modal: true });
+        } finally {
+            appContext.readonlyMode = false;
+        }
+    }
+
+    private getImportError(errorKind: ImportModelErrorKind, data: ImportFileSelectedData) {
+        const engine = ImportExportManager.getImporterByEngine(data.engine)!.name;
+        const file = isNullOrEmpty(data.file) ? '-' : data.file;
+
+        switch (errorKind) {
+            case 'emptyModel':
+                return `The model is empty. Please check the file '${file}' (${engine}) for valid data.`;
+            case 'categoriesForFlatStructure':
+                return `Categories are not allowed in flat structure. Please change project properties to 'Tree structure'.`;
+            case 'noResourcesToImport':
+                return `No resources to import found in the file '${file}' (${engine}). Please check the file for valid data.`;
+            default:
+                return `Unknown error occurred while importing model from file '${file}' (${engine}). Please check the file for valid data.`;
+        }
     }
 
     public async runCodeGenerator(): Promise<void> {
@@ -754,7 +893,8 @@ export class DocumentContext implements IDocumentContext {
                         if (message.id === 'editElementName') {
                             const elem = appContext.treeContext.getElementByPath(data.elementType, data.paths);
                             if (elem) {
-                                return validateTreeElementName(elem.elementType, value, elem.parent);
+                                const fullPath = getElementFullPath(elem);
+                                return validateTreeElementName(elem.elementType, value, elem.parent, fullPath);
                             }
                         }
 
@@ -764,7 +904,7 @@ export class DocumentContext implements IDocumentContext {
 
                 if (!isNullOrEmpty(result) && message.id === 'editElementName' && data.elementType === 'model' && result !== oldValue) {
                     await delay(100); // wait for input box to close
-                    
+
                     if (!(await showConfirmBox(`Do you want to rename the model?`,
                         `Associated code generator usually use model name as file name.\n` +
                         'After renaming the model, you may need to manually delete the old file(s).'))) {
@@ -786,6 +926,11 @@ export class DocumentContext implements IDocumentContext {
     public onSelectionChanged(selectedElements: ITreeElement[]): void {
         if (this._disposed) {
             logger().log(this, 'debug', `onSelectionChanged -> DocumentContext is disposed. Ignoring selection change.`);
+            return;
+        }
+
+        if (this.isReadonly) {
+            logger().log(this, 'debug', `onSelectionChanged -> DocumentContext is readonly. Ignoring selection change.`);
             return;
         }
 
@@ -833,7 +978,7 @@ export class DocumentContext implements IDocumentContext {
 
         this.clearPageErrors();
 
-        const cultures = rootModel.languages.map(lang => findCulture(lang)).filter(c => !!c);
+        const cultures = rootModel.languages.map(lang => appContext.findCulture(lang)).filter(c => !!c);
         const toJsonOptions: CategoryLikeTreeElementToJsonOptions = {
             includeCategories: false,
             includeResources: false
@@ -845,7 +990,7 @@ export class DocumentContext implements IDocumentContext {
             command: 'loadPage',
             file: this.fileName,
             cultures: cultures,
-            primaryLang: rootModel.primaryLanguage,
+            primaryLang: rootModel.primaryLanguage ?? '',
             element: element.toJson(toJsonOptions),
             modelProperties: {
                 resources: rootModel.options.resources,
@@ -1376,7 +1521,7 @@ export class DocumentContext implements IDocumentContext {
     }
 
     private async addLanguageComplete(langTypeMode: LangTypeMode): Promise<void> {
-        const cultures = await loadCultures();
+        const cultures = appContext.getAllCultures();
         const langRoot = this.virtualRootElement!.languagesRoot;
 
         const languagesQuickPickItems = Object.values(cultures)
@@ -1399,8 +1544,11 @@ export class DocumentContext implements IDocumentContext {
             }) as LanguageQuickPickItem);
 
         const result = await vscode.window.showQuickPick(languagesQuickPickItems, {
-            canPickMany: true, ignoreFocusOut: true,
-            matchOnDescription: true, matchOnDetail: true, placeHolder: 'Select languages to add'
+            canPickMany: true,
+            ignoreFocusOut: true,
+            matchOnDescription: true,
+            matchOnDetail: true,
+            placeHolder: 'Select languages to add'
         });
 
         if (!result || result.length === 0) {
@@ -1413,12 +1561,9 @@ export class DocumentContext implements IDocumentContext {
         }
 
         const added: string[] = [];
-        result.map(item => item.culture.name).forEach(cultureName => {
-            if (this.rootModel?.addLanguage(cultureName)) {
-                const culture = cultures[cultureName];
-                if (culture) {
-                    added.push(`${culture.engName} (${culture.name})`);
-                }
+        result.map(item => item.culture).forEach(culture => {
+            if (this.rootModel?.addLanguage(culture.name)) {
+                added.push(`${culture.engName} (${culture.name})`);
             }
         });
 
@@ -1464,17 +1609,17 @@ export class DocumentContext implements IDocumentContext {
         const primaryLang = elemsToDelete.find(x => x.isPrimary);
         if (primaryLang) {
             const msg = selectedCount === 1
-                ? `Primary language '${getCultureDesc(primaryLang.name)}' cannot be deleted.`
-                : `Selected languages contain primary language '${getCultureDesc(primaryLang.name)}' which cannot be deleted.`;
+                ? `Primary language '${appContext.getCultureDesc(primaryLang.name)}' cannot be deleted.`
+                : `Selected languages contain primary language '${appContext.getCultureDesc(primaryLang.name)}' which cannot be deleted.`;
             return await showMessageBox('warn', msg, { modal: true });
         }
 
         const maxDisplayCount = 10;
 
         const elemIdent = selectedCount === 1
-            ? getCultureDesc(elemsToDelete[0].name)
+            ? appContext.getCultureDesc(elemsToDelete[0].name)
             : selectedCount <= maxDisplayCount
-                ? elemsToDelete.slice(0, maxDisplayCount).map(x => `'${getCultureDesc(x.name)}'`).join(', ')
+                ? elemsToDelete.slice(0, maxDisplayCount).map(x => `'${appContext.getCultureDesc(x.name)}'`).join(', ')
                 : '';
 
 
@@ -1529,10 +1674,10 @@ export class DocumentContext implements IDocumentContext {
         const langElement = selectedElements[0];
 
         if (this._rootModel!.primaryLanguage === langElement.name) {
-            return await showMessageBox('info', `Language '${getCultureDesc(langElement.name)}' is already marked as primary.`);
+            return await showMessageBox('info', `Language '${appContext.getCultureDesc(langElement.name)}' is already marked as primary.`);
         }
 
-        if (!(await showConfirmBox(`Mark language '${getCultureDesc(langElement.name)}' as primary ?`))) {
+        if (!(await showConfirmBox(`Mark language '${appContext.getCultureDesc(langElement.name)}' as primary ?`))) {
             return;
         }
 
@@ -1557,8 +1702,8 @@ export class DocumentContext implements IDocumentContext {
         }
 
         await showMessageBox(success ? 'info' : 'err', success
-            ? `Successfully marked '${getCultureDesc(langElement.name)}' as primary language.`
-            : `Failed to mark '${getCultureDesc(langElement.name)}' as primary language.`, { modal: !success });
+            ? `Successfully marked '${appContext.getCultureDesc(langElement.name)}' as primary language.`
+            : `Failed to mark '${appContext.getCultureDesc(langElement.name)}' as primary language.`, { modal: !success });
     }
 
     private async toggleLanguages(visible: boolean): Promise<void> {

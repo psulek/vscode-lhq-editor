@@ -418,6 +418,16 @@
                 window.pageApp.editElementName();
                 break;
             }
+
+            case 'blockEditor': {
+                /*
+                command: 'blockEditor',
+                block: boolean
+                */
+
+                window.pageApp.blockPanelVisible = message.block;
+                break;
+            }
         }
     });
 

@@ -5,16 +5,18 @@ import type { FileInfo, ReadFileInfoOptions, ITreeElementPaths, ITreeElement, IR
 import { AppError, fileUtils, isNullOrEmpty, ModelUtils, strCompare } from '@lhq/lhq-generators';
 
 import { ILogger, LogType, VsCodeLogger } from './logger';
-import { CultureInfo, CulturesMap, MatchForSubstringResult, MessageBoxOptions } from './types';
+import { CultureInfo, MatchForSubstringResult, MessageBoxOptions } from './types';
 
 import 'reflect-metadata';
 
 
 
 let _logger: VsCodeLogger = null!; //= new VsCodeLogger();
-let _cultures: CulturesMap = {};
+// let _cultures: CulturesMap = {};
 
 let _isDebugMode = false; // Default to false
+
+const treePathSeparator = '/';
 
 export function initializeDebugMode(ctx: vscode.ExtensionContext) {
     //_isDebugMode = ctx.mode === vscode.ExtensionMode.Development;
@@ -53,16 +55,77 @@ export async function readFileInfo(inputPath: string, options?: ReadFileInfoOpti
     return fileUtils.readFileInfo(inputPath, path, fse.pathExists, fse.readFile, options);
 }
 
-export function getElementFullPath(element: ITreeElement): string {
-    return element.paths.getParentPath('/', true);
+export function getElementFullPath(element: ITreeElement | ITreeElementPaths): string {
+    return 'getParentPath' in element
+        ? element.getParentPath(treePathSeparator, true)
+        : element.paths.getParentPath(treePathSeparator, true);
 }
 
 export function createTreeElementPaths(parentPath: string, anySlash: boolean = false): ITreeElementPaths {
     if (anySlash) {
-        parentPath = parentPath.replace(/\\/g, '/');
+        parentPath = parentPath.replace(/\\/g, treePathSeparator);
     }
 
-    return ModelUtils.createTreePaths(parentPath, '/');
+    return ModelUtils.createTreePaths(parentPath, treePathSeparator);
+}
+
+export function joinTreePaths(paths: string[]): string {
+    return paths.join(treePathSeparator);
+}
+
+export function findCategoryByPaths(rootModel: IRootModelElement,
+    elementPaths: ITreeElementPaths, deep: number): ICategoryLikeTreeElement | undefined {
+
+    if (!rootModel || !elementPaths) {
+        return undefined;
+    }
+
+    const paths = elementPaths.getPaths(true);
+    if (paths.length === 0 || paths.length < deep) {
+        return undefined;
+    }
+
+    let result: ICategoryLikeTreeElement | undefined;
+    const pathParts = paths.slice(0, deep);
+    if (pathParts.length > 1) {
+        let parentCategory: ICategoryLikeTreeElement | undefined = undefined;
+
+        for (const findByName of pathParts) {
+            parentCategory = (parentCategory ?? rootModel).find(findByName, 'category');
+            if (!parentCategory) {
+                break;
+            }
+        }
+
+        result = parentCategory;
+    } else {
+        result = rootModel.find(pathParts[0], 'category');
+    }
+
+    return result;
+}
+
+export type ShowFileDialogOptions = {
+    //canSelectMany?: boolean;
+    filters?: { [name: string]: string[] };
+    title?: string;
+    defaultUri?: vscode.Uri;
+};
+
+export async function showFileDialog(label: string, dialogOptions?: ShowFileDialogOptions): Promise<vscode.Uri | undefined> {
+    const options: vscode.OpenDialogOptions = {
+        openLabel: label,
+        //canSelectMany: dialogOptions?.canSelectMany ?? false,
+        canSelectMany: false,
+        canSelectFiles: true,
+        canSelectFolders: false,
+        title: dialogOptions?.title,
+        filters: dialogOptions?.filters ?? { 'All files': ['*'] },
+        defaultUri: dialogOptions?.defaultUri
+    };
+
+    const fileUri = await vscode.window.showOpenDialog(options);
+    return fileUri && fileUri[0] ? fileUri[0] : undefined;
 }
 
 export async function showConfirmBox(message: string, detail?: string, warn?: boolean): Promise<boolean | undefined> {
@@ -210,42 +273,42 @@ export function matchForSubstring(value: string, searchString: string, ignoreCas
     return result;
 }
 
-export async function loadCultures(context?: vscode.ExtensionContext): Promise<CulturesMap> {
-    if (Object.keys(_cultures).length === 0) {
-        if (context === undefined) {
-            logger().log('loadCultures', 'error', 'Failed to load list of cultures. Context is undefined.');
-            await showMessageBox('err', 'Failed to load list of cultures. Context is undefined. Please report this issue.');
-            return {};
-        }
-        const culturesFileUri = vscode.Uri.joinPath(context.extensionUri, 'dist', 'cultures.json');
-        try {
-            const rawContent = await vscode.workspace.fs.readFile(culturesFileUri);
-            const contentString = new TextDecoder().decode(rawContent);
-            const items = JSON.parse(contentString) as CultureInfo[];
-            for (const culture of items) {
-                _cultures[culture.name] = culture;
-            }
+// export async function loadCultures(context?: vscode.ExtensionContext): Promise<CulturesMap> {
+//     if (Object.keys(_cultures).length === 0) {
+//         if (context === undefined) {
+//             logger().log('loadCultures', 'error', 'Failed to load list of cultures. Context is undefined.');
+//             await showMessageBox('err', 'Failed to load list of cultures. Context is undefined. Please report this issue.');
+//             return {};
+//         }
+//         const culturesFileUri = vscode.Uri.joinPath(context.extensionUri, 'dist', 'cultures.json');
+//         try {
+//             const rawContent = await vscode.workspace.fs.readFile(culturesFileUri);
+//             const contentString = new TextDecoder().decode(rawContent);
+//             const items = JSON.parse(contentString) as CultureInfo[];
+//             for (const culture of items) {
+//                 _cultures[culture.name] = culture;
+//             }
 
-        } catch (error) {
-            logger().log('loadCultures', 'error', 'Failed to read or parse dist/cultures.json');
-            await showMessageBox('err', 'Failed to load list of cultures. Please reinstall the extension or report this issue.');
-        }
-    }
+//         } catch (error) {
+//             logger().log('loadCultures', 'error', 'Failed to read or parse dist/cultures.json');
+//             await showMessageBox('err', 'Failed to load list of cultures. Please reinstall the extension or report this issue.');
+//         }
+//     }
 
-    return _cultures;
-}
+//     return _cultures;
+// }
 
-export function findCulture(name: string): CultureInfo | undefined {
-    if (isNullOrEmpty(name)) {
-        return undefined;
-    }
-    return _cultures[name];
-}
+// export function findCulture(name: string): CultureInfo | undefined {
+//     if (isNullOrEmpty(name)) {
+//         return undefined;
+//     }
+//     return _cultures[name];
+// }
 
-export function getCultureDesc(name: string): string {
-    const culture = findCulture(name);
-    return culture ? `${culture?.engName ?? ''} (${culture?.name ?? ''})` : name;
-}
+// export function getCultureDesc(name: string): string {
+//     const culture = findCulture(name);
+//     return culture ? `${culture?.engName ?? ''} (${culture?.name ?? ''})` : name;
+// }
 
 export function generateNonce(): string {
     let text = '';

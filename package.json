@@ -1,12 +1,32 @@
 {
-  "name": "lhq-editor-extension",
-  "displayName": "LHQ Editor Extension",
-  "description": "An extension for LHQ files",
+  "name": "lhq-editor",
+  "displayName": "LHQ Editor",
+  "description": "Editor for LHQ files, a format for localization and internationalization of software applications.",
   "version": "0.0.1",
+  "publisher": "psulek-solo",
+  "license": "MIT",
+  "author": "Peter Šulek",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/psulek/vscode-lhq-editor"
+  },
+  "bugs": {
+    "url": "https://github.com/psulek/vscode-lhq-editor/issues"
+  },
+  "homepage": "https://github.com/psulek/vscode-lhq-editor/blob/main/README.md",
   "engines": {
     "vscode": "^1.100.0"
   },
+  "keywords": [
+    "lhq",
+    "localization",
+    "internationalization",
+    "editor",
+    "visualization",
+    "code-generator"
+  ],
   "categories": [
+    "Visualization",
     "Other"
   ],
   "activationEvents": [
@@ -113,7 +133,7 @@
       {
         "command": "lhqTreeView.findInTreeView",
         "category": "LHQ",
-        "title": "Find",
+        "title": "Find in Tree",
         "icon": "$(search)"
       },
       {
@@ -151,21 +171,27 @@
         "category": "LHQ",
         "title": "Run code generator",
         "icon": "$(run-all)"
+      },
+      {
+        "command": "lhqTreeView.importFromFile",
+        "category": "LHQ",
+        "title": "Import resources from file...",
+        "icon": "$(file-import)"
       }
     ],
     "menus": {
       "commandPalette": [
         {
           "command": "lhqTreeView.focusTree",
-          "when": "lhqEditorIsActive"
+          "when": "lhqEditorIsActive && !lhqIsReadonlyMode"
         },
         {
           "command": "lhqTreeView.focusEditor",
-          "when": "lhqEditorIsActive"
+          "when": "lhqEditorIsActive  && !lhqIsReadonlyMode"
         },
         {
           "command": "lhqTreeView.projectProperties",
-          "when": "lhqEditorIsActive"
+          "when": "lhqEditorIsActive  && !lhqIsReadonlyMode"
         },
         {
           "command": "lhqTreeView.addElement",
@@ -173,7 +199,7 @@
         },
         {
           "command": "lhqTreeView.addLanguage",
-          "when": "lhqEditorIsActive"
+          "when": "lhqEditorIsActive && !lhqIsReadonlyMode"
         },
         {
           "command": "lhqTreeView.addCategory",
@@ -205,7 +231,7 @@
         },
         {
           "command": "lhqTreeView.advancedFind",
-          "when": "lhqEditorIsActive"
+          "when": "lhqEditorIsActive && !lhqIsReadonlyMode"
         },
         {
           "command": "lhqTreeView.markLanguageAsPrimary",
@@ -221,75 +247,84 @@
         },
         {
           "command": "lhqTreeView.runGenerator",
-          "when": "lhqEditorIsActive"
+          "when": "lhqEditorIsActive && !lhqIsReadonlyMode"
+        },
+        {
+          "command": "lhqTreeView.importFromFile",
+          "when": "lhqEditorIsActive && !lhqIsReadonlyMode"
         }
       ],
       "view/title": [
         {
           "command": "lhqTreeView.projectProperties",
-          "when": "view == lhqTreeView",
+          "when": "view == lhqTreeView && !lhqIsReadonlyMode",
           "group": "navigation"
         },
         {
           "command": "lhqTreeView.findInTreeView",
-          "group": "navigation"
+          "group": "navigation",
+          "when": "!lhqIsReadonlyMode"
         },
         {
           "command": "lhqTreeView.addElement",
-          "when": "view == lhqTreeView && !lhqTreeHasMultiSelection && !lhqTreeHasLanguageSelection",
+          "when": "view == lhqTreeView && !lhqTreeHasMultiSelection && !lhqTreeHasLanguageSelection && !lhqIsReadonlyMode",
           "group": "navigation"
         },
         {
           "command": "lhqTreeView.addLanguage",
-          "when": "view == lhqTreeView && lhqTreeHasLanguageSelection",
+          "when": "view == lhqTreeView && lhqTreeHasLanguageSelection && !lhqIsReadonlyMode",
           "group": "navigation"
         },
         {
           "command": "lhqTreeView.runGenerator",
-          "when": "view == lhqTreeView && !lhqGeneratorIsRunning",
+          "when": "view == lhqTreeView && !lhqGeneratorIsRunning && !lhqIsReadonlyMode",
           "group": "navigation"
         }
       ],
       "view/item/context": [
         {
           "command": "lhqTreeView.showLanguages",
-          "when": "view == lhqTreeView && (viewItem == languages) && !lhqTreeHasLanguagesVisible"
+          "when": "view == lhqTreeView && (viewItem == languages) && !lhqTreeHasLanguagesVisible && !lhqIsReadonlyMode"
         },
         {
           "command": "lhqTreeView.hideLanguages",
-          "when": "view == lhqTreeView && (viewItem == languages) && lhqTreeHasLanguagesVisible"
+          "when": "view == lhqTreeView && (viewItem == languages) && lhqTreeHasLanguagesVisible && !lhqIsReadonlyMode"
         },
         {
           "command": "lhqTreeView.addCategory",
-          "when": "view == lhqTreeView && (viewItem == category || viewItem == model) && !lhqTreeHasMultiSelection && !lhqTreeHasLanguageSelection"
+          "when": "view == lhqTreeView && (viewItem == category || viewItem == model) && !lhqTreeHasMultiSelection && !lhqTreeHasLanguageSelection && !lhqIsReadonlyMode"
         },
         {
           "command": "lhqTreeView.addResource",
-          "when": "view == lhqTreeView && (viewItem == category || viewItem == model) && !lhqTreeHasMultiSelection && !lhqTreeHasLanguageSelection"
+          "when": "view == lhqTreeView && (viewItem == category || viewItem == model) && !lhqTreeHasMultiSelection && !lhqTreeHasLanguageSelection && !lhqIsReadonlyMode"
         },
         {
           "command": "lhqTreeView.addLanguage",
-          "when": "view == lhqTreeView && (viewItem == languages || viewItem == language) && !lhqTreeHasMultiSelection"
+          "when": "view == lhqTreeView && (viewItem == languages || viewItem == language) && !lhqTreeHasMultiSelection && !lhqIsReadonlyMode"
         },
         {
           "command": "lhqTreeView.renameElement",
-          "when": "view == lhqTreeView && lhqTreeHasSelectedItem && !lhqTreeHasLanguageSelection"
+          "when": "view == lhqTreeView && lhqTreeHasSelectedItem && !lhqTreeHasLanguageSelection && !lhqIsReadonlyMode"
         },
         {
           "command": "lhqTreeView.deleteElement",
-          "when": "view == lhqTreeView && (viewItem == category || viewItem == resource) && !lhqTreeHasSelectedDiffParents && !lhqTreeHasLanguageSelection"
+          "when": "view == lhqTreeView && (viewItem == category || viewItem == resource) && !lhqTreeHasSelectedDiffParents && !lhqTreeHasLanguageSelection && !lhqIsReadonlyMode"
         },
         {
           "command": "lhqTreeView.duplicateElement",
-          "when": "view == lhqTreeView && lhqTreeHasSelectedItem && !lhqTreeHasLanguageSelection && !lhqTreeHasSelectedModelRoot"
+          "when": "view == lhqTreeView && lhqTreeHasSelectedItem && !lhqTreeHasLanguageSelection && !lhqTreeHasSelectedModelRoot && !lhqIsReadonlyMode"
         },
         {
           "command": "lhqTreeView.deleteLanguage",
-          "when": "view == lhqTreeView && viewItem == language"
+          "when": "view == lhqTreeView && viewItem == language && !lhqIsReadonlyMode"
         },
         {
           "command": "lhqTreeView.markLanguageAsPrimary",
-          "when": "view == lhqTreeView && viewItem == language && !lhqTreeHasPrimaryLanguageSelected && !lhqTreeHasMultiSelection"
+          "when": "view == lhqTreeView && viewItem == language && !lhqTreeHasPrimaryLanguageSelected && !lhqTreeHasMultiSelection && !lhqIsReadonlyMode"
+        },
+        {
+          "command": "lhqTreeView.importFromFile",
+          "when": "view == lhqTreeView && !lhqTreeHasLanguageSelection && lhqTreeHasSelectedModelRoot && !lhqIsReadonlyMode"
         }
       ]
     },
@@ -297,52 +332,52 @@
       {
         "command": "lhqTreeView.advancedFind",
         "key": "ctrl+alt+f",
-        "when": "lhqEditorIsActive"
+        "when": "lhqEditorIsActive && !lhqIsReadonlyMode"
       },
       {
         "command": "lhqTreeView.addCategory",
         "key": "ctrl+insert",
-        "when": "lhqEditorIsActive && !lhqTreeHasMultiSelection && !lhqTreeHasLanguageSelection"
+        "when": "focusedView == 'lhqTreeView' && !lhqTreeHasMultiSelection && !lhqTreeHasLanguageSelection && !lhqIsReadonlyMode"
       },
       {
         "command": "lhqTreeView.addResource",
         "key": "insert",
-        "when": "lhqEditorIsActive && !lhqTreeHasMultiSelection && !lhqTreeHasLanguageSelection"
+        "when": "focusedView == 'lhqTreeView' && !lhqTreeHasMultiSelection && !lhqTreeHasLanguageSelection && !lhqIsReadonlyMode"
       },
       {
         "command": "lhqTreeView.addLanguage",
         "key": "insert",
-        "when": "lhqEditorIsActive && lhqTreeHasLanguageSelection"
+        "when": "lhqEditorIsActive && lhqTreeHasLanguageSelection && !lhqIsReadonlyMode"
       },
       {
         "command": "lhqTreeView.focusTree",
         "key": "f2",
-        "when": "lhqEditorIsActive"
+        "when": "lhqEditorIsActive && !lhqIsReadonlyMode"
       },
       {
         "command": "lhqTreeView.focusEditor",
         "key": "ctrl+enter",
-        "when": "lhqEditorIsActive"
+        "when": "focusedView == 'lhqTreeView' && !lhqIsReadonlyMode"
       },
       {
         "command": "lhqTreeView.deleteElement",
         "key": "delete",
-        "when": "lhqEditorIsActive && !lhqTreeHasSelectedDiffParents && !lhqTreeHasLanguageSelection && !lhqTreeHasSelectedModelRoot"
+        "when": "focusedView == 'lhqTreeView' && !lhqTreeHasSelectedDiffParents && !lhqTreeHasLanguageSelection && !lhqTreeHasSelectedModelRoot && !lhqIsReadonlyMode"
       },
       {
         "command": "lhqTreeView.deleteLanguage",
         "key": "delete",
-        "when": "lhqEditorIsActive && lhqTreeHasLanguageSelection"
+        "when": "focusedView == 'lhqTreeView' && lhqTreeHasLanguageSelection && !lhqIsReadonlyMode"
       },
       {
         "command": "lhqTreeView.renameElement",
         "key": "Ctrl+R",
-        "when": "lhqEditorIsActive && !lhqTreeHasSelectedDiffParents && !lhqTreeHasLanguageSelection"
+        "when": "focusedView == 'lhqTreeView' && !lhqTreeHasSelectedDiffParents && !lhqTreeHasLanguageSelection && !lhqIsReadonlyMode"
       },
       {
         "command": "lhqTreeView.duplicateElement",
         "key": "Ctrl+D",
-        "when": "lhqEditorIsActive && lhqTreeHasSelectedItem && !lhqTreeHasLanguageSelection && !lhqTreeHasSelectedModelRoot"
+        "when": "focusedView == 'lhqTreeView' && lhqTreeHasSelectedItem && !lhqTreeHasLanguageSelection && !lhqTreeHasSelectedModelRoot && !lhqIsReadonlyMode"
       }
     ],
     "configuration": [
@@ -393,12 +428,13 @@
     "typescript": "^5.8.3"
   },
   "dependencies": {
-    "@lhq/lhq-generators": "1.0.0-rc.87",
+    "@lhq/lhq-generators": "1.0.0-rc.97",
     "class-transformer": "^0.5.1",
+    "exceljs": "^4.4.0",
     "fs-extra": "11.3.0",
+    "glob": "^11.0.1",
     "lodash.debounce": "4.0.8",
     "lodash.throttle": "4.1.1",
-    "reflect-metadata": "^0.2.2",
-    "glob": "^11.0.1"
+    "reflect-metadata": "^0.2.2"
   }
 }

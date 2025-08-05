@@ -1,71 +1,77 @@
-# lhq-editor-extension README
+# LHQ Editor for Visual Studio Code
 
-This is the README for your extension "lhq-editor-extension". After writing up a brief description, we recommend including the following sections.
+![][demo-1]
+
+
+A `vscode` extension to show and edit LHQ files, a format for localization and internationalization of software applications.
+
 
 ## Features
 
-Describe specific features of your extension including screenshots of your extension in action. Image paths are relative to this README file.
+### WYSIWYG editor
+LHQ files are shown in a tree view with a WYSIWYG editor for each element.
+![][demo-2]
 
-For example if there is an image subfolder under your extension project workspace:
+### Code generation
+LHQ files can be used to generate code in various programming languages.
+![][demo-3]
 
-\!\[feature X\]\(images/feature-x.png\)
+### Light & dark theme support (autodetect)
+Theme (light or dark) is automatically detect from vscode theme.
+![][demo-4]
 
-> Tip: Many popular extensions utilize animations. This is an excellent way to show off your extension! We recommend short, focused animations that are easy to follow.
+## Commands
 
-## Requirements
+| Command                       | Keybinding       |
+| ------------------------------| ---------------- |
+| LHQ: Focus Tree View          | `F2`             |
+| LHQ: Focus Editor             | `Ctrl + Enter`   |
+| LHQ: Model Properties         | none             |
+| LHQ: Add element              | none             |
+| LHQ: Add language             | `Insert`         |
+| LHQ: Add resource             | `Insert`         |
+| LHQ: Add category             | `Ctrl + Insert`  |
+| LHQ: Rename element           | `Ctrl + R`       |
+| LHQ: Delete element           | `Delete`         |
+| LHQ: Duplicate element        | `Ctrl + D`       |
+| LHQ: Delete language          | `Delete`         |
+| LHQ: Find in Tree             | `Ctr+F`          |
+| LHQ: Advanced Find            | `Ctr +Alt + F`   |
+| LHQ: Mark language as primary | none             |
+| LHQ: Toggle languages (show)  | none             |
+| LHQ: Toggle languages (hide)  | none             |
+| LHQ: Run code generator       | none             |
+| LHQ: Import from Excel        | none             |
 
-If you have any requirements or dependencies, add a section describing those and how to install and configure them.
+## Install
 
-## Extension Settings
+1. Open **Extensions** sideBar panel in Visual Studio Code and choose the menu options for **View → Extensions**
+1. Search for `lhq-editor`
+1. Click **Install**
+1. Click **Reload**, if required
 
-Include if your extension adds any VS Code settings through the `contributes.configuration` extension point.
+### Marketplace
+Marketplace extension page - [LHQ Editor][marketplace_ext]
 
-For example:
+
+## Configuration
 
 This extension contributes the following settings:
 
-* `myExtension.enable`: Enable/disable this extension.
-* `myExtension.thing`: Set to `blah` to do something.
-
-## Known Issues
-
-Calling out known issues can help limit users opening duplicate issues against your extension.
+| Setting                       | Description                                                | Default | Values           |
+| ------------------------------| -----------------------------------------------------------| ------- | ---------------- |
+| lhqeditor.runGeneratorOnSave  | Run associated code generator after `*.lhq` file is saved. | `true`  | `true` / `false` |
 
 ## Release Notes
-
-Users appreciate release notes as you update your extension.
+[Have a look at CHANGELOG][changelog] to get the details of all changes.
 
 ### 1.0.0
 
-Initial release of ...
+Initial release of `LHQ Editor` extension
 
-### 1.0.1
+<!-- Links -->
+[changelog]: https://github.com/psulek/vscode-lhq-editor/blob/main/CHANGELOG.md
+[marketplace_ext]: https://marketplace.visualstudio.com/items?itemName=psulek-solo.lhq-editor
 
-Fixed issue #.
-
-### 1.1.0
-
-Added features X, Y, and Z.
-
----
-
-## Following extension guidelines
-
-Ensure that you've read through the extensions guidelines and follow the best practices for creating your extension.
-
-* [Extension Guidelines](https://code.visualstudio.com/api/references/extension-guidelines)
-
-## Working with Markdown
-
-You can author your README using Visual Studio Code. Here are some useful editor keyboard shortcuts:
-
-* Split the editor (`Cmd+\` on macOS or `Ctrl+\` on Windows and Linux).
-* Toggle preview (`Shift+Cmd+V` on macOS or `Shift+Ctrl+V` on Windows and Linux).
-* Press `Ctrl+Space` (Windows, Linux, macOS) to see a list of Markdown snippets.
-
-## For more information
-
-* [Visual Studio Code's Markdown Support](http://code.visualstudio.com/docs/languages/markdown)
-* [Markdown Syntax Reference](https://help.github.com/articles/markdown-basics/)
-
-**Enjoy!**
+<!-- Demo images -->
+[demo-1]: https://github.com/psulek/vscode-lhq-editor/blob/main/docs/demo/demo1.gif?raw=true

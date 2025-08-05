@@ -15,13 +15,10 @@ export class AppConfig implements IAppConfig {
     }
 
     public async updateConfig(newConfig: Partial<IAppConfig>): Promise<void> {
-        //const cfg = vscode.workspace.getConfiguration();
         const cfg = vscode.workspace.getConfiguration(sectionName);
 
-        // iterate over all keys in newConfig and update them
         for (const key of Object.keys(newConfig) as (keyof IAppConfig)[]) {
             if (newConfig[key] !== undefined) {
-                //const fullkey = `${sectionName}${key}`;
                 await cfg.update(key, newConfig[key], vscode.ConfigurationTarget.Global);
             }
         }

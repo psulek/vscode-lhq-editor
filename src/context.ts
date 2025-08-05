@@ -2,11 +2,11 @@ import path from 'path';
 import * as vscode from 'vscode';
 import fse from 'fs-extra';
 import { glob } from 'glob';
-import { AppToPageMessage, CheckAnyActiveDocumentCallback, IAppConfig, IAppContext, ITreeContext, IVirtualLanguageElement, SelectionChangedCallback } from './types';
-import { Generator, GeneratorInitialization, HbsTemplateManager, ITreeElement, ModelUtils, generatorUtils, isNullOrEmpty } from '@lhq/lhq-generators';
+import { AppToPageMessage, CheckAnyActiveDocumentCallback, CultureInfo, IAppConfig, IAppContext, ITreeContext, IVirtualLanguageElement, SelectionChangedCallback } from './types';
+import { Generator, GeneratorInitialization, HbsTemplateManager, ITreeElement, ModelUtils, generatorUtils, isNullOrEmpty, strCompare } from '@lhq/lhq-generators';
 import { VirtualTreeElement } from './elements';
 import {
-    DefaultFormattingOptions, getElementFullPath, initializeDebugMode, isValidDocument, loadCultures,
+    DefaultFormattingOptions, getElementFullPath, initializeDebugMode, isValidDocument,
     logger, safeReadFile, showConfirmBox, showMessageBox
 } from './utils';
 import { LhqEditorProvider } from './editorProvider';
@@ -43,6 +43,7 @@ export const Commands = {
 export const GlobalCommands = {
     runGenerator: 'lhqTreeView.runGenerator',
     createNewLhqFile: 'lhqTreeView.createNewLhqFile',
+    importFromFile: 'lhqTreeView.importFromFile',
 
     // commands not in package.json (internal)
     showOutput: 'lhqTreeView.showOutput'
@@ -61,27 +62,20 @@ export const ContextKeys = {
     hasSelectedResource: 'lhqTreeHasSelectedResource',
     hasSelectedModelRoot: 'lhqTreeHasSelectedModelRoot',
     hasLanguagesVisible: 'lhqTreeHasLanguagesVisible',
-    generatorIsRunning: 'lhqGeneratorIsRunning'
+
+    generatorIsRunning: 'lhqGeneratorIsRunning',
+    isReadonlyMode: 'lhqIsReadonlyMode',
 };
 
 export const ContextEvents = {
     isEditorActiveChanged: 'isEditorActiveChanged',
+    isReadonlyModeChanged: 'isReadonlyModeChanged'
 };
-
-const configSection = 'lhqeditor';
-
-const configKeys = {
-    //autoFocusEditor: 'lhqeditor.autoFocusEditor'
-    //runGeneratorOnSave: 'lhqeditor.runGeneratorOnSave'
-} as const;
-
-// const defaultExtensionConfig: ExtensionConfig = Object.freeze({
-//     runGeneratorOnSave: true
-// });
 
 export class AppContext implements IAppContext {
     private _ctx!: vscode.ExtensionContext;
     private _isEditorActive = false;
+    private _isReadonlyMode = false;
     private activeTheme = ''; // not supported yet
     private _selectedElements: ITreeElement[] = [];
     private _onSelectionChanged: SelectionChangedCallback | undefined;
@@ -92,6 +86,7 @@ export class AppContext implements IAppContext {
     private _checkAnyActiveDocumentCallback: CheckAnyActiveDocumentCallback | undefined;
     private _firstTimeRunCached: boolean | undefined;
     private _appConfig: AppConfig = null!;
+    private _cultures: CultureInfo[] = [];
 
     public setSelectionChangedCallback(callback: SelectionChangedCallback): void {
         this._onSelectionChanged = callback;
@@ -117,6 +112,8 @@ export class AppContext implements IAppContext {
         this._appConfig = new AppConfig();
         (globalThis as any).appConfig = this._appConfig;
 
+        await this.initCultures();
+
         // reset global state
         if (ctx.extensionMode === vscode.ExtensionMode.Production && reset) {
             reset = false;
@@ -140,7 +137,7 @@ export class AppContext implements IAppContext {
         this.setTreeSelection([]);
 
         initializeDebugMode(ctx);
-        await loadCultures(ctx);
+        //await loadCultures(ctx);
 
         this._ctx.subscriptions.push(
             vscode.commands.registerCommand(GlobalCommands.showOutput, () => {
@@ -174,6 +171,40 @@ export class AppContext implements IAppContext {
         // commands
         vscode.commands.registerCommand(GlobalCommands.createNewLhqFile, () => this.createNewLhqFile());
     }
+
+    private async initCultures(): Promise<void> {
+        const culturesFileUri = vscode.Uri.joinPath(this._ctx.extensionUri, 'dist', 'cultures.json');
+
+        try {
+            const rawContent = await vscode.workspace.fs.readFile(culturesFileUri);
+            const contentString = new TextDecoder().decode(rawContent);
+            const items = JSON.parse(contentString) as CultureInfo[];
+            for (const culture of items) {
+                this._cultures.push(culture);
+            }
+
+        } catch (error) {
+            logger().log('loadCultures', 'error', 'Failed to read or parse dist/cultures.json');
+        }
+    }
+
+    public getAllCultures(): CultureInfo[] {
+        return this._cultures;
+    }
+
+    public findCulture(name: string, ignoreCase: boolean = true): CultureInfo | undefined {
+        if (isNullOrEmpty(name)) {
+            throw new Error('Culture name cannot be null or empty');
+        }
+
+        return this._cultures.find(culture => strCompare(name, culture.name, ignoreCase));
+    }
+
+    public getCultureDesc(name: string): string {
+        const culture = this.findCulture(name);
+        return culture ? `${culture?.engName ?? ''} (${culture?.name ?? ''})` : name;
+    }
+
 
     // public getConfig(): ExtensionConfig {
     //     const cfg = vscode.workspace.getConfiguration();
@@ -317,8 +348,7 @@ export class AppContext implements IAppContext {
 
             const root = ModelUtils.createRootElement();
             root.name = path.basename(fileName, '.lhq');
-            root.primaryLanguage = 'en';
-            root.languages = ['en'];
+            root.addLanguage('en', true);
             root.options = {
                 categories: true,
                 resources: 'All',
@@ -374,6 +404,18 @@ export class AppContext implements IAppContext {
 
     public set firstTimeRun(value: boolean) {
         this._ctx.globalState.update(globalStateKeys.firstTimeRun, value);
+    }
+
+    public get readonlyMode(): boolean {
+        return this._isReadonlyMode;
+    }
+
+    public set readonlyMode(value: boolean) {
+        if (this._isReadonlyMode !== value) {
+            this._isReadonlyMode = value;
+            vscode.commands.executeCommand('setContext', ContextKeys.isReadonlyMode, value);
+            this._eventEmitter.emit(ContextEvents.isReadonlyModeChanged, value);
+        }
     }
 
     public get isEditorActive(): boolean {

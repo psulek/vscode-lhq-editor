@@ -117,11 +117,15 @@ export class VirtualRootElement extends VirtualTreeElement implements IVirtualRo
     }
 
     public refresh(): void {
-        let label = 'Languages';
-        if (!appContext.languagesVisible) {
-            const primary = this.root.primaryLanguage ?? '';
-            label += `: ${this.root.languages?.length ?? 0} (primary: ${primary})`;
-        }
+        // let label = 'Languages';
+        // if (!appContext.languagesVisible) {
+        //     const primary = this.root.primaryLanguage ?? '';
+        //     label += `: ${this.root.languages?.length ?? 0} (primary: ${primary})`;
+        // }
+
+        const primary = this.root.primaryLanguage ?? '';
+        const label = `Languages: ${this.root.languages?.length ?? 0} (primary: ${primary})`;
+
         this._languagesRoot.name = label;
     }
 
