@@ -129,6 +129,10 @@ export class LhqEditorProvider implements vscode.CustomTextEditorProvider {
             return;
         }
 
+        if (activeDoc.isDirty) {
+            await activeDoc.saveDocument();
+        }
+
         return activeDoc.runCodeGenerator();
     }
 
@@ -225,7 +229,7 @@ export class LhqEditorProvider implements vscode.CustomTextEditorProvider {
             await docCtx.loadEmptyPage();
 
             // 2nd - update tree data provider with the document
-            await docCtx.update(document, { forceRefresh: true, fileOpened: true });
+            await docCtx.update(document, { forceRefresh: true });
 
             // 3rd - update webview content with the document
             await docCtx.updateWebviewContent();
@@ -248,12 +252,7 @@ export class LhqEditorProvider implements vscode.CustomTextEditorProvider {
     private validateOnOpen(docCtx: DocumentContext): void {
         setTimeout(async () => {
             try {
-                const validateResult = await docCtx.validateLanguages();
-                if (validateResult) {
-                    await showMessageBox('err', `Validation error: ${validateResult.error}`, validateResult.detail);
-                } else {
-                    logger().log(this, 'debug', 'validateOnOpen -> Languages validated successfully.');
-                }
+                await docCtx.validateLanguages();
             } catch (error) {
                 logger().log(this, 'error', `validateOnOpen -> Error while validating languages: ${error}`);                
             }

@@ -5,7 +5,7 @@ export type ImportPreparedData = {
     importLines?: ImportResourceItem[] | undefined;
 }
 
-export type ImporterEngine = 'MsExcel' | 'ResX';
+export type ImporterEngine = 'MsExcel' | 'Lhq';
 
 export interface IDataImporter {
     /**

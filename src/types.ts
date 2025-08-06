@@ -286,6 +286,13 @@ export type NotificationBoxOptions = {
     logger?: boolean
 }
 
+export type ConfirmBoxOptions = {
+    logger?: boolean
+    warn?: boolean;
+    yesText?: string;
+    noText?: string
+}
+
 export interface ICodeGenStatus {
     get inProgress(): boolean;
     set inProgress(value: boolean);

@@ -46,11 +46,6 @@ const LanguageTypeModes = [
 type UpdateOptions = {
     forceRefresh?: boolean;
     undoRedo?: boolean;
-
-    /**
-     * Flag `true` indicates that the update is called from file open, not forced refresh and/or undo/redo.
-     */
-    fileOpened?: boolean;
 };
 
 export class DocumentContext implements IDocumentContext {
@@ -74,6 +69,7 @@ export class DocumentContext implements IDocumentContext {
     private _isActive = false;
     private _lastRequestPageReload = '';
     private _isReadonly = false;
+    private _manualSaving = false;
 
     private _importFileSelectedData: ImportFileSelectedData = {
         engine: 'MsExcel',
@@ -124,6 +120,19 @@ export class DocumentContext implements IDocumentContext {
         return this._isReadonly;
     }
 
+    public get isDirty(): boolean {
+        if (this._disposed) {
+            logger().log(this, 'debug', `isDirty -> DocumentContext is disposed. Ignoring dirty check.`);
+            return false;
+        }
+
+        if (!this._textDocument) {
+            return false;
+        }
+
+        return this._textDocument.isDirty;
+    }
+
     public setReadonlyMode(readonly: boolean) {
         this._isReadonly = readonly;
 
@@ -136,12 +145,6 @@ export class DocumentContext implements IDocumentContext {
         }
 
         return this._isActive;
-
-        // try {
-        //     return this._webviewPanel?.active === true;
-        // } catch (error) {
-        //     return false;
-        // }
     }
 
     public set isActive(value: boolean) {
@@ -318,13 +321,6 @@ export class DocumentContext implements IDocumentContext {
                 else {
                     appContext.treeContext.refreshTree([elem]);
                 }
-
-                // if (pathChanged) {
-                //     this.sendMessageToHtmlPage({
-                //         command: 'updatePaths',
-                //         paths: elem.paths.getPaths(true)
-                //     });
-                // }
             } else {
                 logger().log(this, 'debug', `updateElement -> No changes for element '${getElementFullPath(elem)}'.`);
             }
@@ -335,6 +331,36 @@ export class DocumentContext implements IDocumentContext {
 
     public commitChanges(message: string): Promise<boolean> {
         return this.internalCommitChanges(message);
+    }
+
+    public async saveDocument(): Promise<boolean> {
+        if (this._disposed) {
+            logger().log(this, 'debug', `saveDocument -> DocumentContext is disposed. Ignoring save request.`);
+            return false;
+        }
+
+        if (!this._textDocument) {
+            logger().log(this, 'debug', `saveDocument -> No text document available.`);
+            return false;
+        }
+
+        if (this._textDocument.isDirty) {
+            logger().log(this, 'debug', `saveDocument -> Saving document: ${this.fileName}`);
+            try {
+                this._manualSaving = true;
+                await this._textDocument.save();
+                return !this._textDocument.isDirty;
+            } catch (error) {
+                logger().log(this, 'error', `saveDocument -> Error while saving document: ${this.fileName}`, error as Error);
+                showNotificationBox('err', `Error while saving document: ${this.fileName}`);
+            } finally {
+                this._manualSaving = false;
+            }
+        } else {
+            logger().log(this, 'debug', `saveDocument -> Document is not dirty, no need to save.`);
+        }
+
+        return false;
     }
 
     private async internalCommitChanges(message: string /* rootFix?: boolean */): Promise<boolean> {
@@ -379,16 +405,13 @@ export class DocumentContext implements IDocumentContext {
         if (document && isValidDocument(document)) {
             const sameDoc = this.isSameDocument(document);
 
-            options = Object.assign({}, { forceRefresh: false, undoRedo: false, fileOpened: false } as UpdateOptions, options);
+            options = Object.assign({}, { forceRefresh: false, undoRedo: false } as UpdateOptions, options);
 
             this._textDocument = document;
             this._fileName = newFileName;
             this._documentUri = document.uri;
             appContext.enableEditorActive();
             appContext.readonlyMode = false;
-
-            //TODO: 1st time open, check for missing/invalid languages
-            // checkMissingLanguages;
 
             let backupSelection: SelectionBackup | undefined;
             if (sameDoc || !this._rootModel || options.forceRefresh) {
@@ -414,29 +437,6 @@ export class DocumentContext implements IDocumentContext {
                 logger().log(this, 'debug', `update() -> Requesting page reload for: ${this.fileName} (for undoRedo)`);
                 this.reflectSelectedElementToWebview(true);
             }
-
-            if (options.fileOpened === true && options.undoRedo !== true) {
-
-                //void this.validateLanguages();
-
-                // setTimeout(() => {
-                //     void this.validateLanguages();
-                // }, 100);
-
-                // setTimeout(async () => {
-                //     const validLangsError = await this.validateLanguages();
-                //     if (validLangsError) {
-                //         this._jsonModel = undefined;
-                //         this._rootModel = undefined;
-                //         this._virtualRootElement = undefined;
-
-                //         void showMessageBox('err', `${validLangsError.error} (${this.fileName})`, {
-                //             detail: validLangsError.detail,
-                //             modal: true
-                //         });
-                //     }
-                // }, 100);
-            }
         } else if (appContext.isEditorActive) {
             this._textDocument = undefined;
             await this.refresh();
@@ -450,22 +450,11 @@ export class DocumentContext implements IDocumentContext {
         }
     }
 
-    // private restoreSelection(backupSelection: SelectionBackup) {
-    //     if (!this.rootModel || !backupSelection || this._disposed) {
-    //         return;
-    //     }
-
-    //     this._selectedElements = appContext.treeContext.getElementsFromSelection(backupSelection);
-    // }
-
     private async refresh(document?: vscode.TextDocument): Promise<void> {
         this.clearPageErrors();
         this._codeGenStatus.inProgress = false;
 
         if (document) {
-            // true means that this is called from file open, not forced refresh or undo/redo
-            //fileOpened = fileOpened ?? false;
-
             this._jsonModel = undefined;
             this._rootModel = undefined;
             this._virtualRootElement = undefined;
@@ -520,18 +509,14 @@ export class DocumentContext implements IDocumentContext {
         }
     }
 
-    public async validateLanguages(): Promise<{ error: string, detail?: string } | undefined> {
+    public async validateLanguages(): Promise<boolean> {
         const root = this._rootModel;
-
-        const returnError = (error: string, detail?: string): { error: string, detail?: string } => {
-            return { error, detail };
-        };
-
         if (!root) {
-            return returnError('No model found. Cannot validate languages.');
+            return false;
         }
 
         let rootLanguages = new Set(root.languages);
+        let madeChanges = false;
 
         const addLanguagesToRoot = async (langs: string[], setAsPrimary?: string): Promise<void> => {
             if (!root || langs.length === 0) {
@@ -559,10 +544,10 @@ export class DocumentContext implements IDocumentContext {
             await this.commitChanges('addLanguagesToRoot');
 
             if (added && this._virtualRootElement) {
-                //appContext.readonlyMode = false;
                 this.treeContext.refreshTree(undefined);
                 this._virtualRootElement.refresh();
                 this._virtualRootElement.languagesRoot.refresh();
+                madeChanges = true;
             }
         };
 
@@ -605,12 +590,19 @@ export class DocumentContext implements IDocumentContext {
 
                 if (await showConfirmBox(`Detected that model missing some language(s)`,
                     `The model contains resources with languages that are not defined in the model.\n` +
-                    `Missing languages: ${langsNames}. `, false, 'Add missing language(s)')) {
+                    `Missing languages: ${langsNames}. `, {
+                    warn: true,
+                    yesText: 'Add missing languages',
+                })) {
 
                     await addLanguagesToRoot(missingLangs);
-                }
+                } else {
+                    await showMessageBox('warn', `Missing languages in the model`,
+                        `Please add manually these languages, otherwise you will not see them when editing resources!\n` +
+                        `Missing languages: ${langsNames}. `, false);
 
-                //return undefined;
+                    return false;
+                }
             }
 
             if (rootLanguages.size === 0) {
@@ -622,7 +614,7 @@ export class DocumentContext implements IDocumentContext {
 
                         const displayName = appContext.getCultureDesc(primaryCulture.name);
                         showNotificationBox('info', `Primary language '${displayName}' was automatically added to the model.`);
-                        return undefined;
+                        return true;
                     }
                 }
 
@@ -633,7 +625,7 @@ export class DocumentContext implements IDocumentContext {
                     `Language ${enName} was automatically added to the model and was set as primary.\n` +
                     `Please review list of languages in document.`);
 
-                return undefined;
+                return true;
             }
 
             // refresh list of root languages after adding missing languages
@@ -651,7 +643,7 @@ export class DocumentContext implements IDocumentContext {
                 await addLanguagesToRoot([newLang], newLang);
                 const enName = appContext.getCultureDesc(newLang);
                 showNotificationBox('info', `Language '${enName}' was automatically added to the model and was set as primary.`);
-                return undefined;
+                return true;
             }
 
 
@@ -669,7 +661,7 @@ export class DocumentContext implements IDocumentContext {
                     showNotificationBox('info', `Primary language '${primaryLangDisplayName}' was added to the model.`);
 
                     await addLanguagesToRoot([primaryLang]);
-                    return undefined;
+                    return true;
                 }
             }
 
@@ -682,6 +674,8 @@ export class DocumentContext implements IDocumentContext {
                 root.primaryLanguage = newPrimaryLang;
                 const langRoot = this._virtualRootElement!.languagesRoot;
                 this._virtualRootElement!.refresh();
+                madeChanges = true;
+
                 await this.commitChanges('markLanguageAsPrimary');
 
                 await this.treeContext.clearSelection(true);
@@ -692,11 +686,14 @@ export class DocumentContext implements IDocumentContext {
             }
         } finally {
             appContext.readonlyMode = false;
-            await appContext.treeContext.showLoading('Applying changes ...');
-            await appContext.treeContext.selectRootElement();
+
+            if (madeChanges) {
+                await appContext.treeContext.showLoading('Applying changes ...');
+                await appContext.treeContext.selectRootElement();
+            }
         }
 
-        return undefined;
+        return true;
     }
 
     public resetGeneratorStatus(): void {
@@ -777,9 +774,6 @@ export class DocumentContext implements IDocumentContext {
 
             this.treeContext.refreshTree(undefined);
 
-            // reload actual page with element data to show new primary language
-            //this.requestPageReload();
-
             const fileBase = path.basename(file);
             let successMsg = `Resources were successfully imported from '${fileBase}' file.`;
             let successDetail = 'Resource(s) were merged into existing resources.';
@@ -823,6 +817,11 @@ export class DocumentContext implements IDocumentContext {
             return;
         }
 
+        if (this._manualSaving) {
+            logger().log(this, 'debug', 'runCodeGenerator -> Manual saving is in progress. Cannot run code generator.');
+            return;
+        }
+
         if (this._codeGenStatus.inProgress) {
             logger().log(this, 'debug', 'runCodeGenerator -> Code generator is already in progress.');
             showNotificationBox('info', 'Code generator is already running ...');
@@ -863,6 +862,21 @@ export class DocumentContext implements IDocumentContext {
                 return;
             }
 
+            const validLangs = await this.validateLanguages();
+            if (!validLangs) {
+                let msg = `Code generator failed.`;
+                const detail = 'Languages are not valid for code generation.';
+                this._codeGenStatus.update({
+                    kind: 'error',
+                    message: msg,
+                    detail: detail
+                });
+
+                msg = `Code generator template '${templateId}' failed.${detail} `;
+                logger().log('this', 'error', msg);
+                return;
+            }
+
 
             const startTime = Date.now();
             const generator = new Generator();
@@ -875,9 +889,6 @@ export class DocumentContext implements IDocumentContext {
             }
 
             if (result.generatedFiles) {
-                //const lhqFileFolder = path.dirname(filename);
-                //const fileNames = result.generatedFiles.map(f => path.join(lhqFileFolder, f.fileName));
-
                 const fileNames: string[] = [];
                 const folder = getCurrentFolder();
                 if (!folder) {
@@ -1001,7 +1012,6 @@ export class DocumentContext implements IDocumentContext {
         const changedPanel = e.webviewPanel;
         logger().log(this, 'debug', `webviewPanel.onDidChangeViewState for ${this.fileName}.Active: ${changedPanel.active}, Visible: ${changedPanel.visible} `);
 
-        //this._notifyDocumentActiveChangedCallback(this, changedPanel.active);
         this.isActive = changedPanel.active;
 
         if (changedPanel.active) {
@@ -1079,7 +1089,7 @@ export class DocumentContext implements IDocumentContext {
                 const warn = message.warning ?? false;
 
                 await delay(100);
-                const confirmed = await showConfirmBox(text, detail, warn) === true;
+                const confirmed = await showConfirmBox(text, detail, { warn }) === true;
 
                 let result: unknown | undefined;
                 switch (message.id) {
@@ -1221,8 +1231,8 @@ export class DocumentContext implements IDocumentContext {
         const webview = this._webviewPanel.webview;
         let pageHtml = await appContext.getPageHtml();
 
-        const content_begin = `< !--lhq_editor_content_begin --> `;
-        const content_end = `< !--lhq_editor_content_end --> `;
+        const content_begin = `<!-- lhq_editor_content_begin -->`;
+        const content_end = `<!-- lhq_editor_content_end -->`;
 
         if (emptyPage) {
             const startIdx = pageHtml.indexOf(content_begin);
@@ -1234,7 +1244,7 @@ export class DocumentContext implements IDocumentContext {
             }
         }
 
-        pageHtml = pageHtml.replace(`< !--lhq_loading_file_text --> `, ` < span > Loading ${this.fileName} ...</>`);
+        pageHtml = pageHtml.replace(`<!-- lhq_loading_file_text -->`, `<span> Loading ${this.fileName} ...</span>`);
 
         const regex = /<script\s+nonce="([^"]*)"\s+src="([^"]*)"[^>]*><\/script>/g;
 
@@ -1829,7 +1839,7 @@ export class DocumentContext implements IDocumentContext {
 
 
         const detail = selectedCount > maxDisplayCount ? '' : `Selected languages to delete: \n${elemIdent}\n\n` + 'This will remove all translations for those languages!';
-        if (!(await showConfirmBox(`Delete ${selectedCount} languages ?`, detail, true))) {
+        if (!(await showConfirmBox(`Delete ${selectedCount} languages ?`, detail, { warn: true }))) {
             return;
         }
 

@@ -5,7 +5,7 @@ import type { FileInfo, ReadFileInfoOptions, ITreeElementPaths, ITreeElement, IR
 import { AppError, fileUtils, isNullOrEmpty, ModelUtils, strCompare } from '@lhq/lhq-generators';
 
 import { ILogger, LogType, VsCodeLogger } from './logger';
-import { MatchForSubstringResult, NotificationBoxOptions } from './types';
+import { ConfirmBoxOptions, MatchForSubstringResult, NotificationBoxOptions } from './types';
 
 import 'reflect-metadata';
 
@@ -128,11 +128,20 @@ export async function showFileDialog(label: string, dialogOptions?: ShowFileDial
     return fileUri && fileUri[0] ? fileUri[0] : undefined;
 }
 
-export async function showConfirmBox(message: string, detail?: string, warn?: boolean, yesText?: string, noText?: string): Promise<boolean | undefined> {
+export async function showConfirmBox(message: string, detail?: string, options?: ConfirmBoxOptions): Promise<boolean | undefined> {
     const msg = getMessageBoxText(message);
-    warn = warn ?? false;
-    const yes = yesText ?? 'Yes';
-    const no = noText ?? 'No';
+
+    const addTologger = options?.logger ?? (options?.warn === true);
+
+    if (addTologger) {
+        const logType: LogType = options?.warn === true ? 'warn' : 'info';
+        const logMsg = detail ? `${msg}\n${detail}` : msg;
+        logger().log('', logType, logMsg);
+    }
+
+    const warn = options?.warn ?? false;
+    const yes = options?.yesText ?? 'Yes';
+    const no = options?.noText ?? 'No';
     const result = warn ?
         await vscode.window.showWarningMessage(msg, { modal: true, detail }, yes, no) :
         await vscode.window.showInformationMessage(msg, { modal: true, detail }, yes, no);
@@ -143,7 +152,9 @@ export async function showConfirmBox(message: string, detail?: string, warn?: bo
 export function showNotificationBox(type: 'warn' | 'info' | 'err', message: string, options?: NotificationBoxOptions): void {
     let msg = getMessageBoxText(message);
 
-    if (options?.logger === true) {
+    const addTologger = options?.logger ?? true;
+
+    if (addTologger) {
         const logType: LogType = type === 'err' ? 'error' : type === 'warn' ? 'warn' : 'info';
         logger().log('', logType, msg);
     }
@@ -165,9 +176,12 @@ export async function showMessageBox(type: 'warn' | 'info' | 'err', message: str
         modal: true
     };
 
+    addTologger = addTologger ?? true;
+
     if (addTologger === true) {
         const logType: LogType = type === 'err' ? 'error' : type === 'warn' ? 'warn' : 'info';
-        logger().log('', logType, msg);
+        const logMsg = detail ? `${msg}\n${detail}` : msg;
+        logger().log('', logType, logMsg);
     }
 
     if (type === 'warn') {
