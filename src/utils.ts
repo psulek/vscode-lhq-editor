@@ -128,14 +128,16 @@ export async function showFileDialog(label: string, dialogOptions?: ShowFileDial
     return fileUri && fileUri[0] ? fileUri[0] : undefined;
 }
 
-export async function showConfirmBox(message: string, detail?: string, warn?: boolean): Promise<boolean | undefined> {
+export async function showConfirmBox(message: string, detail?: string, warn?: boolean, yesText?: string, noText?: string): Promise<boolean | undefined> {
     const msg = getMessageBoxText(message);
     warn = warn ?? false;
+    const yes = yesText ?? 'Yes';
+    const no = noText ?? 'No';
     const result = warn ?
-        await vscode.window.showWarningMessage(msg, { modal: true, detail }, 'Yes', 'No') :
-        await vscode.window.showInformationMessage(msg, { modal: true, detail }, 'Yes', 'No');
+        await vscode.window.showWarningMessage(msg, { modal: true, detail }, yes, no) :
+        await vscode.window.showInformationMessage(msg, { modal: true, detail }, yes, no);
 
-    return result === undefined ? undefined : result === 'Yes';
+    return result === undefined ? undefined : result === yes;
 }
 
 

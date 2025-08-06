@@ -46,6 +46,11 @@ const LanguageTypeModes = [
 type UpdateOptions = {
     forceRefresh?: boolean;
     undoRedo?: boolean;
+
+    /**
+     * Flag `true` indicates that the update is called from file open, not forced refresh and/or undo/redo.
+     */
+    fileOpened?: boolean;
 };
 
 export class DocumentContext implements IDocumentContext {
@@ -122,7 +127,7 @@ export class DocumentContext implements IDocumentContext {
     public setReadonlyMode(readonly: boolean) {
         this._isReadonly = readonly;
 
-        this.sendMessageToHtmlPage({command: 'blockEditor', block: readonly});
+        this.sendMessageToHtmlPage({ command: 'blockEditor', block: readonly });
     }
 
     public get isActive(): boolean {
@@ -374,7 +379,7 @@ export class DocumentContext implements IDocumentContext {
         if (document && isValidDocument(document)) {
             const sameDoc = this.isSameDocument(document);
 
-            options = Object.assign({}, { forceRefresh: false, undoRedo: false } as UpdateOptions, options);
+            options = Object.assign({}, { forceRefresh: false, undoRedo: false, fileOpened: false } as UpdateOptions, options);
 
             this._textDocument = document;
             this._fileName = newFileName;
@@ -389,7 +394,7 @@ export class DocumentContext implements IDocumentContext {
             if (sameDoc || !this._rootModel || options.forceRefresh) {
                 logger().log(this, 'debug', `update() for: ${this.fileName}, forceRefresh: ${options.forceRefresh}, undoRedo: ${options.undoRedo}`);
 
-                this.refresh(document);
+                await this.refresh(document);
 
                 // after undo/redo, current this._selectedElements folds obsolete refs to elements, 
                 // needs to find actual based on elem type and paths (from backupSelection as tree holds actual elements)
@@ -409,9 +414,32 @@ export class DocumentContext implements IDocumentContext {
                 logger().log(this, 'debug', `update() -> Requesting page reload for: ${this.fileName} (for undoRedo)`);
                 this.reflectSelectedElementToWebview(true);
             }
+
+            if (options.fileOpened === true && options.undoRedo !== true) {
+
+                //void this.validateLanguages();
+
+                // setTimeout(() => {
+                //     void this.validateLanguages();
+                // }, 100);
+
+                // setTimeout(async () => {
+                //     const validLangsError = await this.validateLanguages();
+                //     if (validLangsError) {
+                //         this._jsonModel = undefined;
+                //         this._rootModel = undefined;
+                //         this._virtualRootElement = undefined;
+
+                //         void showMessageBox('err', `${validLangsError.error} (${this.fileName})`, {
+                //             detail: validLangsError.detail,
+                //             modal: true
+                //         });
+                //     }
+                // }, 100);
+            }
         } else if (appContext.isEditorActive) {
             this._textDocument = undefined;
-            this.refresh();
+            await this.refresh();
 
             appContext.treeContext.updateDocument(undefined);
 
@@ -430,11 +458,14 @@ export class DocumentContext implements IDocumentContext {
     //     this._selectedElements = appContext.treeContext.getElementsFromSelection(backupSelection);
     // }
 
-    private refresh(document?: vscode.TextDocument): void {
+    private async refresh(document?: vscode.TextDocument): Promise<void> {
         this.clearPageErrors();
         this._codeGenStatus.inProgress = false;
 
         if (document) {
+            // true means that this is called from file open, not forced refresh or undo/redo
+            //fileOpened = fileOpened ?? false;
+
             this._jsonModel = undefined;
             this._rootModel = undefined;
             this._virtualRootElement = undefined;
@@ -487,6 +518,190 @@ export class DocumentContext implements IDocumentContext {
             this._rootModel = undefined;
             this._virtualRootElement = undefined;
         }
+    }
+
+    public async validateLanguages(): Promise<{ error: string, detail?: string } | undefined> {
+        const root = this._rootModel;
+
+        const returnError = (error: string, detail?: string): { error: string, detail?: string } => {
+            return { error, detail };
+        };
+
+        if (!root) {
+            return returnError('No model found. Cannot validate languages.');
+        }
+
+        let rootLanguages = new Set(root.languages);
+
+        const addLanguagesToRoot = async (langs: string[], setAsPrimary?: string): Promise<void> => {
+            if (!root || langs.length === 0) {
+                return;
+            }
+
+            let added = false;
+            langs.forEach(lang => {
+                const culture = appContext.findCulture(lang);
+                if (culture) {
+                    if (root.addLanguage(culture.name)) {
+                        added = true;
+                    }
+                } else {
+                    logger().log(this, 'warn', `validateLanguages -> Unknown culture '${lang}' found in resources.`);
+                }
+            });
+
+            if (!isNullOrEmpty(setAsPrimary) && root.containsLanguage(setAsPrimary)) {
+                root.primaryLanguage = setAsPrimary;
+            }
+
+            rootLanguages = new Set(root.languages);
+
+            await this.commitChanges('addLanguagesToRoot');
+
+            if (added && this._virtualRootElement) {
+                //appContext.readonlyMode = false;
+                this.treeContext.refreshTree(undefined);
+                this._virtualRootElement.refresh();
+                this._virtualRootElement.languagesRoot.refresh();
+            }
+        };
+
+        appContext.readonlyMode = true;
+
+        try {
+
+            // list of all languages used in resources
+            let resourceLanguages = new Set<string>();
+            root.iterateTree(element => {
+                if (element.elementType === 'resource') {
+                    const resource = element as IResourceElement;
+                    resource.values?.forEach(value => {
+                        if (value.languageName) {
+                            resourceLanguages.add(value.languageName);
+                        }
+                    });
+                }
+            }, { root: false, categories: false, resources: true }); // this will call callback for resources only
+
+            // test if there is any language that is missing in root.languages
+            const missingLangsOnRoot = new Set<string>();
+            resourceLanguages.forEach(resLang => {
+                if (!rootLanguages.has(resLang)) {
+                    missingLangsOnRoot.add(resLang);
+                }
+            });
+
+            if (missingLangsOnRoot.size > 0) {
+                const missingLangs = Array.from(missingLangsOnRoot);
+                const maxDisplayCount = 10;
+
+                let langsNames = missingLangs.length === 1
+                    ? appContext.getCultureDesc(missingLangs[0])
+                    : missingLangs.slice(0, maxDisplayCount).map(x => `'${appContext.getCultureDesc(x)}'`).join(', ');
+
+                if (missingLangs.length > maxDisplayCount) {
+                    langsNames += ` and ${missingLangs.length - maxDisplayCount} more ...`;
+                }
+
+                if (await showConfirmBox(`Detected that model missing some language(s)`,
+                    `The model contains resources with languages that are not defined in the model.\n` +
+                    `Missing languages: ${langsNames}. `, false, 'Add missing language(s)')) {
+
+                    await addLanguagesToRoot(missingLangs);
+                }
+
+                //return undefined;
+            }
+
+            if (rootLanguages.size === 0) {
+                // model has no langs, but has defined primary lang, so check if is valid and add it to root
+                if (!isNullOrEmpty(root.primaryLanguage)) {
+                    const primaryCulture = appContext.findCulture(root.primaryLanguage);
+                    if (primaryCulture) {
+                        await addLanguagesToRoot([primaryCulture.name], primaryCulture.name);
+
+                        const displayName = appContext.getCultureDesc(primaryCulture.name);
+                        void showMessageBox('info', `Primary language '${displayName}' was automatically added to the model.`);
+                        return undefined;
+                    }
+                }
+
+                const enName = appContext.getCultureDesc('en');
+
+                await addLanguagesToRoot(['en'], 'en');
+                await showMessageBox('warn', 'Model does not contain any languages!', {
+                    detail: `Language ${enName} was automatically added to the model and was set as primary.\n` + 
+                    `Please review list of languages in document.`,
+                    modal: true
+                });
+
+                return undefined;
+            }
+
+            // refresh list of root languages after adding missing languages
+            rootLanguages = new Set(root.languages);
+
+            if (rootLanguages.size === 0) {
+                let newLang = 'en';
+                if (!isNullOrEmpty(root.primaryLanguage)) {
+                    const primaryCulture = appContext.findCulture(root.primaryLanguage);
+                    if (primaryCulture) {
+                        newLang = primaryCulture.name;
+                    }
+                }
+
+                await addLanguagesToRoot([newLang], newLang);
+                const enName = appContext.getCultureDesc(newLang);
+                void showMessageBox('info', `Language '${enName}' was automatically added to the model.`, {
+                    detail: `Also language '${enName}' was set as primary language.`
+                });
+                return undefined;
+            }
+
+
+            let selectPrimaryLang = isNullOrEmpty(root.primaryLanguage);
+            let selectPrimaryLangMsg = 'No primary language defined in the model.';
+            if (!isNullOrEmpty(root.primaryLanguage) && !rootLanguages.has(root.primaryLanguage)) {
+                const primaryLang = root.primaryLanguage;
+
+                if (!appContext.findCulture(primaryLang)) {
+                    selectPrimaryLang = true;
+                    selectPrimaryLangMsg = `Unknown primary language '${primaryLang}' defined in the model.`;
+                    await addLanguagesToRoot(['en']);
+                } else {
+                    const primaryLangDisplayName = appContext.getCultureDesc(primaryLang);
+                    await showMessageBox('warn', `Primary language '${primaryLangDisplayName}' is not defined in the model.`, {
+                        detail: `Language '${primaryLangDisplayName}' was added to the model.`
+                    });
+
+                    await addLanguagesToRoot([primaryLang]);
+                    return undefined;
+                }
+            }
+
+            if (selectPrimaryLang) {
+                const newPrimaryLang = rootLanguages.has('en') ? 'en' : Array.from(rootLanguages)[0];
+                const newPrimaryLangName = appContext.getCultureDesc(newPrimaryLang);
+                await showMessageBox('warn', selectPrimaryLangMsg, {
+                    detail: `Language '${newPrimaryLangName}' was automatically set as primary language.`
+                });
+
+                root.primaryLanguage = newPrimaryLang;
+                const langRoot = this._virtualRootElement!.languagesRoot;
+                await this.commitChanges('markLanguageAsPrimary');
+
+                await this.treeContext.clearSelection(true);
+
+                this.treeContext.refreshTree([langRoot]);
+                await this.treeContext.revealElement(langRoot, { expand: true, select: true, focus: true });
+            }
+        } finally {
+            appContext.readonlyMode = false;
+            await appContext.treeContext.showLoading('Applying changes ...');
+            await appContext.treeContext.selectRootElement();
+        }
+
+        return undefined;
     }
 
     public resetGeneratorStatus(): void {
@@ -545,7 +760,7 @@ export class DocumentContext implements IDocumentContext {
                         importNewLanguages: true
                     });
                 } else {
-                    await showMessageBox('err', `Error importing model from '${engine}' file: ${file}`, { detail: importData.error, modal: true });
+                    await showMessageBox('err', `Error importing model from '${engine}' file: ${file} `, { detail: importData.error, modal: true });
                 }
             });
 
@@ -554,9 +769,9 @@ export class DocumentContext implements IDocumentContext {
             }
 
             if (importResult.errorKind) {
-                logger().log(this, 'error', `importModelFromFile(${file}) -> Error importing model from '${engine}' -> '${importResult.error}' (${importResult.errorKind})`);
+                logger().log(this, 'error', `importModelFromFile(${file}) -> Error importing model from '${engine}' -> '${importResult.error}'(${importResult.errorKind})`);
                 const importError = this.getImportError(importResult.errorKind, importInfo);
-                return await showMessageBox('err', `Error importing model from '${engine}' file: ${file}`, { detail: importError, modal: true });
+                return await showMessageBox('err', `Error importing model from '${engine}' file: ${file} `, { detail: importError, modal: true });
             }
 
             await this.commitChanges('importModelFromFile');
@@ -585,8 +800,8 @@ export class DocumentContext implements IDocumentContext {
             appContext.readonlyMode = false;
             await showMessageBox('info', successMsg, { detail: successDetail, modal: true });
         } catch (error) {
-            logger().log(this, 'error', `importModelFromFile -> Error while importing model from file: ${error}`);
-            await showMessageBox('err', `Error importing model from file: ${file}`, { detail: error instanceof Error ? error.message : String(error), modal: true });
+            logger().log(this, 'error', `importModelFromFile -> Error while importing model from file: ${error} `);
+            await showMessageBox('err', `Error importing model from file: ${file} `, { detail: error instanceof Error ? error.message : String(error), modal: true });
         } finally {
             appContext.readonlyMode = false;
         }
@@ -598,13 +813,13 @@ export class DocumentContext implements IDocumentContext {
 
         switch (errorKind) {
             case 'emptyModel':
-                return `The model is empty. Please check the file '${file}' (${engine}) for valid data.`;
+                return `The model is empty.Please check the file '${file}'(${engine}) for valid data.`;
             case 'categoriesForFlatStructure':
-                return `Categories are not allowed in flat structure. Please change project properties to 'Tree structure'.`;
+                return `Categories are not allowed in flat structure.Please change project properties to 'Tree structure'.`;
             case 'noResourcesToImport':
-                return `No resources to import found in the file '${file}' (${engine}). Please check the file for valid data.`;
+                return `No resources to import found in the file '${file}'(${engine}).Please check the file for valid data.`;
             default:
-                return `Unknown error occurred while importing model from file '${file}' (${engine}). Please check the file for valid data.`;
+                return `Unknown error occurred while importing model from file '${file}'(${engine}).Please check the file for valid data.`;
         }
     }
 
@@ -624,12 +839,12 @@ export class DocumentContext implements IDocumentContext {
 
         const filename = this.fileName;
         if (isNullOrEmpty(filename)) {
-            logger().log(this, 'debug', `runCodeGenerator -> Document fileName is not valid (${filename}). Cannot run code generator.`);
+            logger().log(this, 'debug', `runCodeGenerator -> Document fileName is not valid(${filename}).Cannot run code generator.`);
             return;
         }
 
         const templateId = this.codeGeneratorTemplateId;
-        logger().log(this, 'info', `Running code generator template '${templateId}' for: ${filename}`);
+        logger().log(this, 'info', `Running code generator template '${templateId}' for: ${filename} `);
 
         this._codeGenStatus.inProgress = true;
 
@@ -642,14 +857,14 @@ export class DocumentContext implements IDocumentContext {
             const validationErr = this.validateDocument(false);
             if (validationErr) {
                 let msg = `Code generator failed.`;
-                const detail = `${validationErr.message}\n${validationErr.detail ?? ''} for: ${filename}`;
+                const detail = `${validationErr.message} \n${validationErr.detail ?? ''} for: ${filename} `;
                 this._codeGenStatus.update({
                     kind: 'error',
                     message: msg,
                     detail: detail,
                 });
 
-                msg = `Code generator template '${templateId}' failed.${detail}`;
+                msg = `Code generator template '${templateId}' failed.${detail} `;
                 logger().log('this', 'error', msg);
                 return;
             }
@@ -677,7 +892,7 @@ export class DocumentContext implements IDocumentContext {
 
                 const output = folder.fsPath;
                 if (await fse.pathExists(output) === false) {
-                    return showMessageBox('err', `Output folder '${output}' does not exist. Please select a valid folder.`);
+                    return showMessageBox('err', `Output folder '${output}' does not exist.Please select a valid folder.`);
                 }
 
                 const saveFilesMap = result.generatedFiles.map(async (file) => {
@@ -687,8 +902,8 @@ export class DocumentContext implements IDocumentContext {
                 await Promise.all(saveFilesMap);
 
 
-                logger().log(this, 'info', `Code generator template '${templateId}' for: ${filename} successfully generated ${fileNames.length} files:\n` +
-                    `${fileNames.join('\n')}`);
+                logger().log(this, 'info', `Code generator template '${templateId}' for: ${filename} successfully generated ${fileNames.length} files: \n` +
+                    `${fileNames.join('\n')} `);
 
                 this._codeGenStatus.update({
                     kind: 'status',
@@ -761,7 +976,7 @@ export class DocumentContext implements IDocumentContext {
             } else {
                 // let msg = error.message;
                 // if (!isNullOrEmpty(error.detail)) {
-                //     msg += `\n${error.detail}`;
+                //     msg += `\n${ error.detail } `;
                 // }
                 // logger().log('this', 'error', msg);
             }
@@ -777,7 +992,7 @@ export class DocumentContext implements IDocumentContext {
         this._context.subscriptions.push(
             this._webviewPanel!.onDidDispose(() => {
                 this._disposed = true;
-                logger().log(this, 'debug', `onDidDispose -> for: ${this.fileName}`);
+                logger().log(this, 'debug', `onDidDispose -> for: ${this.fileName} `);
                 viewStateSubscription.dispose();
                 didReceiveMessageSubscription.dispose();
 
@@ -788,13 +1003,13 @@ export class DocumentContext implements IDocumentContext {
 
     private async handleChangeViewState(e: vscode.WebviewPanelOnDidChangeViewStateEvent): Promise<void> {
         const changedPanel = e.webviewPanel;
-        logger().log(this, 'debug', `webviewPanel.onDidChangeViewState for ${this.fileName}. Active: ${changedPanel.active}, Visible: ${changedPanel.visible}`);
+        logger().log(this, 'debug', `webviewPanel.onDidChangeViewState for ${this.fileName}.Active: ${changedPanel.active}, Visible: ${changedPanel.visible} `);
 
         //this._notifyDocumentActiveChangedCallback(this, changedPanel.active);
         this.isActive = changedPanel.active;
 
         if (changedPanel.active) {
-            logger().log(this, 'debug', `webviewPanel.onDidChangeViewState for ${this.fileName} became active. Updating tree and context.`);
+            logger().log(this, 'debug', `webviewPanel.onDidChangeViewState for ${this.fileName} became active.Updating tree and context.`);
             appContext.enableEditorActive();
 
             this._codeGenStatus.restoreLastStatus();
@@ -820,7 +1035,7 @@ export class DocumentContext implements IDocumentContext {
         logger().log(this, 'debug', `${header} for ${this.fileName}`);
 
         if (this._disposed) {
-            logger().log(this, 'debug', `${header} -> DocumentContext is disposed. Ignoring message.`);
+            logger().log(this, 'debug', `${header} -> DocumentContext is disposed.Ignoring message.`);
             return;
         }
 
@@ -837,7 +1052,7 @@ export class DocumentContext implements IDocumentContext {
                         await this.updateElement(element);
                     }
                 } catch (e) {
-                    logger().log(this, 'error', `${header} - error parsing element data: ${e}`);
+                    logger().log(this, 'error', `${header} - error parsing element data: ${e} `);
                     return;
                 }
                 break;
@@ -850,14 +1065,14 @@ export class DocumentContext implements IDocumentContext {
 
                     await appContext.treeContext.selectElementByPath(message.elementType, message.paths, true);
                 } catch (e) {
-                    logger().log(this, 'error', `${header} - error selecting element: ${e}`);
+                    logger().log(this, 'error', `${header} - error selecting element: ${e} `);
                     return;
                 }
                 break;
             case 'saveProperties': {
                 const error = await this.saveModelProperties(message.modelProperties);
                 if (error) {
-                    logger().log(this, 'error', `${header} - error saving properties: ${error.message}`);
+                    logger().log(this, 'error', `${header} - error saving properties: ${error.message} `);
                 }
                 this.sendMessageToHtmlPage({ command: 'savePropertiesResult', error });
                 break;
@@ -905,7 +1120,7 @@ export class DocumentContext implements IDocumentContext {
                 if (!isNullOrEmpty(result) && message.id === 'editElementName' && data.elementType === 'model' && result !== oldValue) {
                     await delay(100); // wait for input box to close
 
-                    if (!(await showConfirmBox(`Do you want to rename the model?`,
+                    if (!(await showConfirmBox(`Do you want to rename the model ? `,
                         `Associated code generator usually use model name as file name.\n` +
                         'After renaming the model, you may need to manually delete the old file(s).'))) {
                         result = undefined;
@@ -925,12 +1140,12 @@ export class DocumentContext implements IDocumentContext {
 
     public onSelectionChanged(selectedElements: ITreeElement[]): void {
         if (this._disposed) {
-            logger().log(this, 'debug', `onSelectionChanged -> DocumentContext is disposed. Ignoring selection change.`);
+            logger().log(this, 'debug', `onSelectionChanged -> DocumentContext is disposed.Ignoring selection change.`);
             return;
         }
 
         if (this.isReadonly) {
-            logger().log(this, 'debug', `onSelectionChanged -> DocumentContext is readonly. Ignoring selection change.`);
+            logger().log(this, 'debug', `onSelectionChanged -> DocumentContext is readonly.Ignoring selection change.`);
             return;
         }
 
@@ -940,7 +1155,7 @@ export class DocumentContext implements IDocumentContext {
 
     public async loadEmptyPage(): Promise<void> {
         if (this._disposed) {
-            logger().log(this, 'debug', `loadEmptyPage -> DocumentContext is disposed. Ignoring load request.`);
+            logger().log(this, 'debug', `loadEmptyPage -> DocumentContext is disposed.Ignoring load request.`);
             return;
         }
 
@@ -949,7 +1164,7 @@ export class DocumentContext implements IDocumentContext {
 
     public async updateWebviewContent(): Promise<void> {
         if (this._disposed) {
-            logger().log(this, 'debug', `updateWebviewContent -> DocumentContext is disposed. Ignoring update request.`);
+            logger().log(this, 'debug', `updateWebviewContent -> DocumentContext is disposed.Ignoring update request.`);
             return;
         }
 
@@ -961,7 +1176,7 @@ export class DocumentContext implements IDocumentContext {
 
     public reflectSelectedElementToWebview(restoreFocusedInput: boolean = false): void {
         if (this._disposed) {
-            logger().log(this, 'debug', `reflectSelectedElementToWebview -> DocumentContext is disposed. Ignoring selection change.`);
+            logger().log(this, 'debug', `reflectSelectedElementToWebview -> DocumentContext is disposed.Ignoring selection change.`);
             return;
         }
 
@@ -1010,8 +1225,8 @@ export class DocumentContext implements IDocumentContext {
         const webview = this._webviewPanel.webview;
         let pageHtml = await appContext.getPageHtml();
 
-        const content_begin = `<!-- lhq_editor_content_begin -->`;
-        const content_end = `<!-- lhq_editor_content_end -->`;
+        const content_begin = `< !--lhq_editor_content_begin --> `;
+        const content_end = `< !--lhq_editor_content_end --> `;
 
         if (emptyPage) {
             const startIdx = pageHtml.indexOf(content_begin);
@@ -1023,7 +1238,7 @@ export class DocumentContext implements IDocumentContext {
             }
         }
 
-        pageHtml = pageHtml.replace(`<!-- lhq_loading_file_text -->`, `<span>Loading ${this.fileName} ...</span>`);
+        pageHtml = pageHtml.replace(`< !--lhq_loading_file_text --> `, ` < span > Loading ${this.fileName} ...</>`);
 
         const regex = /<script\s+nonce="([^"]*)"\s+src="([^"]*)"[^>]*><\/script>/g;
 
@@ -1505,7 +1720,7 @@ export class DocumentContext implements IDocumentContext {
         return await this.addItem(element, 'resource');
     }
 
-    private async addLanguage(element: ITreeElement): Promise<void> {
+    private async addLanguage(_: ITreeElement): Promise<void> {
         const selected = await vscode.window.showQuickPick(LanguageTypeModes, {
             placeHolder: `Select type of languages to select from`,
             ignoreFocusOut: true

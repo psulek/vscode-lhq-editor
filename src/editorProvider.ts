@@ -57,7 +57,7 @@ export class LhqEditorProvider implements vscode.CustomTextEditorProvider {
 
         context.subscriptions.push(
             vscode.commands.registerCommand(GlobalCommands.runGenerator, () => this._debouncedRunCodeGenerator()),
-            
+
             vscode.commands.registerCommand(GlobalCommands.importFromFile, this.importModelFromFile.bind(this)),
         );
     }
@@ -224,7 +224,7 @@ export class LhqEditorProvider implements vscode.CustomTextEditorProvider {
             await docCtx.loadEmptyPage();
 
             // 2nd - update tree data provider with the document
-            await docCtx.update(document, { forceRefresh: true });
+            await docCtx.update(document, { forceRefresh: true, fileOpened: true });
 
             // 3rd - update webview content with the document
             await docCtx.updateWebviewContent();
@@ -234,12 +234,29 @@ export class LhqEditorProvider implements vscode.CustomTextEditorProvider {
 
             // appContext.isEditorActive = true;
             appContext.enableEditorActive();
+
+            this.validateOnOpen(docCtx);
         } catch (error) {
             logger().log(this, 'error', `resolveCustomTextEditor -> Error while resolving custom text editor: ${error}`);
 
             // clear and hide the tree if error occurs
             await docCtx.update(undefined);
         }
+    }
+
+    private validateOnOpen(docCtx: DocumentContext): void {
+        setTimeout(async () => {
+            try {
+                const validateResult = await docCtx.validateLanguages();
+                if (validateResult) {
+                    await showMessageBox('err', `Validation error: ${validateResult.error}`, { detail: validateResult.detail, modal: true });
+                } else {
+                    logger().log(this, 'debug', 'validateOnOpen -> Languages validated successfully.');
+                }
+            } catch (error) {
+                logger().log(this, 'error', `validateOnOpen -> Error while validating languages: ${error}`);                
+            }
+        }, 100);
     }
 
     public onWillSaveTextDocument(event: vscode.TextDocumentWillSaveEvent) {

@@ -411,11 +411,11 @@ export class AppContext implements IAppContext {
     }
 
     public set readonlyMode(value: boolean) {
-        if (this._isReadonlyMode !== value) {
+        //if (this._isReadonlyMode !== value) {
             this._isReadonlyMode = value;
             vscode.commands.executeCommand('setContext', ContextKeys.isReadonlyMode, value);
             this._eventEmitter.emit(ContextEvents.isReadonlyModeChanged, value);
-        }
+        //}
     }
 
     public get isEditorActive(): boolean {
