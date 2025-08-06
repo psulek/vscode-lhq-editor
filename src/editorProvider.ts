@@ -3,7 +3,7 @@ import debounce from 'lodash.debounce';
 import { ITreeElement } from '@lhq/lhq-generators';
 
 import { LhqTreeDataProvider } from './treeDataProvider';
-import { isValidDocument, logger, showConfirmBox, showMessageBox } from './utils';
+import { isValidDocument, logger, showConfirmBox, showMessageBox, showNotificationBox } from './utils';
 import { AppToPageMessage, IDocumentContext, SelectionChangedCallback, StatusBarItemUpdateInfo } from './types';
 import { DocumentContext } from './documentContext';
 import { AvailableCommands, Commands, ContextEvents, GlobalCommands } from './context';
@@ -151,7 +151,8 @@ export class LhqEditorProvider implements vscode.CustomTextEditorProvider {
 
         const documentUri = document.uri.toString();
         if (this._documents.has(documentUri)) {
-            return await showMessageBox('err', `Editor for ${document.fileName} is already open.`, { modal: true });
+            showNotificationBox('err', `Editor for ${document.fileName} is already open.`);
+            return;
         }
 
         const onDocContextDisposed = () => {
@@ -249,7 +250,7 @@ export class LhqEditorProvider implements vscode.CustomTextEditorProvider {
             try {
                 const validateResult = await docCtx.validateLanguages();
                 if (validateResult) {
-                    await showMessageBox('err', `Validation error: ${validateResult.error}`, { detail: validateResult.detail, modal: true });
+                    await showMessageBox('err', `Validation error: ${validateResult.error}`, validateResult.detail);
                 } else {
                     logger().log(this, 'debug', 'validateOnOpen -> Languages validated successfully.');
                 }

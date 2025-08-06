@@ -5,7 +5,7 @@ import type { FileInfo, ReadFileInfoOptions, ITreeElementPaths, ITreeElement, IR
 import { AppError, fileUtils, isNullOrEmpty, ModelUtils, strCompare } from '@lhq/lhq-generators';
 
 import { ILogger, LogType, VsCodeLogger } from './logger';
-import { CultureInfo, MatchForSubstringResult, MessageBoxOptions } from './types';
+import { MatchForSubstringResult, NotificationBoxOptions } from './types';
 
 import 'reflect-metadata';
 
@@ -140,35 +140,42 @@ export async function showConfirmBox(message: string, detail?: string, warn?: bo
     return result === undefined ? undefined : result === yes;
 }
 
-
-export async function showMessageBox(type: 'warn' | 'info' | 'err', message: string, options?: MessageBoxOptions): Promise<void> {
+export function showNotificationBox(type: 'warn' | 'info' | 'err', message: string, options?: NotificationBoxOptions): void {
     let msg = getMessageBoxText(message);
 
-    if (type === 'err' && isNullOrEmpty(options)) {
-        options = { modal: true };
-    }
-
-    options = options ?? {};
-    const addToLogger = options.logger ?? true;
-    const showDetail = options.showDetail ?? 'auto';
-    delete options.logger;
-    delete options.showDetail;
-
-    if (showDetail === 'always' && (isNullOrEmpty(options.modal) || !options.modal) && !isNullOrEmpty(options.detail)) {
-        msg += `\n${options.detail!}`;
-    }
-
-    if (addToLogger) {
+    if (options?.logger === true) {
         const logType: LogType = type === 'err' ? 'error' : type === 'warn' ? 'warn' : 'info';
         logger().log('', logType, msg);
     }
 
     if (type === 'warn') {
-        await vscode.window.showWarningMessage(msg, options);
+        vscode.window.showWarningMessage(msg);
     } else if (type === 'err') {
-        await vscode.window.showErrorMessage(msg, options);
+        vscode.window.showErrorMessage(msg);
     } else {
-        await vscode.window.showInformationMessage(msg, options);
+        vscode.window.showInformationMessage(msg);
+    }
+}
+
+export async function showMessageBox(type: 'warn' | 'info' | 'err', message: string, detail?: string, addTologger?: boolean): Promise<void> {
+    let msg = getMessageBoxText(message);
+
+    const msgOptions: vscode.MessageOptions = {
+        detail: detail,
+        modal: true
+    };
+
+    if (addTologger === true) {
+        const logType: LogType = type === 'err' ? 'error' : type === 'warn' ? 'warn' : 'info';
+        logger().log('', logType, msg);
+    }
+
+    if (type === 'warn') {
+        await vscode.window.showWarningMessage(msg, msgOptions);
+    } else if (type === 'err') {
+        await vscode.window.showErrorMessage(msg, msgOptions);
+    } else {
+        await vscode.window.showInformationMessage(msg, msgOptions);
     }
 }
 

@@ -14,7 +14,8 @@ import type { SearchTreeOptions, MatchingElement, ITreeContext, IDocumentContext
 
 import {
     getMessageBoxText, createTreeElementPaths, findChildsByPaths, matchForSubstring,
-    logger, getElementFullPath, showMessageBox
+    logger, getElementFullPath, showMessageBox,
+    showNotificationBox
 } from './utils';
 
 
@@ -401,23 +402,23 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
         logger().log(this, 'debug', `handleDrop -> Dropped single item: ${items[0].path} [${items[0].type}]`);
 
         if (target.elementType === 'model' && !this.resourcesUnderRoot && sourceItems.some(x => x.elementType === 'resource')) {
-            return await showMessageBox('warn', `Resources are not allowed under root!`,
-                {
-                    detail: `Cannot move ${elemText} to root element '${getElementFullPath(target)}'.\n\n` +
-                        `NOTE: 'Resources under root' can be enabled in project properties.`, modal: true
-                });
+            const detail = `Cannot move ${elemText} to root element '${getElementFullPath(target)}'.\n\n` +
+                `NOTE: 'Resources under root' can be enabled in project properties.`;
+            return await showMessageBox('warn', `Resources are not allowed under root!`, detail);
         }
 
         // diff parents
         if (sourceItems.length > 1) {
             if (!sourceItems.every(item => item.parent === firstParent)) {
-                return await showMessageBox('warn', `Cannot move ${elemText} with different parents.`);
+                showNotificationBox('warn', `Cannot move ${elemText} with different parents.`);
+                return;
             }
         }
 
         // move to the same parent
         if (target === firstParent) {
-            return await showMessageBox('warn', `Cannot move ${elemText} to the same parent element '${getElementFullPath(target)}'.`);
+            showNotificationBox('warn', `Cannot move ${elemText} to the same parent element '${getElementFullPath(target)}'.`);
+            return;
         }
 
         const targetElement = target as ICategoryLikeTreeElement;
@@ -458,8 +459,8 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
                 ? `${sourceItems[0].elementType} '${getElementFullPath(sourceItems[0])}'`
                 : `${sourceItems.length} element(s)`;
 
-            await showMessageBox('info', `Moved ${moved} under '${getElementFullPath(target)}'`);
-        } 
+            showNotificationBox('info', `Moved ${moved} under '${getElementFullPath(target)}'`);
+        }
     }
 
     public updateDocument(docCtx: IDocumentContext): void {

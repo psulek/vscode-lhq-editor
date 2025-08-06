@@ -3,7 +3,7 @@ import { isNullOrEmpty } from '@lhq/lhq-generators';
 
 import { CodeGeneratorStatusInfo, CodeGeneratorStatusKind, ICodeGenStatus, IDocumentContext, StatusBarItemUpdateInfo, StatusBarItemUpdateRequestCallback } from './types';
 import { ContextKeys, GlobalCommands } from './context';
-import { logger, showMessageBox } from './utils';
+import { logger, showNotificationBox } from './utils';
 import path from 'node:path';
 
 type LastStatusInfo = {
@@ -99,7 +99,7 @@ export class CodeGenStatus implements ICodeGenStatus {
                     info.message += `\n${info.detail}`;
                 }
 
-                void showMessageBox('err', info.message, { modal: false, logger: false });
+                showNotificationBox('err', info.message, { logger: false });
                 break;
 
             case 'status':

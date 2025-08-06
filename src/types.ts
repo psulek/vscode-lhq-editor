@@ -276,9 +276,14 @@ export type SelectionBackup = Array<{
     fullPath: string;
 }>;
 
-export type MessageBoxOptions = MessageOptions & {
+// export type MessageBoxOptions = {
+//     logger?: boolean
+//     detail?: string;
+//     showDetail?: boolean;
+// }
+
+export type NotificationBoxOptions = {
     logger?: boolean
-    showDetail?: 'auto' | 'always';
 }
 
 export interface ICodeGenStatus {

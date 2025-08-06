@@ -7,7 +7,8 @@ import { Generator, GeneratorInitialization, HbsTemplateManager, ITreeElement, M
 import { VirtualTreeElement } from './elements';
 import {
     DefaultFormattingOptions, getElementFullPath, initializeDebugMode, isValidDocument,
-    logger, safeReadFile, showConfirmBox, showMessageBox
+    logger, safeReadFile, showConfirmBox, 
+    showNotificationBox
 } from './utils';
 import { LhqEditorProvider } from './editorProvider';
 import { LhqTreeDataProvider } from './treeDataProvider';
@@ -259,7 +260,7 @@ export class AppContext implements IAppContext {
             const result = generatorUtils.validateTemplateMetadata(metadataContent);
             if (!result.success) {
                 logger().log(this, 'error', `Validation of  ${metadataFile} failed: ${result.error}`);
-                await showMessageBox('err', `Validation of lhq templates metadata file failed: ${result.error}`);
+                showNotificationBox('err', `Validation of lhq templates metadata file failed: ${result.error}`);
             }
 
             const generatorInit: GeneratorInitialization = {
@@ -282,7 +283,7 @@ export class AppContext implements IAppContext {
             Generator.initialize(generatorInit);
         } catch (error) {
             logger().log(this, 'error', `Failed to initialize generator: ${error instanceof Error ? error.message : 'Unknown error'}`);
-            await showMessageBox('err', `Failed to initialize lhq generator! Please report this issue.`);
+            showNotificationBox('err', `Failed to initialize lhq generator! Please report this issue.`);
         }
     }
 
@@ -290,7 +291,7 @@ export class AppContext implements IAppContext {
         try {
             const folder = getCurrentFolder();
             if (!folder) {
-                await showMessageBox('err', 'No folder selected. Please select a folder in the Explorer view.');
+                showNotificationBox('err', 'No folder selected. Please select a folder in the Explorer view.');
                 return;
             }
 
@@ -370,10 +371,10 @@ export class AppContext implements IAppContext {
             const fileUri = vscode.Uri.file(filePath);
             await vscode.commands.executeCommand('vscode.openWith', fileUri, 'lhq.customEditor');
 
-            await showMessageBox('info', `Successfully created file: ${filePath}`);
+            showNotificationBox('info', `Successfully created file: ${filePath}`);
         } catch (error) {
             logger().log(this, 'error', `Error creating new LHQ file: ${error instanceof Error ? error.message : 'Unknown error'}`);
-            await showMessageBox('err', `Error creating new LHQ file.`);
+            showNotificationBox('err', `Error creating new LHQ file.`);
         }
     }
 

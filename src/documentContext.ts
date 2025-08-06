@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import path from 'node:path';
 import fse from 'fs-extra';
 import { nextTick } from 'node:process';
-import { createTreeElementPaths, delay, generateNonce, getElementFullPath, getGeneratorAppErrorMessage, isValidDocument, logger, showConfirmBox, showMessageBox } from './utils';
+import { createTreeElementPaths, delay, generateNonce, getElementFullPath, getGeneratorAppErrorMessage, isValidDocument, logger, showConfirmBox, showMessageBox, showNotificationBox } from './utils';
 import { AppToPageMessage, ClientPageError, ClientPageModelProperties, ClientPageSettingsError, CultureInfo, IDocumentContext, IVirtualLanguageElement, IVirtualRootElement, NotifyDocumentActiveChangedCallback, PageToAppMessage, SelectionBackup, StatusBarItemUpdateRequestCallback, ValidationError } from './types';
 import { CategoryLikeTreeElementToJsonOptions, CategoryOrResourceType, CodeGeneratorGroupSettings, detectFormatting, FormattingOptions, GeneratedFile, Generator, generatorUtils, HbsTemplateManager, ICategoryLikeTreeElement, ImportModelErrorKind, ImportModelMode, ImportModelResult, IResourceElement, IResourceParameterElement, IResourceValueElement, IRootModelElement, isNullOrEmpty, ITreeElement, LhqModel, LhqModelResourceTranslationState, LhqValidationResult, modelConst, ModelUtils, TreeElementType } from '@lhq/lhq-generators';
 import { filterTreeElements, filterVirtualTreeElements, isVirtualTreeElement, validateTreeElementName, VirtualRootElement } from './elements';
@@ -478,7 +478,7 @@ export class DocumentContext implements IDocumentContext {
                 const error = `Error parsing LHQ file '${this._fileName}'`;
                 logger().log(this, 'error', `refresh failed -> ${error}`, ex as Error);
                 this._jsonModel = undefined;
-                void showMessageBox('err', error);
+                showNotificationBox('err', error);
             }
 
             if (this._jsonModel) {
@@ -498,7 +498,7 @@ export class DocumentContext implements IDocumentContext {
                     this._jsonModel = undefined;
                     const error = `Error validating LHQ file '${this.fileName}': ${ex}`;
                     logger().log(this, 'error', `refresh failed -> ${error}`, ex as Error);
-                    void showMessageBox('err', error);
+                    showNotificationBox('err', error);
                 }
 
                 if (this._rootModel === undefined) {
@@ -506,7 +506,7 @@ export class DocumentContext implements IDocumentContext {
                         ? `Validation errors while parsing LHQ file '${this.fileName}': \n${validateResult.error}`
                         : `Error validating LHQ file '${this.fileName}'`;
                     logger().log(this, 'error', `refresh failed -> ${error}`);
-                    void showMessageBox('err', error);
+                    showNotificationBox('err', error);
                 } else {
                     this._codeGenStatus.update({ kind: 'idle' });
                 }
@@ -621,7 +621,7 @@ export class DocumentContext implements IDocumentContext {
                         await addLanguagesToRoot([primaryCulture.name], primaryCulture.name);
 
                         const displayName = appContext.getCultureDesc(primaryCulture.name);
-                        void showMessageBox('info', `Primary language '${displayName}' was automatically added to the model.`);
+                        showNotificationBox('info', `Primary language '${displayName}' was automatically added to the model.`);
                         return undefined;
                     }
                 }
@@ -629,11 +629,9 @@ export class DocumentContext implements IDocumentContext {
                 const enName = appContext.getCultureDesc('en');
 
                 await addLanguagesToRoot(['en'], 'en');
-                await showMessageBox('warn', 'Model does not contain any languages!', {
-                    detail: `Language ${enName} was automatically added to the model and was set as primary.\n` + 
-                    `Please review list of languages in document.`,
-                    modal: true
-                });
+                await showMessageBox('warn', 'Model does not contain any languages!',
+                    `Language ${enName} was automatically added to the model and was set as primary.\n` +
+                    `Please review list of languages in document.`);
 
                 return undefined;
             }
@@ -652,9 +650,7 @@ export class DocumentContext implements IDocumentContext {
 
                 await addLanguagesToRoot([newLang], newLang);
                 const enName = appContext.getCultureDesc(newLang);
-                void showMessageBox('info', `Language '${enName}' was automatically added to the model.`, {
-                    detail: `Also language '${enName}' was set as primary language.`
-                });
+                showNotificationBox('info', `Language '${enName}' was automatically added to the model and was set as primary.`);
                 return undefined;
             }
 
@@ -670,9 +666,7 @@ export class DocumentContext implements IDocumentContext {
                     await addLanguagesToRoot(['en']);
                 } else {
                     const primaryLangDisplayName = appContext.getCultureDesc(primaryLang);
-                    await showMessageBox('warn', `Primary language '${primaryLangDisplayName}' is not defined in the model.`, {
-                        detail: `Language '${primaryLangDisplayName}' was added to the model.`
-                    });
+                    showNotificationBox('info', `Primary language '${primaryLangDisplayName}' was added to the model.`);
 
                     await addLanguagesToRoot([primaryLang]);
                     return undefined;
@@ -682,16 +676,17 @@ export class DocumentContext implements IDocumentContext {
             if (selectPrimaryLang) {
                 const newPrimaryLang = rootLanguages.has('en') ? 'en' : Array.from(rootLanguages)[0];
                 const newPrimaryLangName = appContext.getCultureDesc(newPrimaryLang);
-                await showMessageBox('warn', selectPrimaryLangMsg, {
-                    detail: `Language '${newPrimaryLangName}' was automatically set as primary language.`
-                });
+                showNotificationBox('warn', selectPrimaryLangMsg + ' \n' +
+                    `Language '${newPrimaryLangName}' was automatically set as primary language.`);
 
                 root.primaryLanguage = newPrimaryLang;
                 const langRoot = this._virtualRootElement!.languagesRoot;
+                this._virtualRootElement!.refresh();
                 await this.commitChanges('markLanguageAsPrimary');
 
                 await this.treeContext.clearSelection(true);
 
+                langRoot.refresh();
                 this.treeContext.refreshTree([langRoot]);
                 await this.treeContext.revealElement(langRoot, { expand: true, select: true, focus: true });
             }
@@ -732,8 +727,7 @@ export class DocumentContext implements IDocumentContext {
             const fileInfo = importInfo.file;
             if (!fileInfo || (!(await fse.pathExists(fileInfo)))) {
                 const err = isNullOrEmpty(fileInfo) ? 'No file selected.' : `File '${fileInfo}' does not exist.`;
-                await showMessageBox('err', err, { modal: true });
-                return;
+                return await showMessageBox('err', err);
             }
 
             file = fileInfo;
@@ -760,7 +754,7 @@ export class DocumentContext implements IDocumentContext {
                         importNewLanguages: true
                     });
                 } else {
-                    await showMessageBox('err', `Error importing model from '${engine}' file: ${file} `, { detail: importData.error, modal: true });
+                    await showMessageBox('err', `Error importing model from '${engine}' file: ${file} `, importData.error);
                 }
             });
 
@@ -771,7 +765,7 @@ export class DocumentContext implements IDocumentContext {
             if (importResult.errorKind) {
                 logger().log(this, 'error', `importModelFromFile(${file}) -> Error importing model from '${engine}' -> '${importResult.error}'(${importResult.errorKind})`);
                 const importError = this.getImportError(importResult.errorKind, importInfo);
-                return await showMessageBox('err', `Error importing model from '${engine}' file: ${file} `, { detail: importError, modal: true });
+                return await showMessageBox('err', `Error importing model from '${engine}' file: ${file} `, importError);
             }
 
             await this.commitChanges('importModelFromFile');
@@ -798,10 +792,10 @@ export class DocumentContext implements IDocumentContext {
             }
 
             appContext.readonlyMode = false;
-            await showMessageBox('info', successMsg, { detail: successDetail, modal: true });
+            await showMessageBox('info', successMsg, successDetail);
         } catch (error) {
             logger().log(this, 'error', `importModelFromFile -> Error while importing model from file: ${error} `);
-            await showMessageBox('err', `Error importing model from file: ${file} `, { detail: error instanceof Error ? error.message : String(error), modal: true });
+            await showMessageBox('err', `Error importing model from file: ${file} `, error instanceof Error ? error.message : String(error));
         } finally {
             appContext.readonlyMode = false;
         }
@@ -831,7 +825,7 @@ export class DocumentContext implements IDocumentContext {
 
         if (this._codeGenStatus.inProgress) {
             logger().log(this, 'debug', 'runCodeGenerator -> Code generator is already in progress.');
-            void showMessageBox('info', 'Code generator is already running ...');
+            showNotificationBox('info', 'Code generator is already running ...');
             return;
         }
 
@@ -887,12 +881,14 @@ export class DocumentContext implements IDocumentContext {
                 const fileNames: string[] = [];
                 const folder = getCurrentFolder();
                 if (!folder) {
-                    return showMessageBox('err', 'No folder selected. Please select a folder in the Explorer view.');
+                    showNotificationBox('err', 'No folder selected. Please select a folder in the Explorer view.');
+                    return;
                 }
 
                 const output = folder.fsPath;
                 if (await fse.pathExists(output) === false) {
-                    return showMessageBox('err', `Output folder '${output}' does not exist.Please select a valid folder.`);
+                    showNotificationBox('err', `Output folder '${output}' does not exist.Please select a valid folder.`);
+                    return;
                 }
 
                 const saveFilesMap = result.generatedFiles.map(async (file) => {
@@ -972,7 +968,7 @@ export class DocumentContext implements IDocumentContext {
 
         if (error) {
             if (showError === true) {
-                void showMessageBox('warn', error.message, { detail: error.detail, modal: false, showDetail: 'always' });
+                showNotificationBox('warn', error.message + '\n' + error.detail);
             } else {
                 // let msg = error.message;
                 // if (!isNullOrEmpty(error.detail)) {
@@ -1343,7 +1339,7 @@ export class DocumentContext implements IDocumentContext {
                 const success = await this.commitChanges('saveModelProperties');
 
                 if (success) {
-                    void showMessageBox('info', 'Project properties was successfully changed.');
+                    showNotificationBox('info', 'Project properties was successfully changed.');
                 }
             } else {
                 result = {
@@ -1443,10 +1439,9 @@ export class DocumentContext implements IDocumentContext {
 
         function canCreateCategory(): boolean {
             if (!rootModel.options.categories) {
-                void showMessageBox('info', `Cannot add new category!`, {
-                    detail: `Categories are disabled in project properties. \nPlease enable 'Categories' in project properties to add new categories.`,
-                    modal: true
-                });
+                const detail = `Categories are disabled in project properties. \n` +
+                    `Please enable 'Categories' in project properties to add new categories.`;
+                void showMessageBox('info', `Cannot add new category!`, detail);
                 return false;
             }
 
@@ -1474,11 +1469,9 @@ export class DocumentContext implements IDocumentContext {
 
         function canCreateResource(): boolean {
             if (rootModel.options.resources === 'Categories' && element.isRoot) {
-                void showMessageBox('info', `Cannot add new resource!`, {
-                    detail: `Resources are under root are not allowed (only under category).\n` +
-                        `Please enable 'Resources under root' in project properties.`,
-                    modal: true
-                });
+                const detail = `Resources are under root are not allowed (only under category).\n` +
+                    `Please enable 'Resources under root' in project properties.`;
+                void showMessageBox('info', `Cannot add new resource!`, detail);
 
                 return false;
             }
@@ -1558,24 +1551,21 @@ export class DocumentContext implements IDocumentContext {
 
             const validationError = validateTreeElementName(elementType, itemName, parentCategory);
             if (validationError) {
-                return await showMessageBox('warn', validationError);
+                showNotificationBox('warn', validationError);
+                return;
             }
 
             // do not allow resources under root if not enabled in project properties
             if (!this.resourcesUnderRoot && isResource && parentCategory.elementType === 'model') {
-                return await showMessageBox('warn', `Resources are not allowed under root!`,
-                    {
-                        detail: `Cannot add resource '${itemName}' under root element '${getElementFullPath(parent)}'.\n\n` +
-                            `NOTE: 'Resources under root' can be enabled in project properties.`, modal: true
-                    });
+                const detail = `Cannot add resource '${itemName}' under root element '${getElementFullPath(parent)}'.\n\n` +
+                    `NOTE: 'Resources under root' can be enabled in project properties.`;
+                return await showMessageBox('warn', `Resources are not allowed under root!`, detail);
             }
             // do not allow categories in flat structure
             if (!this.isTreeStructure && !isResource && parentCategory.elementType === 'model') {
-                return await showMessageBox('warn', `Categories are not allowed in flat structure!`,
-                    {
-                        detail: `Cannot add category '${itemName}' under root element '${getElementFullPath(parent)}'.\n\n` +
-                            `NOTE: 'Hierarchical tree structure' can be enabled in project properties.`, modal: true
-                    });
+                const detail = `Cannot add category '${itemName}' under root element '${getElementFullPath(parent)}'.\n\n` +
+                    `NOTE: 'Hierarchical tree structure' can be enabled in project properties.`;
+                return await showMessageBox('warn', `Categories are not allowed in flat structure!`, detail);
             }
 
             let newElement: ITreeElement;
@@ -1595,7 +1585,7 @@ export class DocumentContext implements IDocumentContext {
             this.treeContext.refreshTree([parent]);
             await this.treeContext.revealElement(newElement, { expand: true, select: true, focus: true });
 
-            return await showMessageBox('info', `Added new ${elementType} '${itemName}' under '${getElementFullPath(parent)}'`);
+            showNotificationBox('info', `Added new ${elementType} '${itemName}' under '${getElementFullPath(parent)}'`);
         } catch (error) {
             logger().log(this, 'error', `addItemComplete -> Failed to add new ${elementType} under '${getElementFullPath(parent)}'`, error as Error);
         }
@@ -1630,7 +1620,7 @@ export class DocumentContext implements IDocumentContext {
 
         const firstSelected = elemsToDelete[0];
         if (firstSelected.isRoot) {
-            return await showMessageBox('warn', `Cannot delete root element '${getElementFullPath(firstSelected)}'.`, { modal: true });
+            return await showMessageBox('warn', `Cannot delete root element '${getElementFullPath(firstSelected)}'.`);
         }
 
         const elemIdent = selectedCount === 1
@@ -1640,7 +1630,7 @@ export class DocumentContext implements IDocumentContext {
         if (selectedCount > 1) {
             const firstParent = firstSelected.parent;
             if (!elemsToDelete.every(item => item.parent === firstParent)) {
-                return await showMessageBox('warn', `Cannot delete ${elemIdent} with different parents.`, { modal: true });
+                return await showMessageBox('warn', `Cannot delete ${elemIdent} with different parents.`);
             }
         }
 
@@ -1681,7 +1671,7 @@ export class DocumentContext implements IDocumentContext {
             await this.treeContext.revealElement(parentToSelect, { expand: true, select: true });
         }
 
-        await showMessageBox(success ? 'info' : 'err', success ? `Successfully deleted ${elemIdent}.` : `Failed to delete ${elemIdent}.`);
+        showNotificationBox(success ? 'info' : 'err', success ? `Successfully deleted ${elemIdent}.` : `Failed to delete ${elemIdent}.`);
     }
 
     private async duplicateElement(element: ITreeElement): Promise<void> {
@@ -1800,9 +1790,9 @@ export class DocumentContext implements IDocumentContext {
                 : added.length <= maxDisplayCount
                     ? `${added.length} languages: ` + added.slice(0, maxDisplayCount).join(', ')
                     : `${added.length} languages`;
-            await showMessageBox('info', `Succesfully added ${addedStr} .`);
+            showNotificationBox('info', `Succesfully added ${addedStr} .`);
         } else {
-            await showMessageBox('warn', `No languages were added as they already exist in the model.`);
+            showNotificationBox('warn', `No languages were added as they already exist in the model.`);
         }
     }
 
@@ -1818,7 +1808,7 @@ export class DocumentContext implements IDocumentContext {
 
         const restCount = Math.max(0, this.rootModel!.languages.length - selectedCount);
         if (restCount === 0) {
-            return await showMessageBox('warn', `Cannot delete all languages. At least one language must remain.`, { modal: true });
+            return await showMessageBox('warn', `Cannot delete all languages. At least one language must remain.`);
         }
 
         const primaryLang = elemsToDelete.find(x => x.isPrimary);
@@ -1826,7 +1816,7 @@ export class DocumentContext implements IDocumentContext {
             const msg = selectedCount === 1
                 ? `Primary language '${appContext.getCultureDesc(primaryLang.name)}' cannot be deleted.`
                 : `Selected languages contain primary language '${appContext.getCultureDesc(primaryLang.name)}' which cannot be deleted.`;
-            return await showMessageBox('warn', msg, { modal: true });
+            return await showMessageBox('warn', msg);
         }
 
         const maxDisplayCount = 10;
@@ -1868,8 +1858,7 @@ export class DocumentContext implements IDocumentContext {
         // reload actual page with element data to show new primary language
         this.requestPageReload();
 
-        await showMessageBox(success ? 'info' : 'err',
-            success ? `Successfully deleted ${elemIdent}.` : `Failed to delete ${elemIdent}.`, { modal: !success });
+        showNotificationBox('info', `Successfully deleted ${elemIdent}.`);
     }
 
     private async markLanguageAsPrimary(element: ITreeElement): Promise<void> {
@@ -1883,13 +1872,14 @@ export class DocumentContext implements IDocumentContext {
         if (selectedCount === 0) { return; }
 
         if (selectedCount > 1) {
-            return await showMessageBox('warn', `Cannot mark multiple languages as primary. Please select only one language.`, { modal: true });
+            return await showMessageBox('warn', `Cannot mark multiple languages as primary. Please select only one language.`);
         }
 
         const langElement = selectedElements[0];
 
         if (this._rootModel!.primaryLanguage === langElement.name) {
-            return await showMessageBox('info', `Language '${appContext.getCultureDesc(langElement.name)}' is already marked as primary.`);
+            showNotificationBox('info', `Language '${appContext.getCultureDesc(langElement.name)}' is already marked as primary.`);
+            return;
         }
 
         if (!(await showConfirmBox(`Mark language '${appContext.getCultureDesc(langElement.name)}' as primary ?`))) {
@@ -1916,9 +1906,7 @@ export class DocumentContext implements IDocumentContext {
             this.requestPageReload();
         }
 
-        await showMessageBox(success ? 'info' : 'err', success
-            ? `Successfully marked '${appContext.getCultureDesc(langElement.name)}' as primary language.`
-            : `Failed to mark '${appContext.getCultureDesc(langElement.name)}' as primary language.`, { modal: !success });
+        showNotificationBox('info', `Language '${appContext.getCultureDesc(langElement.name)}' is now marked as primary.`);
     }
 
     private async toggleLanguages(visible: boolean): Promise<void> {
