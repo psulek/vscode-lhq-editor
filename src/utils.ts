@@ -105,9 +105,11 @@ export function findCategoryByPaths(rootModel: IRootModelElement,
     return result;
 }
 
+export type FileFilter = { [name: string]: string[] };
+
 export type ShowFileDialogOptions = {
     //canSelectMany?: boolean;
-    filters?: { [name: string]: string[] };
+    filters?: FileFilter;
     title?: string;
     defaultUri?: vscode.Uri;
 };

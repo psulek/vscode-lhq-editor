@@ -1,11 +1,12 @@
 import fse from 'fs-extra';
 import * as ExcelJS from 'exceljs';
 import { ImportResourceItem, isNullOrEmpty, ITreeElementPaths, ModelUtils } from '@lhq/lhq-generators';
-import { IDataImporter, ImporterEngine, ImportPreparedData } from './types';
+import { DataImporterBase, ImporterEngine, ImportPreparedData } from './types';
+import { FileFilter } from '../utils';
 
 const worksheetName = "Localizations";
 
-export class ExcelDataImporter implements IDataImporter {
+export class ExcelDataImporter extends DataImporterBase {
     public get engine(): ImporterEngine {
         return 'MsExcel';
     }
@@ -18,8 +19,14 @@ export class ExcelDataImporter implements IDataImporter {
         return 'Imports localization data from Microsoft Excel files (*.xlsx).';
     }
 
-    public async getDataFromFile(filePath: string): Promise<ImportPreparedData> {
+    public get fileFilter(): FileFilter {
+        return {
+            'Excel files': ['xlsx'],
+            'All files': ['*']
+        };
+    }
 
+    public async getDataFromFile(filePath: string): Promise<ImportPreparedData> {
         if (await fse.pathExists(filePath) === false) {
             return { error: `Could not find file: ${filePath}` };
         }

@@ -7,7 +7,7 @@ import type { ImporterEngine, ImportFileSelectedData } from './types';
 import { ImportExportManager } from './manager';
 
 interface ImportFromFilePickItem extends vscode.QuickPickItem {
-    type: 'importerEngine' | 'importerFile' | 'importMode' | 'import';
+    type: 'importerEngine' | 'importerFile' | 'allowNewElements' | 'importMode' | 'import';
 }
 
 interface ImporterEnginePickItem extends vscode.QuickPickItem {
@@ -18,28 +18,21 @@ interface ImportModelPickItem extends vscode.QuickPickItem {
     mode: ImportModelMode;
 }
 
-const filtersExcel = {
-    'Excel files': ['xlsx'],
-    'All files': ['*']
-};
-
-const filtersResX = {
-    'ResX files': ['resx'],
-    'All files': ['*']
-};
-
 export class ImportFileSelector {
     public static async showRoot(data: ImportFileSelectedData): Promise<ImportFileSelectedData | undefined> {
         const result: ImportFileSelectedData = structuredClone(data);
 
         do {
-            const selectedImporter = ImportExportManager.getImporterByEngine(result.engine)!.name;
+            const selectedImporter = ImportExportManager.getImporterByEngine(result.engine);
+            const selectedImporterName = selectedImporter!.name;
+            const allowNewElements = selectedImporter?.allowNewElements;
             const selectedFile = isNullOrEmpty(result.file) ? 'none' : result.file;
             const selectedModeMerge = result.mode === 'merge';
+            const selectedAllowNewElements = result.allowNewElements;
             const ImportFileSelectorItems = [
                 {
                     type: 'importerEngine',
-                    label: selectedImporter,
+                    label: selectedImporterName,
                     detail: 'Importer engine',
                     iconPath: new vscode.ThemeIcon('beaker'),
                 },
@@ -64,6 +57,15 @@ export class ImportFileSelector {
                 }
             ] as ImportFromFilePickItem[];
 
+            if (allowNewElements) {
+                ImportFileSelectorItems.splice(3, 0, {
+                    type: 'allowNewElements',
+                    label: selectedAllowNewElements ? 'Allowed new elements' : 'Not allowed new elements',
+                    detail: 'Import new elements',
+                    iconPath: new vscode.ThemeIcon(selectedAllowNewElements ? 'check' : 'x')
+                });
+            }
+
             const selected = await vscode.window.showQuickPick(ImportFileSelectorItems, {
                 placeHolder: 'Import resources from file',
                 ignoreFocusOut: true,
@@ -78,16 +80,16 @@ export class ImportFileSelector {
             switch (selected.type) {
                 case 'importerEngine': {
                     const newEngine = await ImportFileSelector.showImporterEngine(result);
-                    if (newEngine) {
+                    if (newEngine && newEngine !== result.engine) {
                         result.engine = newEngine;
+                        result.file = undefined;
                     }
 
                     break;
                 }
                 case 'importerFile': {
-                    const filters = result.engine === 'MsExcel' ? filtersExcel : filtersResX;
                     const newFile = await showFileDialog('Select file to import', {
-                        filters,
+                        filters: selectedImporter!.fileFilter,
                         defaultUri: result.file ? vscode.Uri.file(result.file) : undefined,
                     });
 
@@ -99,10 +101,20 @@ export class ImportFileSelector {
                 }
                 case 'importMode': {
                     const newMode = await ImportFileSelector.showMode(result);
-                    if (newMode) {
+                    if (newMode && newMode !== result.mode) {
                         result.mode = newMode;
+                        if (newMode === 'importAsNew') {
+                            result.allowNewElements = true;
+                        }
                     }
 
+                    break;
+                }
+                case 'allowNewElements': {
+                    const newAllowed = await ImportFileSelector.showAllowNewElements(result);
+                    if (newAllowed !== undefined) {
+                        result.allowNewElements = newAllowed;
+                    }
                     break;
                 }
                 case 'import': {
@@ -118,20 +130,30 @@ export class ImportFileSelector {
     }
 
     private static async showImporterEngine(data: ImportFileSelectedData): Promise<ImporterEngine | undefined> {
-        const isExcel = data.engine === 'MsExcel';
+        //const isExcel = data.engine === 'MsExcel';
 
-        const items = [
-            {
-                label: 'Microsoft Excel' + (isExcel ? ' (selected)' : ''),
-                engine: 'MsExcel',
-                detail: 'Import from Microsoft Excel file (*.xlsx)',
-            },
-            {
-                label: '.NET ResX' + (!isExcel ? ' (selected)' : ''),
-                engine: 'ResX',
-                detail: 'Import from .NET resource file (*.resx)',
-            }
-        ] as ImporterEnginePickItem[];
+        // const items = [
+        //     {
+        //         label: 'Microsoft Excel' + (isExcel ? ' (selected)' : ''),
+        //         engine: 'MsExcel',
+        //         detail: 'Import from Microsoft Excel file (*.xlsx)',
+        //     },
+        //     {
+        //         label: '.NET ResX' + (!isExcel ? ' (selected)' : ''),
+        //         engine: 'ResX',
+        //         detail: 'Import from .NET resource file (*.resx)',
+        //     }
+        // ] as ImporterEnginePickItem[];
+
+        const items: ImporterEnginePickItem[] = [];
+        ImportExportManager.availableImporters.forEach(function (importer) {
+            const selected = importer.engine === data.engine;
+            items.push({
+                label: importer.name + (selected ? ' (selected)' : ''),
+                engine: importer.engine,
+                detail: importer.description,
+            });
+        });
 
 
         const selected = await vscode.window.showQuickPick(items, {
@@ -170,5 +192,34 @@ export class ImportFileSelector {
         });
 
         return selected ? selected.mode as ImportModelMode : undefined;
+    }
+
+    private static async showAllowNewElements(data: ImportFileSelectedData): Promise<boolean | undefined> {
+        type Item = { allowNewElements: boolean } & vscode.QuickPickItem;
+
+        const isAllowed = data.allowNewElements;
+        const items = [
+            {
+                label: 'Allow new elements' + (isAllowed ? ' (selected)' : ''),
+                allowNewElements: true,
+                detail: 'Allows importing new elements during import',
+                iconPath: new vscode.ThemeIcon('check'),
+            },
+            {
+                label: 'Do not allow new elements' + (!isAllowed ? ' (selected)' : ''),
+                allowNewElements: false,
+                detail: 'Disallows importing new elements during import',
+                iconPath: new vscode.ThemeIcon('x'),
+            }
+        ] as Item[];
+
+        const selected = await vscode.window.showQuickPick(items, {
+            placeHolder: 'Allow new elements during import',
+            ignoreFocusOut: true,
+            matchOnDescription: true,
+            matchOnDetail: true
+        });
+
+        return selected ? selected.allowNewElements : undefined;
     }
 }

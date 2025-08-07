@@ -75,6 +75,7 @@ export class DocumentContext implements IDocumentContext {
         engine: 'MsExcel',
         mode: 'merge',
         file: undefined,
+        allowNewElements: false
     };
 
     constructor(context: vscode.ExtensionContext, webviewPanel: vscode.WebviewPanel, onDidDispose: () => void,
@@ -741,17 +742,18 @@ export class DocumentContext implements IDocumentContext {
                 cancellable: false,
                 title: `Importing file: ${file} (${engine}) ...`
             }, async () => {
-                const importData = await ImportExportManager.getDataFromFile(file, engine);
-                if (isNullOrEmpty(importData.error) || isNullOrEmpty(importData.importLines)) {
-                    //await delay(10 * 1000);
-                    importResult = ModelUtils.importModel(rootModel, importInfo.mode, {
-                        sourceKind: 'rows',
-                        source: importData.importLines!,
-                        cloneSource: false,
-                        importNewLanguages: true
-                    });
+                const importData = await ImportExportManager.getImportData(file, engine);
+                const isError = !isNullOrEmpty(importData) && typeof importData === 'string';
+
+                if (!isError && !isNullOrEmpty(importData)) {
+                    importData.cloneSource = false;
+                    importData.importNewLanguages = true;
+                    importData.importNewElements = importInfo.allowNewElements;
+                    // importData.importNewElements = importInfo.mode === 'importAsNew';
+
+                    importResult = ModelUtils.importModel(rootModel, importInfo.mode, importData);
                 } else {
-                    await showMessageBox('err', `Error importing model from '${engine}' file: ${file} `, importData.error);
+                    await showMessageBox('err', `Error importing model from '${engine}' file: ${file} `, importData);
                 }
             });
 
@@ -762,7 +764,7 @@ export class DocumentContext implements IDocumentContext {
             if (importResult.errorKind) {
                 logger().log(this, 'error', `importModelFromFile(${file}) -> Error importing model from '${engine}' -> '${importResult.error}'(${importResult.errorKind})`);
                 const importError = this.getImportError(importResult.errorKind, importInfo);
-                return await showMessageBox('err', `Error importing model from '${engine}' file: ${file} `, importError);
+                return await showMessageBox('err', importError.message, importError.detail);
             }
 
             await this.commitChanges('importModelFromFile');
@@ -795,20 +797,32 @@ export class DocumentContext implements IDocumentContext {
         }
     }
 
-    private getImportError(errorKind: ImportModelErrorKind, data: ImportFileSelectedData) {
+    private getImportError(errorKind: ImportModelErrorKind, data: ImportFileSelectedData): { message: string, detail?: string } {
         const engine = ImportExportManager.getImporterByEngine(data.engine)!.name;
         const file = isNullOrEmpty(data.file) ? '-' : data.file;
 
+        let message = '';
+        let detail = 'Please check the file for valid data.';
         switch (errorKind) {
             case 'emptyModel':
-                return `The model is empty.Please check the file '${file}'(${engine}) for valid data.`;
+                message = `File does not contains any resources to import.`;
+                break;
             case 'categoriesForFlatStructure':
-                return `Categories are not allowed in flat structure.Please change project properties to 'Tree structure'.`;
-            case 'noResourcesToImport':
-                return `No resources to import found in the file '${file}'(${engine}).Please check the file for valid data.`;
+                message = `Categories are not allowed in flat structure.`;
+                detail = `Please change project properties to 'Hierarchical tree'.`;
+                break;
+            case 'noResourcesToMerge':
+                message = `No resources found to be merged with.`;
+                break;
             default:
-                return `Unknown error occurred while importing model from file '${file}'(${engine}).Please check the file for valid data.`;
+                message = `Unknown error occurred while importing file.`;
+                break;
         }
+
+        return {
+            message: message,
+            detail: `Error importing file: ${file} (${engine}).\n${detail}`
+        };
     }
 
     public async runCodeGenerator(): Promise<void> {
@@ -972,7 +986,7 @@ export class DocumentContext implements IDocumentContext {
             } else if (!this.isTreeStructure && this._rootModel.categories.length > 0) {
                 error = {
                     message: `Categories are not allowed in flat structure!`,
-                    detail: `Please change project properties 'Layout' to 'Hierarchical tree structure' or remove categories from the root.`
+                    detail: `Please change project properties 'Layout' to 'Hierarchical tree' or remove categories from the root.`
                 };
             }
         }
