@@ -83,3 +83,5 @@ export type ImportFileSelectedData = {
     allowNewElements: boolean;
     file?: string;
 }
+
+export const excelWorksheetName = "Localizations";

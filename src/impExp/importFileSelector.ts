@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { isNullOrEmpty } from '@lhq/lhq-generators';
 import type { ImportModelMode } from '@lhq/lhq-generators';
 
-import { showFileDialog, showMessageBox } from '../utils';
+import { showOpenFileDialog, showMessageBox } from '../utils';
 import type { ImporterEngine, ImportFileSelectedData } from './types';
 import { ImportExportManager } from './manager';
 
@@ -88,7 +88,7 @@ export class ImportFileSelector {
                     break;
                 }
                 case 'importerFile': {
-                    const newFile = await showFileDialog('Select file to import', {
+                    const newFile = await showOpenFileDialog('Select file to import', {
                         filters: selectedImporter!.fileFilter,
                         defaultUri: result.file ? vscode.Uri.file(result.file) : undefined,
                     });
@@ -130,21 +130,6 @@ export class ImportFileSelector {
     }
 
     private static async showImporterEngine(data: ImportFileSelectedData): Promise<ImporterEngine | undefined> {
-        //const isExcel = data.engine === 'MsExcel';
-
-        // const items = [
-        //     {
-        //         label: 'Microsoft Excel' + (isExcel ? ' (selected)' : ''),
-        //         engine: 'MsExcel',
-        //         detail: 'Import from Microsoft Excel file (*.xlsx)',
-        //     },
-        //     {
-        //         label: '.NET ResX' + (!isExcel ? ' (selected)' : ''),
-        //         engine: 'ResX',
-        //         detail: 'Import from .NET resource file (*.resx)',
-        //     }
-        // ] as ImporterEnginePickItem[];
-
         const items: ImporterEnginePickItem[] = [];
         ImportExportManager.availableImporters.forEach(function (importer) {
             const selected = importer.engine === data.engine;

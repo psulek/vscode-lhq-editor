@@ -1,10 +1,8 @@
 import fse from 'fs-extra';
 import * as ExcelJS from 'exceljs';
 import { ImportResourceItem, isNullOrEmpty, ITreeElementPaths, ModelUtils } from '@lhq/lhq-generators';
-import { DataImporterBase, ImporterEngine, ImportPreparedData } from './types';
+import { DataImporterBase, ImporterEngine, ImportPreparedData, excelWorksheetName } from './types';
 import { FileFilter } from '../utils';
-
-const worksheetName = "Localizations";
 
 export class ExcelDataImporter extends DataImporterBase {
     public get engine(): ImporterEngine {
@@ -32,10 +30,10 @@ export class ExcelDataImporter extends DataImporterBase {
         }
 
         const workbook = await new ExcelJS.Workbook().xlsx.readFile(filePath);
-        const ws = workbook.getWorksheet(worksheetName);
+        const ws = workbook.getWorksheet(excelWorksheetName);
         if (!ws) {
             return {
-                error: `Worksheet "${worksheetName}" not found in file: ${filePath}`
+                error: `Worksheet "${excelWorksheetName}" not found in file: ${filePath}`
             };
         }
 
@@ -49,10 +47,10 @@ export class ExcelDataImporter extends DataImporterBase {
         };
 
         if (ws.actualRowCount < 2 || ws.actualColumnCount < 3) {
-            return { error: `Worksheet "${worksheetName}" does not contain enough data to import.` };
+            return { error: `Worksheet "${excelWorksheetName}" does not contain enough data to import.` };
         } else if (!validateCell('A1') || !validateCell('B1')) {
             // check if there are at least 2 columns, 'A:1' -> Resource Key, 'A:2' -> Primary Language Name
-            return { error: `Worksheet "${worksheetName}" does not contain valid headers. Expected at least 'Resource Key' and 'Primary Language Name'.` };
+            return { error: `Worksheet "${excelWorksheetName}" does not contain valid headers. Expected at least 'Resource Key' and 'Primary Language Name'.` };
         }
 
         type LangCodeItem = {
@@ -76,7 +74,7 @@ export class ExcelDataImporter extends DataImporterBase {
         }
 
         if (languageCodes.length === 0) {
-            return { error: `Worksheet "${worksheetName}" does not contain any valid language codes.` };
+            return { error: `Worksheet "${excelWorksheetName}" does not contain any valid language codes.` };
         }
 
         const startRow = 2;

@@ -173,6 +173,8 @@ export interface IAppConfig {
 export interface IAppContext {
     updateConfig(newConfig: Partial<IAppConfig>): Promise<void>;
 
+    getCurrentFolder(): Uri | undefined;
+
     getAllCultures(): CultureInfo[];
     findCulture(name: string, ignoreCase?: boolean): CultureInfo | undefined;
     getCultureDesc(name: string): string;

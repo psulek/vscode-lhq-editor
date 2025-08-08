@@ -45,6 +45,7 @@ export const GlobalCommands = {
     runGenerator: 'lhqTreeView.runGenerator',
     createNewLhqFile: 'lhqTreeView.createNewLhqFile',
     importFromFile: 'lhqTreeView.importFromFile',
+    exportToFile: 'lhqTreeView.exportToFile',
 
     // commands not in package.json (internal)
     showOutput: 'lhqTreeView.showOutput'
@@ -105,6 +106,10 @@ export class AppContext implements IAppContext {
     public off(event: string, listener: (...args: any[]) => void): this {
         this._eventEmitter.off(event, listener);
         return this;
+    }
+
+    public getCurrentFolder(): vscode.Uri | undefined {
+        return getCurrentFolder();
     }
 
     public async init(ctx: vscode.ExtensionContext, reset: boolean = false): Promise<void> {

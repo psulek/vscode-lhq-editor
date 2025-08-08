@@ -177,6 +177,12 @@
         "category": "LHQ",
         "title": "Import resources from file...",
         "icon": "$(file-import)"
+      },
+      {
+        "command": "lhqTreeView.exportToFile",
+        "category": "LHQ",
+        "title": "Export resources to file...",
+        "icon": "$(file-export)"
       }
     ],
     "menus": {
@@ -252,6 +258,10 @@
         {
           "command": "lhqTreeView.importFromFile",
           "when": "lhqEditorIsActive && !lhqIsReadonlyMode"
+        },
+        {
+          "command": "lhqTreeView.exportToFile",
+          "when": "lhqEditorIsActive && !lhqIsReadonlyMode"
         }
       ],
       "view/title": [
@@ -324,6 +334,10 @@
         },
         {
           "command": "lhqTreeView.importFromFile",
+          "when": "view == lhqTreeView && !lhqTreeHasLanguageSelection && lhqTreeHasSelectedModelRoot && !lhqIsReadonlyMode"
+        },
+        {
+          "command": "lhqTreeView.exportToFile",
           "when": "view == lhqTreeView && !lhqTreeHasLanguageSelection && lhqTreeHasSelectedModelRoot && !lhqIsReadonlyMode"
         }
       ]

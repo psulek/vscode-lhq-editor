@@ -59,6 +59,7 @@ export class LhqEditorProvider implements vscode.CustomTextEditorProvider {
             vscode.commands.registerCommand(GlobalCommands.runGenerator, () => this._debouncedRunCodeGenerator()),
 
             vscode.commands.registerCommand(GlobalCommands.importFromFile, this.importModelFromFile.bind(this)),
+            vscode.commands.registerCommand(GlobalCommands.exportToFile, this.exportModelToFile.bind(this)),
         );
     }
 
@@ -120,6 +121,16 @@ export class LhqEditorProvider implements vscode.CustomTextEditorProvider {
         }
 
         return activeDoc.importModelFromFile();
+    }
+
+    private async exportModelToFile(): Promise<void> {
+        const activeDoc = this.activeDocument;
+        if (!activeDoc) {
+            logger().log(this, 'warn', 'exportModelToFile -> No active document context found. Cannot import from Excel.');
+            return;
+        }
+
+        return activeDoc.exportModelToFile();
     }
 
     public async runCodeGenerator(): Promise<void> {

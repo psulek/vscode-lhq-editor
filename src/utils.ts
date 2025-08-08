@@ -114,7 +114,7 @@ export type ShowFileDialogOptions = {
     defaultUri?: vscode.Uri;
 };
 
-export async function showFileDialog(label: string, dialogOptions?: ShowFileDialogOptions): Promise<vscode.Uri | undefined> {
+export async function showOpenFileDialog(label: string, dialogOptions?: ShowFileDialogOptions): Promise<vscode.Uri | undefined> {
     const options: vscode.OpenDialogOptions = {
         openLabel: label,
         //canSelectMany: dialogOptions?.canSelectMany ?? false,
@@ -128,6 +128,17 @@ export async function showFileDialog(label: string, dialogOptions?: ShowFileDial
 
     const fileUri = await vscode.window.showOpenDialog(options);
     return fileUri && fileUri[0] ? fileUri[0] : undefined;
+}
+
+export async function showSaveFileDialog(label: string, dialogOptions?: ShowFileDialogOptions): Promise<vscode.Uri | undefined> {
+    const options: vscode.SaveDialogOptions = {
+        //saveLabel: label,
+        title: label,
+        filters: dialogOptions?.filters ?? { 'All files': ['*'] },
+        defaultUri: dialogOptions?.defaultUri
+    };
+
+    return await vscode.window.showSaveDialog(options);
 }
 
 export async function showConfirmBox(message: string, detail?: string, options?: ConfirmBoxOptions): Promise<boolean | undefined> {

@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import path from 'node:path';
 import fse from 'fs-extra';
 import { nextTick } from 'node:process';
-import { createTreeElementPaths, delay, generateNonce, getElementFullPath, getGeneratorAppErrorMessage, isValidDocument, logger, showConfirmBox, showMessageBox, showNotificationBox } from './utils';
+import { createTreeElementPaths, delay, generateNonce, getElementFullPath, getGeneratorAppErrorMessage, isValidDocument, logger, showConfirmBox, showOpenFileDialog, showMessageBox, showNotificationBox, showSaveFileDialog } from './utils';
 import { AppToPageMessage, ClientPageError, ClientPageModelProperties, ClientPageSettingsError, CultureInfo, IDocumentContext, IVirtualLanguageElement, IVirtualRootElement, NotifyDocumentActiveChangedCallback, PageToAppMessage, SelectionBackup, StatusBarItemUpdateRequestCallback, ValidationError } from './types';
 import { CategoryLikeTreeElementToJsonOptions, CategoryOrResourceType, CodeGeneratorGroupSettings, detectFormatting, FormattingOptions, GeneratedFile, Generator, generatorUtils, HbsTemplateManager, ICategoryLikeTreeElement, ImportModelErrorKind, ImportModelMode, ImportModelResult, IResourceElement, IResourceParameterElement, IResourceValueElement, IRootModelElement, isNullOrEmpty, ITreeElement, LhqModel, LhqModelResourceTranslationState, LhqValidationResult, modelConst, ModelUtils, TreeElementType } from '@lhq/lhq-generators';
 import { filterTreeElements, filterVirtualTreeElements, isVirtualTreeElement, validateTreeElementName, VirtualRootElement } from './elements';
@@ -11,6 +11,7 @@ import { CodeGenStatus } from './codeGenStatus';
 import { ImportFileSelector } from './impExp/importFileSelector';
 import { ImportFileSelectedData } from './impExp/types';
 import { ImportExportManager } from './impExp/manager';
+import { ExcelDataExporter } from './impExp/excelExpoter';
 
 type LangTypeMode = 'all' | 'neutral' | 'country';
 
@@ -699,6 +700,40 @@ export class DocumentContext implements IDocumentContext {
 
     public resetGeneratorStatus(): void {
         this._codeGenStatus.resetGeneratorStatus();
+    }
+
+    public async exportModelToFile(): Promise<void> {
+        if (!this.rootModel) {
+            logger().log(this, 'debug', 'exportModelToFile -> No root model found. Cannot export to file.');
+            return;
+        }
+
+        if (this._codeGenStatus.inProgress) {
+            logger().log(this, 'debug', 'exportModelToFile -> Code generator is already in progress. Cannot export to file.');
+            return;
+        }
+
+        try {
+            const currentFolder = appContext.getCurrentFolder();
+            const date = new Date().toISOString().replace(/[:.-]/g, '').slice(0, 15); // format: YYYYMMDDTHHMMSS
+            const fileName = currentFolder ? path.join(currentFolder.fsPath, `exported-${date}`) : `exported-${date}`;
+            const newFile = await showSaveFileDialog('Enter file name where to export resources', {
+                filters: { 'Excel files': ['xlsx'] },
+                defaultUri: currentFolder ? vscode.Uri.file(fileName) : undefined,
+                title: 'Export resources to Excel file'
+            });
+
+            if (!newFile) {
+                return;
+            }
+
+            await new ExcelDataExporter().exportToFile(newFile.fsPath, this.rootModel, this.fileName);
+            vscode.env.openExternal(newFile);
+            //await showMessageBox('info', `Model was successfully exported to '${fileName}'.`);
+        } catch (error) {
+            logger().log(this, 'error', `exportModelToFile -> Error while exporting model to file: ${error}`);
+            await showMessageBox('err', `Error exporting model to file`, error instanceof Error ? error.message : String(error));
+        }
     }
 
     public async importModelFromFile(): Promise<void> {
