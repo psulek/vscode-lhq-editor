@@ -499,9 +499,14 @@
         window.pageApp.templateDefinition = templateDefinition;
     }
 
-    function getFullPath(element) {
-        if (element && element.paths && element.paths.length > 0) {
-            return '/' + element.paths.join('/');
+    function getFullPath(element, noRoot) {
+        let paths = element.paths;
+        if (element && paths && paths.length > 0) {
+            if (noRoot === true) {
+                paths = paths.slice(1);
+            }
+
+            return '/' + paths.join('/');
         }
         return '';
     }
@@ -768,6 +773,10 @@
 
             fullPath() {
                 return getFullPath(this.item);
+            },
+
+            fullPathNoRoot() {
+                return getFullPath(this.item, true);
             },
 
             isResource() {
@@ -1561,6 +1570,12 @@
                         }
                     }
                 }
+            },
+
+            async copyPathToClipboard() {
+                const path = this.fullPathNoRoot;
+                await navigator.clipboard.writeText(path);
+                postMessage({command: 'showNotification', message: `Path "${path}" copied to clipboard!`}, 'Copy path to clipboard');
             }
         }
     }).mount('#app');

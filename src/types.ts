@@ -163,6 +163,10 @@ export type PageToAppMessage = {
     command: 'focusTree';
     paths: string[];
     elementType: TreeElementType;
+} | {
+    command: 'showNotification',
+    type?: 'info' | 'warn' | 'err';
+    message: string;
 };
 
 export interface IAppConfig {

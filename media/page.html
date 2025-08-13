@@ -53,8 +53,13 @@
                 <td class="fullrow">
                     <a href="#" @click="openResource"
                         :title="'Click to locate ' + item.elementType + ' in tree view...'">
-                        {{ fullPath }}
+                        {{ isModelRoot ? '/ (root)' : fullPathNoRoot }}
                     </a>
+                    <template v-if="!isModelRoot">
+                        &nbsp;
+                        <span class="codicon codicon-copy" style="vertical-align: middle; cursor: pointer;"
+                            title="Copy path to clipboard" @click="copyPathToClipboard"></span>
+                    </template>
                 </td>
             </tr>
             <tr>
@@ -64,8 +69,7 @@
                 <td>
                     <div style="display: flex; flex-direction: row; align-items: center; gap: 1em; width: 100%;">
                         <input type="text" id="name" v-model="item.name" ref="name" autocomplete="off"
-                            @focus="focusOnName" readonly="readonly" 
-                            :style="{ 'flex-basis': isResource ? '60%' : '' }">
+                            @focus="focusOnName" readonly="readonly" :style="{ 'flex-basis': isResource ? '60%' : '' }">
 
                         <button type="button" id="btnEditName" @click="editElementName">Rename</button>
 
@@ -115,7 +119,8 @@
                             <tr v-if="paramsEnabled">
                                 <td colspan="3">
                                     <span style="font-size: smaller;">
-                                        <b>Enter</b> - update parameter &nbsp; <b>Backspace</b> - remove parameter &nbsp; <b>Ctrl+Enter</b> - apply changes &nbsp; <b>Esc</b> - cancel changes
+                                        <b>Enter</b> - update parameter &nbsp; <b>Backspace</b> - remove parameter
+                                        &nbsp; <b>Ctrl+Enter</b> - apply changes &nbsp; <b>Esc</b> - cancel changes
                                     </span>
                                 </td>
                             </tr>
@@ -150,8 +155,7 @@
                                 </td>
                                 <td>
                                     <textarea ref="translationTextArea" v-model="translation.valueRef.value" rows="1"
-                                        @input="autoResizeTextarea"
-                                        :data-lang="translation.valueRef.languageName"
+                                        @input="autoResizeTextarea" :data-lang="translation.valueRef.languageName"
                                         :placeholder="'Translation for ' + translation.culture"
                                         :readonly="translation.valueRef.locked"
                                         :class="{ 'locked': translation.valueRef.locked }" @focus="focusOnTranslation"

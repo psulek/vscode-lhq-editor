@@ -1,6 +1,5 @@
-import { CategoryOrResourceType, ICategoryLikeTreeElement, IRootModelElement, isNullOrEmpty, ITreeElement, ITreeElementPaths, ModelUtils, TreeElementToJsonOptions, TreeElementType } from '@lhq/lhq-generators';
+import { arraySortBy, CategoryOrResourceType, ICategoryLikeTreeElement, IRootModelElement, isNullOrEmpty, ITreeElement, ITreeElementPaths, ModelUtils, TreeElementToJsonOptions, TreeElementType } from '@lhq/lhq-generators';
 import { createTreeElementPaths, getElementFullPath } from './utils';
-import { validateName } from './validator';
 
 import type { ILanguagesElement, IVirtualLanguageElement, IVirtualRootElement, IVirtualTreeElement, VirtualElementType } from './types';
 
@@ -153,11 +152,12 @@ export class LanguagesElement extends VirtualTreeElement implements ILanguagesEl
             this._virtualLangs.push(new LanguageElement(this.root, primary));
         }
 
-        this.root.languages.forEach(lang => {
-            if (lang !== this.root.primaryLanguage) {
-                this._virtualLangs.push(new LanguageElement(this.root, lang));
-            }
-        });
+        arraySortBy(this.root.languages as string[], lang => lang, 'asc')
+            .forEach(lang => {
+                if (lang !== this.root.primaryLanguage) {
+                    this._virtualLangs.push(new LanguageElement(this.root, lang));
+                }
+            });
     }
 
     get virtualLanguages(): ReadonlyArray<VirtualTreeElement> {
@@ -185,7 +185,7 @@ export class LanguageElement extends VirtualTreeElement implements IVirtualLangu
 
 export function validateTreeElementName(elementType: TreeElementType, name: string, parentElement?: ICategoryLikeTreeElement,
     ignoreElementPath?: string): string | null {
-    const valRes = validateName(name);
+    const valRes = ModelUtils.validateElementName(name);
     if (valRes === 'valid') {
         if (parentElement && !isNullOrEmpty(name)) {
             const found = parentElement.find(name, elementType as CategoryOrResourceType);

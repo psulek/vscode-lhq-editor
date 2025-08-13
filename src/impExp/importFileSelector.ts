@@ -23,13 +23,13 @@ export class ImportFileSelector {
         const result: ImportFileSelectedData = structuredClone(data);
 
         do {
-            const selectedImporter = ImportExportManager.getImporterByEngine(result.engine);
+            const selectedImporter = ImportExportManager.getImporter(result.engine);
             const selectedImporterName = selectedImporter!.name;
             const allowNewElements = selectedImporter?.allowNewElements;
             const selectedFile = isNullOrEmpty(result.file) ? 'none' : result.file;
             const selectedModeMerge = result.mode === 'merge';
             const selectedAllowNewElements = result.allowNewElements;
-            const ImportFileSelectorItems = [
+            const rootItems = [
                 {
                     type: 'importerEngine',
                     label: selectedImporterName,
@@ -58,7 +58,7 @@ export class ImportFileSelector {
             ] as ImportFromFilePickItem[];
 
             if (allowNewElements) {
-                ImportFileSelectorItems.splice(3, 0, {
+                rootItems.splice(3, 0, {
                     type: 'allowNewElements',
                     label: selectedAllowNewElements ? 'Allowed new elements' : 'Not allowed new elements',
                     detail: 'Import new elements',
@@ -66,7 +66,7 @@ export class ImportFileSelector {
                 });
             }
 
-            const selected = await vscode.window.showQuickPick(ImportFileSelectorItems, {
+            const selected = await vscode.window.showQuickPick(rootItems, {
                 placeHolder: 'Import resources from file',
                 ignoreFocusOut: true,
                 matchOnDescription: false,
@@ -131,10 +131,9 @@ export class ImportFileSelector {
 
     private static async showImporterEngine(data: ImportFileSelectedData): Promise<ImporterEngine | undefined> {
         const items: ImporterEnginePickItem[] = [];
-        ImportExportManager.availableImporters.forEach(function (importer) {
-            const selected = importer.engine === data.engine;
+        ImportExportManager.availableImporters.forEach(importer => {
             items.push({
-                label: importer.name + (selected ? ' (selected)' : ''),
+                label: importer.name + (importer.engine === data.engine ? ' (selected)' : ''),
                 engine: importer.engine,
                 detail: importer.description,
             });

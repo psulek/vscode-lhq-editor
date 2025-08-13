@@ -1,4 +1,4 @@
-import type { ImportModelMode, ImportModelOptions, ImportResourceItem } from '@lhq/lhq-generators';
+import type { ImportModelMode, ImportModelOptions, ImportResourceItem, IRootModelElement } from '@lhq/lhq-generators';
 import { FileFilter } from '../utils';
 
 export type ImportPreparedData = {
@@ -85,3 +85,43 @@ export type ImportFileSelectedData = {
 }
 
 export const excelWorksheetName = "Localizations";
+
+export type ExporterEngine = 'MsExcel';
+
+export interface IDataExporter {
+    /**
+     * Exporter engine name.
+     */
+    get engine(): ExporterEngine;
+
+    /**
+     * Exporter engine display name.
+     */
+    get name(): string;
+
+    /**
+     * Exporter engine description.
+     */
+    get description(): string;
+
+    /**
+     * File filter for the importer.
+     */
+    get fileFilter(): FileFilter;
+
+    /**
+     * Exports localization data to a file.
+     * @param filePath Path to the file to export data to.
+     * @param model Model containing localization data.
+     * @param modelFileName Name of the model file.
+     * @param languages Optional list of languages to export. If not provided, all languages from the model will be used.
+     */
+    exportToFile(filePath: string, model: IRootModelElement, modelFileName: string, languages?: string[]): Promise<void>;
+}
+
+
+export type ExportFileSelectedData = {
+    engine: ExporterEngine;
+    file?: string;
+    languages?: string[];
+}

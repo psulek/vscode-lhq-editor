@@ -519,8 +519,8 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
             if (element instanceof VirtualTreeElement) {
                 logger().log(this, 'debug', `getParent -> VirtualTreeElement '${element.name}' [${element.virtualElementType}] has no parent.`);
             }
-            debugger;
-            console.warn('!!!!!');
+            //debugger;
+            //console.warn('!!!!!');
         }
         return element.parent;
     }

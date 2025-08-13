@@ -1,10 +1,11 @@
 import * as ExcelJS from 'exceljs';
-import type { ICategoryElement, IResourceElement, IRootModelElement } from '@lhq/lhq-generators';
-import { excelWorksheetName } from './types';
+import { isNullOrEmpty, type ICategoryElement, type IResourceElement, type IRootModelElement } from '@lhq/lhq-generators';
+import { excelWorksheetName, ExporterEngine, IDataExporter } from './types';
 import path from 'path';
+import { FileFilter } from '../utils';
 
-export class ExcelDataExporter {
-    public get engine(): string {
+export class ExcelDataExporter implements IDataExporter {
+    public get engine(): ExporterEngine {
         return 'MsExcel';
     }
 
@@ -14,6 +15,12 @@ export class ExcelDataExporter {
 
     public get description(): string {
         return 'Exports localization data to Microsoft Excel files (*.xlsx).';
+    }
+
+    public get fileFilter(): FileFilter {
+        return {
+            'Excel files': ['xlsx']
+        };
     }
 
     public async exportToFile(filePath: string, model: IRootModelElement, modelFileName: string, languages?: string[]): Promise<void> {
@@ -124,7 +131,7 @@ export class ExcelDataExporter {
                 languagesToExport.forEach(lang => {
                     cellValueCol++;
                     const cellValue = ws.getCell(cellRow, cellValueCol);
-                    cellValue.value = resource.getValue(lang, false) || '';
+                    cellValue.value = resource.getValue(lang, false) ?? '';
                     const alignStyle: Partial<ExcelJS.Style> = {
                         alignment: {
                             horizontal: 'left',

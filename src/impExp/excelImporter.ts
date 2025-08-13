@@ -92,7 +92,11 @@ export class ExcelDataImporter extends DataImporterBase {
                         const languageCode = item.lang;
 
                         cell = ws.getCell(row, column);
-                        const resourceValue = String(cell.value).trim();
+                        let resourceValue = String(cell.value);
+
+                        if (cell.type === ExcelJS.ValueType.Null || isNullOrEmpty(resourceValue)) {
+                            resourceValue = '';
+                        }
 
                         if (!isNullOrEmpty(languageCode)) {
                             excelResourceLineItem.addValue(languageCode, resourceValue);

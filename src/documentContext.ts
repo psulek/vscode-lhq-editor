@@ -4,14 +4,15 @@ import fse from 'fs-extra';
 import { nextTick } from 'node:process';
 import { createTreeElementPaths, delay, generateNonce, getElementFullPath, getGeneratorAppErrorMessage, isValidDocument, logger, showConfirmBox, showOpenFileDialog, showMessageBox, showNotificationBox, showSaveFileDialog } from './utils';
 import { AppToPageMessage, ClientPageError, ClientPageModelProperties, ClientPageSettingsError, CultureInfo, IDocumentContext, IVirtualLanguageElement, IVirtualRootElement, NotifyDocumentActiveChangedCallback, PageToAppMessage, SelectionBackup, StatusBarItemUpdateRequestCallback, ValidationError } from './types';
-import { CategoryLikeTreeElementToJsonOptions, CategoryOrResourceType, CodeGeneratorGroupSettings, detectFormatting, FormattingOptions, GeneratedFile, Generator, generatorUtils, HbsTemplateManager, ICategoryLikeTreeElement, ImportModelErrorKind, ImportModelMode, ImportModelResult, IResourceElement, IResourceParameterElement, IResourceValueElement, IRootModelElement, isNullOrEmpty, ITreeElement, LhqModel, LhqModelResourceTranslationState, LhqValidationResult, modelConst, ModelUtils, TreeElementType } from '@lhq/lhq-generators';
+import { CategoryLikeTreeElementToJsonOptions, CategoryOrResourceType, CodeGeneratorGroupSettings, detectFormatting, FormattingOptions, GeneratedFile, Generator, generatorUtils, HbsTemplateManager, ICategoryLikeTreeElement, ImportModelErrorKind, ImportModelMode, ImportModelResult, IResourceElement, IResourceParameterElement, IResourceValueElement, IRootModelElement, isNullOrEmpty, ITreeElement, LhqModel, LhqModelResourceTranslationState, LhqValidationResult, modelConst, ModelUtils, strCompare, TreeElementType } from '@lhq/lhq-generators';
 import { filterTreeElements, filterVirtualTreeElements, isVirtualTreeElement, validateTreeElementName, VirtualRootElement } from './elements';
 import { AvailableCommands, Commands, getCurrentFolder } from './context';
 import { CodeGenStatus } from './codeGenStatus';
 import { ImportFileSelector } from './impExp/importFileSelector';
-import { ImportFileSelectedData } from './impExp/types';
+import { ExportFileSelectedData, ImportFileSelectedData } from './impExp/types';
 import { ImportExportManager } from './impExp/manager';
 import { ExcelDataExporter } from './impExp/excelExpoter';
+import { ExportFileSelector } from './impExp/exportFileSelector';
 
 type LangTypeMode = 'all' | 'neutral' | 'country';
 
@@ -77,6 +78,12 @@ export class DocumentContext implements IDocumentContext {
         mode: 'merge',
         file: undefined,
         allowNewElements: false
+    };
+
+    private _exportFileSelectedData: ExportFileSelectedData = {
+        engine: 'MsExcel',
+        file: undefined,
+        languages: undefined
     };
 
     constructor(context: vscode.ExtensionContext, webviewPanel: vscode.WebviewPanel, onDidDispose: () => void,
@@ -331,8 +338,47 @@ export class DocumentContext implements IDocumentContext {
         }
     }
 
-    public commitChanges(message: string): Promise<boolean> {
-        return this.internalCommitChanges(message);
+    public async commitChanges(message: string): Promise<boolean> {
+        
+        if (this._disposed) {
+            logger().log(this, 'debug', `commitChanges [${message}] -> DocumentContext is disposed. Ignoring changes.`);
+            return false;
+        }
+
+        if (!this._rootModel) {
+            logger().log(this, 'debug', `commitChanges [${message}] -> No root model available.`);
+            return false;
+        }
+
+        if (!this._textDocument) {
+            logger().log(this, 'debug', `commitChanges [${message}] -> No text document available.`);
+            return false;
+        }
+
+        this.validateDocument();
+        const newModel = ModelUtils.elementToModel<LhqModel>(this._rootModel!, { 
+            values: {
+                eol: 'CRLF',
+                sanitize: true
+            } 
+        });
+        const serializedRoot = ModelUtils.serializeModel(newModel, this._documentFormatting);
+
+        const edit = new vscode.WorkspaceEdit();
+        const doc = this._textDocument;
+        edit.replace(
+            doc.uri,
+            new vscode.Range(0, 0, doc.lineCount, 0),
+            serializedRoot);
+
+        const res = await vscode.workspace.applyEdit(edit);
+        if (res) {
+            this._jsonModel = newModel;
+        }
+
+        logger().log(this, 'debug', `commitChanges [${message}] -> Changes applied: ${res ? 'successfully' : 'failed'}.`);
+
+        return res;
     }
 
     public async saveDocument(): Promise<boolean> {
@@ -363,43 +409,6 @@ export class DocumentContext implements IDocumentContext {
         }
 
         return false;
-    }
-
-    private async internalCommitChanges(message: string /* rootFix?: boolean */): Promise<boolean> {
-        if (this._disposed) {
-            logger().log(this, 'debug', `commitChanges [${message}] -> DocumentContext is disposed. Ignoring changes.`);
-            return false;
-        }
-
-        if (!this._rootModel) {
-            logger().log(this, 'debug', `commitChanges [${message}] -> No root model available.`);
-            return false;
-        }
-
-        if (!this._textDocument) {
-            logger().log(this, 'debug', `commitChanges [${message}] -> No text document available.`);
-            return false;
-        }
-
-        this.validateDocument();
-        const newModel = ModelUtils.elementToModel<LhqModel>(this._rootModel!);
-        const serializedRoot = ModelUtils.serializeModel(newModel, this._documentFormatting);
-
-        const edit = new vscode.WorkspaceEdit();
-        const doc = this._textDocument;
-        edit.replace(
-            doc.uri,
-            new vscode.Range(0, 0, doc.lineCount, 0),
-            serializedRoot);
-
-        const res = await vscode.workspace.applyEdit(edit);
-        if (res) {
-            this._jsonModel = newModel;
-        }
-
-        logger().log(this, 'debug', `commitChanges [${message}] -> Changes applied: ${res ? 'successfully' : 'failed'}.`);
-
-        return res;
     }
 
     public async update(document: vscode.TextDocument | undefined, options?: UpdateOptions): Promise<void> {
@@ -714,25 +723,61 @@ export class DocumentContext implements IDocumentContext {
         }
 
         try {
-            const currentFolder = appContext.getCurrentFolder();
-            const date = new Date().toISOString().replace(/[:.-]/g, '').slice(0, 15); // format: YYYYMMDDTHHMMSS
-            const fileName = currentFolder ? path.join(currentFolder.fsPath, `exported-${date}`) : `exported-${date}`;
-            const newFile = await showSaveFileDialog('Enter file name where to export resources', {
-                filters: { 'Excel files': ['xlsx'] },
-                defaultUri: currentFolder ? vscode.Uri.file(fileName) : undefined,
-                title: 'Export resources to Excel file'
-            });
+            // const currentFolder = appContext.getCurrentFolder();
+            // const date = new Date().toISOString().replace(/[:.-]/g, '').slice(0, 15); // format: YYYYMMDDTHHMMSS
+            // const fileName = currentFolder ? path.join(currentFolder.fsPath, `exported-${date}`) : `exported-${date}`;
+            // const newFile = await showSaveFileDialog('Enter file name where to export resources', {
+            //     filters: { 'Excel files': ['xlsx'] },
+            //     defaultUri: currentFolder ? vscode.Uri.file(fileName) : undefined,
+            //     title: 'Export resources to Excel file'
+            // });
 
-            if (!newFile) {
+            // if (!newFile) {
+            //     return;
+            // }
+
+            //await new ExcelDataExporter().exportToFile(newFile.fsPath, this.rootModel, this.fileName);
+            const exportInfo = await ExportFileSelector.showRoot(this._exportFileSelectedData, this.rootModel);
+            if (!exportInfo) {
                 return;
             }
 
-            await new ExcelDataExporter().exportToFile(newFile.fsPath, this.rootModel, this.fileName);
-            vscode.env.openExternal(newFile);
-            //await showMessageBox('info', `Model was successfully exported to '${fileName}'.`);
+            this._exportFileSelectedData = exportInfo;
+            const file = exportInfo.file!;
+            if (isNullOrEmpty(file)) {
+                return await showMessageBox('err', 'No file selected for export.');
+            }
+
+            const engine = exportInfo.engine;
+
+            appContext.readonlyMode = true;
+
+            let exportError: string | undefined = undefined;
+            await vscode.window.withProgress({
+                location: vscode.ProgressLocation.Notification,
+                cancellable: false,
+                title: `Exporting file: ${file} (${engine}) ...`
+            }, async () => {
+                exportError = await ImportExportManager.exportToFile(engine, file, this.rootModel!, this.fileName, exportInfo.languages);
+            });
+
+            if (!await fse.pathExists(file)) {
+                exportError = `Export failed, could not create file: ${file}`;
+            }
+
+            if (isNullOrEmpty(exportError)) {
+                vscode.env.openExternal(vscode.Uri.file(file));
+                await showMessageBox('info', `Model was successfully exported to: ${file}`);
+
+            } else {
+                await showMessageBox('err', `Failed to export model to file !`,
+                    `Exporting to file ${file} (${engine}) failed.\n${exportError}`);
+            }
         } catch (error) {
             logger().log(this, 'error', `exportModelToFile -> Error while exporting model to file: ${error}`);
             await showMessageBox('err', `Error exporting model to file`, error instanceof Error ? error.message : String(error));
+        } finally {
+            appContext.readonlyMode = false;
         }
     }
 
@@ -761,6 +806,10 @@ export class DocumentContext implements IDocumentContext {
             if (!fileInfo || (!(await fse.pathExists(fileInfo)))) {
                 const err = isNullOrEmpty(fileInfo) ? 'No file selected.' : `File '${fileInfo}' does not exist.`;
                 return await showMessageBox('err', err);
+            }
+
+            if (strCompare(fileInfo, this.fileName, true)) {
+                return await showMessageBox('err', `Cannot import model from the same file: ${fileInfo}. Please select another file.`);
             }
 
             file = fileInfo;
@@ -833,7 +882,7 @@ export class DocumentContext implements IDocumentContext {
     }
 
     private getImportError(errorKind: ImportModelErrorKind, data: ImportFileSelectedData): { message: string, detail?: string } {
-        const engine = ImportExportManager.getImporterByEngine(data.engine)!.name;
+        const engine = ImportExportManager.getImporter(data.engine)!.name;
         const file = isNullOrEmpty(data.file) ? '-' : data.file;
 
         let message = '';
@@ -1189,6 +1238,9 @@ export class DocumentContext implements IDocumentContext {
                 await this.focusTree(false);
                 await appContext.treeContext.selectElementByPath(message.elementType, message.paths, true);
                 break;
+            }
+            case 'showNotification': {
+                showNotificationBox(message.type ?? 'info', message.message, { logger: false });
             }
         }
     }
