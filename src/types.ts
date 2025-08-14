@@ -91,6 +91,7 @@ export type ConfirmQuestionTypes = 'resetSettings' | 'cancelSettingsChanges';
 export type AppToPageMessage = {
     command: 'init';
     templatesMetadata: Record<string, TemplateMetadataDefinition>;
+    valuesRegexValidators?: string[];
 } | {
     command: 'loadPage';
     element: Object;

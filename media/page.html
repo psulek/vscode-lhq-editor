@@ -155,12 +155,16 @@
                                 </td>
                                 <td>
                                     <textarea ref="translationTextArea" v-model="translation.valueRef.value" rows="1"
-                                        @input="autoResizeTextarea" :data-lang="translation.valueRef.languageName"
-                                        :placeholder="'Translation for ' + translation.culture"
+                                        @input="setTranslationValue" :data-lang="translation.valueRef.languageName"
+                                        :placeholder="'Enter translation for ' + translation.culture"
                                         :readonly="translation.valueRef.locked"
                                         :class="{ 'locked': translation.valueRef.locked }" @focus="focusOnTranslation"
                                         @blur="blurOnTranslation"
                                         :title="translation.valueRef.locked ? 'Editing of translation is locked.':''"></textarea>
+                                    <div v-if="getTranslationUnicodeError(translation)"
+                                        class="error-text small-2lines-trim">
+                                        {{ getTranslationUnicodeError(translation) }}
+                                    </div>
                                 </td>
                             </tr>
                         </table>

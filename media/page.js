@@ -19,7 +19,7 @@
      * @typedef {Object} InvalidDataError
      * @property {string} uid
      * @property {string} message
-     * @property {'server' | 'tags'} type
+     * @property {'server' | 'tags' | 'badunicodechars'} type
      * @property {HTMLElement} element
      */
 
@@ -75,6 +75,8 @@
      * @property {boolean} isPrimary
      */
 
+    //    * @property {string} invalidMessage
+
     const regexValidCharacters = /^[a-zA-Z]+[a-zA-Z0-9_]*$/;
 
     let currentPrimaryLang = 'en';
@@ -84,6 +86,37 @@
 
     /** @type {{type: 'input' | 'tags' | 'translation', id?: string} | undefined} */
     let lastFocusedElement = undefined;
+
+    /** @type Array<RegExp> */
+    const valuesRegexValidators = [];
+
+    //const errorInvalidUnicodeChars = 'Invalid unicode characters found in the value.';
+
+    // returns error string if value is invalid, otherwise returns empty string
+    function validateResourceValue(value) {
+        let validData = true;
+        if (value !== undefined && value !== null && typeof value === 'string' && value.length > 0) {
+            validData = valuesRegexValidators.every(regex => !regex.test(value));
+        }
+
+        return validData;
+    }
+
+
+    function arrayRemoveAll(source, predicate, mutate) {
+        if (!source || source.length === 0) {
+            return [];
+        }
+        if (mutate) {
+            for (let i = source.length - 1; i >= 0; i--) {
+                if (predicate(source[i])) {
+                    source.splice(i, 1);
+                }
+            }
+            return source;
+        }
+        return source.filter(item => !predicate(item));
+    }
 
 
     function getCultureName(lang) {
@@ -158,12 +191,12 @@
                 type: type,
                 id: id,
             };
-            console.log(`Last focused element changed to: `, lastFocusedElement);
+            //console.log(`Last focused element changed to: `, lastFocusedElement);
         } else if (isParametersEditableSpan(target)) {
             lastFocusedElement = {
                 type: 'tags'
             };
-            console.log(`Last focused element changed to: `, lastFocusedElement);
+            //console.log(`Last focused element changed to: `, lastFocusedElement);
         }
     });
 
@@ -226,6 +259,23 @@
                 templatesMetadata: Record<string, TemplateMetadataDefinition>;
                 */
                 templatesMetadata = structuredClone(message.templatesMetadata) || {};
+
+                const regexValidators = message.valuesRegexValidators;
+                if (regexValidators && Array.isArray(regexValidators)) {
+                    valuesRegexValidators.length = 0; // clear existing validators
+                    regexValidators.forEach(regexStr => {
+                        try {
+                            // deserialize regex string
+                            const match = regexStr.match(/^\/(.*)\/([a-z]*)$/);
+                            if (match.length > 2) {
+                                const flags = match[2] || '';
+                                valuesRegexValidators.push(new RegExp(match[1], flags.replace(/[gy]/g, '')));
+                            }
+                        } catch (e) {
+                            console.error(`Invalid regex '${regex}' in valuesRegexValidators: `, e);
+                        }
+                    });
+                }
 
                 break;
             }
@@ -299,6 +349,7 @@
                 const modelProperties = message.modelProperties;
                 const autoFocus = message.autoFocus ?? false;
                 const restoreFocusedInput = message.restoreFocusedInput ?? false;
+
                 //const file = message.file;
                 usedCultures = message.cultures || [];
                 if (usedCultures.length === 0) {
@@ -330,7 +381,7 @@
 
                     window.pageApp.$nextTick(() => {
                         window.pageApp.bindTagParameters(oldElement);
-                        window.pageApp.recheckInvalidData();
+                        window.pageApp.recheckInvalidData(true);
                         window.pageApp.debouncedResize();
                         window.pageApp.restoreLastFocused(restoreFocusedInput);
 
@@ -449,7 +500,8 @@
         translations.push({
             valueRef: primaryValue ?? { languageName: currentPrimaryLang, value: '' },
             culture: getCultureName(currentPrimaryLang),
-            isPrimary: true
+            isPrimary: true,
+            invalidMessage: ''
         });
 
 
@@ -459,7 +511,8 @@
                 translations.push({
                     valueRef: value ?? { languageName: culture.name, value: '' },
                     culture: getCultureName(culture.name),
-                    isPrimary: false
+                    isPrimary: false,
+                    invalidMessage: ''
                 });
             }
         });
@@ -597,7 +650,7 @@
         // remove all tooltipList
         if (tooltipsMap.size > 0) {
             const now = Date.now();
-            tooltipsMap.values().filter(x => (now - x.date) > 200).forEach(item => {
+            tooltipsMap.values().filter(x => (now - x.date) > 300).forEach(item => {
                 if (item.tooltip && !item.tooltip.contains(event.target)) {
                     //logMsg(`[Tooltip] click outside, remove/cancel tooltip '${item.uid}'.`);
                     cancelRemoval(item);
@@ -887,10 +940,11 @@
 
                         /** @type {InvalidDataInfo} */
                         const invalidData = this.invalidData;
-                        if (invalidData.errors.length > 0) {
-                            this.recheckInvalidData();
+                        //if (invalidData.errors.length > 0) 
+                        {
+                            this.recheckInvalidData(true);
 
-                            const nonServerError = invalidData.errors.find(x => x.type !== 'server');
+                            const nonServerError = invalidData.errors.find(x => x.type !== 'server' && x.type !== 'badunicodechars');
 
                             if (nonServerError) {
                                 if (!isAnyTooltipVisible()) {
@@ -903,14 +957,12 @@
                         }
 
                         if (data) {
-                            /* logMsg(`Data changed, sending message 'update' with data: `, data);
-                            vscode.postMessage({ command: 'update', data: data }); */
-
                             postMessage({ command: 'update', data: data }, 'Data changed');
                         }
                     }
                 } finally {
                     if (supressed && supressOnChange === 'onetime') {
+                        logMsg(`Suppressing onChange event for one time, resetting supressOnChange`);
                         this.supressOnChange = undefined;
                     }
 
@@ -962,7 +1014,7 @@
                 /** @type {InvalidDataInfo} */
                 const invalidData = this.invalidData;
                 if (invalidData.errors.length > 0) {
-                    invalidData.errors = invalidData.errors.filter(x => x.uid !== uid && x.type !== 'server');
+                    invalidData.errors = invalidData.errors.filter(x => x.uid !== uid && x.type !== type);
                 }
 
                 hideTooltip(uid);
@@ -974,7 +1026,7 @@
 
             /** @param {InvalidDataError} error */
             updateInvalidData(error) {
-                logMsg(`Update invalid data: `, error);
+                //logMsg(`Update invalid data: `, error);
                 if (error === undefined || error === null) {
                     throw new Error('InvalidDataError is undefined or null');
                 }
@@ -993,12 +1045,17 @@
                     logMsg(`Updating existing invalid data error: `, item);
                 }
 
-                item.element.dataset['error'] = 'true';
+                if (item.element) {
+                    item.element.dataset['error'] = 'true';
+                }
 
-                showTooltip(item.uid, item.message, item.element);
+                // do not show tooltip for 'badunicodechars' type, as it is handled separately
+                if (item.type !== 'badunicodechars') {
+                    showTooltip(item.uid, item.message, item.element);
+                }
             },
 
-            recheckInvalidData() {
+            recheckInvalidData(checkTranslations) {
                 logMsg(`Rechecking invalid data`);
                 /** @type {InvalidDataInfo} */
                 const invalidData = this.invalidData;
@@ -1021,6 +1078,35 @@
                         }
                     });
                 }
+
+                if (checkTranslations === true && this.item.translations) {
+                    this.item.translations.forEach(translation => {
+                        const valid = validateResourceValue(translation.valueRef.value);
+                        const languageName = translation.valueRef.languageName;
+                        if (!valid) {
+                            if (!invalidData.errors.some(x => x.uid === languageName && x.type === 'badunicodechars')) {
+                                const msg = `Invalid unicode characters found in ${getCultureName(languageName)} translation.`;
+                                this.updateInvalidData({ uid: languageName, message: msg, type: 'badunicodechars' });
+                                //logMsg(`Invalid unicode characters found in ${getCultureName(languageName)} translation, updating invalidData: `, msg);
+                            }
+                        } else {
+                            const invalidData = this.invalidData;
+                            const errCount = invalidData.errors.length;
+                            if (errCount > 0) {
+                                invalidData.errors = arrayRemoveAll(invalidData.errors, x => x.uid === languageName && x.type === 'badunicodechars', false);
+                                const errCount2 = invalidData.errors.length;
+                                logMsg(`Removed ${errCount - errCount2} 'badunicodechars' error for language '${languageName}'.`);
+                            }
+                        }
+                    });
+                }
+            },
+
+            getTranslationUnicodeError(translation) {
+                /** @type {InvalidDataInfo} */
+                const invalidData = this.invalidData;
+                const error = invalidData.errors.find(x => x.type === 'badunicodechars' && x.uid === translation.valueRef.languageName);
+                return error ? error.message : '';
             },
 
             editElementName() {
@@ -1071,7 +1157,7 @@
                             }));
                         tagifyParams.loadOriginalValues(tags);
                     } else {
-                        this.recheckInvalidData(true);
+                        this.recheckInvalidData();
                         /** @type {InvalidDataInfo} */
                         const invalidData = this.invalidData;
                         if (invalidData.errors.some(x => x.type === 'tags')) {
@@ -1126,6 +1212,43 @@
                 this.resizeTextarea(event.target);
             },
 
+            setTranslationValue(event) {
+                //@input="setCodeGeneratorPropertyValue(group, setting.name, $event.target.value)"
+                this.resizeTextarea(event.target);
+
+                // const lang = event.target.dataset['lang'];
+                // const translation = this.item.translations.find(x => x.valueRef.languageName === lang);
+                // if (!translation) {
+                //     logMsg(`Translation for language '${lang}' not found.`);
+                //     return;
+                // }
+
+                // const valid = validateResourceValue(event.target.value);
+                // translation.invalidMessage = valid ? '' : 'Invalid unicode characters found in the value.';
+            },
+
+            // onTranslationValueChange(lang, value) {
+            //     const translation = this.item.translations.find(x => x.valueRef.languageName === lang);
+            //     if (!translation) {
+            //         logMsg(`Translation for language '${lang}' not found.`);
+            //         return;
+            //     }
+
+            //     const valid = validateResourceValue(value);
+            //     translation.invalidMessage = valid ? '' : 'Invalid unicode characters found in the value.';
+            // },
+
+            // validateTranslationValue(lang) {
+            //     const translation = this.item.translations.find(x => x.valueRef.languageName === lang);
+            //     if (!translation) {
+            //         logMsg(`Translation for language '${lang}' not found.`);
+            //         return;
+            //     }
+
+            //     const valid = validateResourceValue(event.target.value);
+            //     translation.invalidMessage = valid ? '' : 'Invalid unicode characters found in the value.';
+            // },
+
             focusOnTranslation(event) {
                 if (!event.target) {
                     return;
@@ -1136,6 +1259,14 @@
                 if (cell) {
                     cell.dataset['focused'] = 'true';
                 }
+
+                // /** @type {InvalidDataInfo} */
+                // const invalidData = this.invalidData;
+                // const textArea = event.target;
+                // const error = invalidData.errors.find(x => x.element === textArea);
+                // if (error) {
+                //     showTooltip(error.uid, error.message, textArea);
+                // }
             },
 
             blurOnTranslation(event) {
@@ -1285,9 +1416,6 @@
                 });
 
                 tagify.on('invalid', function ({ detail }) {
-                    //showTooltip('params-invalid', detail.message, tagify.DOM.input);
-                    //self.recheckInvalidData(true);
-
                     /** @type {InvalidDataError} */
                     const error = {
                         uid: `params-invalid`,
@@ -1303,8 +1431,6 @@
                     tag = tagify.getTagElmByValue(data.value);
                     if (isValid !== true) {
                         tagify.replaceTag(tag, { ...data, __isValid: isValid });
-                        //showTooltip('params-invalid', isValid, tagify.DOM.input);
-                        //self.recheckInvalidData(true);
 
                         /** @type {InvalidDataError} */
                         const error = {
@@ -1575,7 +1701,7 @@
             async copyPathToClipboard() {
                 const path = this.fullPathNoRoot;
                 await navigator.clipboard.writeText(path);
-                postMessage({command: 'showNotification', message: `Path "${path}" copied to clipboard!`}, 'Copy path to clipboard');
+                postMessage({ command: 'showNotification', message: `Path "${path}" copied to clipboard!` }, 'Copy path to clipboard');
             }
         }
     }).mount('#app');

@@ -236,6 +236,7 @@ export class DocumentContext implements IDocumentContext {
             valueRef: Partial<IResourceValueElement>;
             culture: CultureInfo;
             isPrimary: boolean;
+            //invalidMessage?: string;
         }
 
         if (elem && !isVirtualTreeElement(elem)) {
@@ -275,6 +276,11 @@ export class DocumentContext implements IDocumentContext {
 
             const newDescription = element.description as string | undefined;
             if (newDescription !== elem.description) {
+
+                // if (!this.checkForInvalidUnicodeChars(elem, elemFullPath, 'description', newDescription)) {
+                //     return;
+                // }
+
                 elem.description = newDescription;
                 changed = true;
             }
@@ -310,6 +316,12 @@ export class DocumentContext implements IDocumentContext {
                 const newValues = values.map(x => `${x.languageName}:${x.value}:${x.locked}`).join(',');
 
                 if (newValues !== oldValues) {
+
+                    // if (!this.checkForInvalidUnicodeChars(elem, elemFullPath, 'description', newDescription)) {
+                    //     return;
+                    // }
+
+
                     changed = true;
                     res.removeValues();
                     res.addValues(values, { existing: 'skip' });
@@ -338,8 +350,40 @@ export class DocumentContext implements IDocumentContext {
         }
     }
 
+    private checkForInvalidUnicodeChars(elem: ITreeElement, elemFullPath: string, field: string, value: string | undefined) {
+        if (isNullOrEmpty(value)) {
+            return true;
+        }
+
+        const hasInvalidChars = ModelUtils.containsInvalidUnicodeChars(value);
+
+        if (hasInvalidChars) {
+            const validationError = 'Invalid unicode characters found in the value. ';
+            this.setPageError(elem, field, validationError);
+
+            this.sendMessageToHtmlPage({
+                command: 'invalidData',
+                fullPath: elemFullPath,
+                message: validationError,
+                action: 'add',
+                field: field
+            });
+            return;
+        } else {
+            if (this.removePageError(elem, field)) {
+                this.sendMessageToHtmlPage({
+                    command: 'invalidData',
+                    fullPath: elemFullPath,
+                    message: '',
+                    action: 'remove',
+                    field: field
+                });
+            }
+        }
+    }
+
     public async commitChanges(message: string): Promise<boolean> {
-        
+
         if (this._disposed) {
             logger().log(this, 'debug', `commitChanges [${message}] -> DocumentContext is disposed. Ignoring changes.`);
             return false;
@@ -356,11 +400,11 @@ export class DocumentContext implements IDocumentContext {
         }
 
         this.validateDocument();
-        const newModel = ModelUtils.elementToModel<LhqModel>(this._rootModel!, { 
+        const newModel = ModelUtils.elementToModel<LhqModel>(this._rootModel!, {
             values: {
-                eol: 'CRLF',
-                sanitize: true
-            } 
+                eol: 'CRLF', // backward compatibility, always use CRLF in values new lines
+                sanitize: false // do not sanitize now, maybe later...
+            }
         });
         const serializedRoot = ModelUtils.serializeModel(newModel, this._documentFormatting);
 
@@ -1278,7 +1322,10 @@ export class DocumentContext implements IDocumentContext {
         this._webviewPanel.webview.html = await this.getHtmlForWebview(false);
 
         const templatesMetadata = HbsTemplateManager.getTemplateDefinitions();
-        this.sendMessageToHtmlPage({ command: 'init', templatesMetadata });
+        const valuesRegexValidators: string[] = [];
+        Object.values(modelConst.ResourceValueValidations).forEach(x => valuesRegexValidators.push(x.toString()));
+
+        this.sendMessageToHtmlPage({ command: 'init', templatesMetadata, valuesRegexValidators });
     }
 
     public reflectSelectedElementToWebview(restoreFocusedInput: boolean = false): void {
