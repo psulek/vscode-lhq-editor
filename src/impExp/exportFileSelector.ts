@@ -101,8 +101,6 @@ export class ExportFileSelector {
                 }
                 case 'file': {
                     const currentFolder = appContext.getCurrentFolder();
-                    //const date = new Date().toISOString().replace(/[:.-]/g, '').slice(0, 15); // format: YYYYMMDDTHHMMSS
-                    //const fileName = currentFolder ? path.join(currentFolder.fsPath, `exported-${date}`) : `exported-${date}`;
                     const newFile = await showSaveFileDialog('Enter file name where to export resources', {
                         filters: selectedExporter!.fileFilter,
                         defaultUri: result.file ? vscode.Uri.file(result.file) : currentFolder,

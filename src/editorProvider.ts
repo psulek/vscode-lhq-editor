@@ -3,7 +3,7 @@ import debounce from 'lodash.debounce';
 import { ITreeElement } from '@lhq/lhq-generators';
 
 import { LhqTreeDataProvider } from './treeDataProvider';
-import { isValidDocument, logger, showConfirmBox, showMessageBox, showNotificationBox } from './utils';
+import { isValidDocument, logger, showConfirmBox, showNotificationBox } from './utils';
 import { AppToPageMessage, IDocumentContext, SelectionChangedCallback, StatusBarItemUpdateInfo } from './types';
 import { DocumentContext } from './documentContext';
 import { AvailableCommands, Commands, ContextEvents, GlobalCommands } from './context';
@@ -46,7 +46,6 @@ export class LhqEditorProvider implements vscode.CustomTextEditorProvider {
         appContext.setSelectionChangedCallback(this._debouncedOnSelectionChanged);
         appContext.setCheckAnyActiveDocumentCallback(this.hasAnyActiveDocument);
 
-        // this._codeGenStatus = new CodeGenStatus(context);
         this._debouncedRunCodeGenerator = debounce(this.runCodeGenerator.bind(this), 200, { leading: true, trailing: false });
 
         for (const command of Object.values(Commands)) {
@@ -109,7 +108,6 @@ export class LhqEditorProvider implements vscode.CustomTextEditorProvider {
             activeDoc.sendMessageToHtmlPage(message);
         } else {
             logger().log(this, 'warn', '[LhqEditorProvider] sendMessageToHtmlPage -> No active document context found. Cannot send message.');
-            //void showMessageBox('warn', 'No active lhq document found. Please reopen lhq file.');
         }
     }
 
@@ -203,7 +201,6 @@ export class LhqEditorProvider implements vscode.CustomTextEditorProvider {
         const onStatusBarItemUpdateRequest = (docContext: IDocumentContext, updateInfo: StatusBarItemUpdateInfo, forceUpdate?: boolean) => {
             const activeDoc = this.activeDocument;
 
-            // if (!activeDoc || docContext === activeDoc || forceUpdate === true) {
             if (!activeDoc || docContext === activeDoc) {
                 logger().log(this, 'debug', `onStatusBarItemUpdateRequest -> Updating status bar item '${updateInfo.text}' for document: ${docContext.fileName}`);
 

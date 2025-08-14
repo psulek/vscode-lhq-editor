@@ -7,7 +7,7 @@ import { Generator, GeneratorInitialization, HbsTemplateManager, ITreeElement, M
 import { VirtualTreeElement } from './elements';
 import {
     DefaultFormattingOptions, getElementFullPath, initializeDebugMode, isValidDocument,
-    logger, safeReadFile, showConfirmBox, 
+    logger, safeReadFile, showConfirmBox,
     showNotificationBox
 } from './utils';
 import { LhqEditorProvider } from './editorProvider';
@@ -143,7 +143,6 @@ export class AppContext implements IAppContext {
         this.setTreeSelection([]);
 
         initializeDebugMode(ctx);
-        //await loadCultures(ctx);
 
         this._ctx.subscriptions.push(
             vscode.commands.registerCommand(GlobalCommands.showOutput, () => {
@@ -211,33 +210,9 @@ export class AppContext implements IAppContext {
         return culture ? `${culture?.engName ?? ''} (${culture?.name ?? ''})` : name;
     }
 
-
-    // public getConfig(): ExtensionConfig {
-    //     const cfg = vscode.workspace.getConfiguration();
-    //     const res = cfg.get(configSection, defaultExtensionConfig);
-    //     return res;
-
-    //     //const autoFocusEditor = cfg.get(configKeys.autoFocusEditor, false);
-    //     // const runGeneratorOnSave = cfg.get(configKeys.runGeneratorOnSave, true);
-    //     // return {
-    //     //     runGeneratorOnSave
-    //     // } as ExtensionConfig;
-    // }
-
     public async updateConfig(newConfig: Partial<IAppConfig>): Promise<void> {
         await this._appConfig.updateConfig(newConfig);
     }
-
-    // public async updateConfig(newConfig: Partial<IAppConfig>): Promise<void> {
-    //     const cfg = await vscode.workspace.getConfiguration();
-
-    //     // iterate over all keys in newConfig and update them
-    //     for (const key of Object.keys(newConfig) as (keyof IAppConfig)[]) {
-    //         if (newConfig[key] !== undefined) {
-    //             await cfg.update(`${configSection}.${key}`, newConfig[key], vscode.ConfigurationTarget.Global);
-    //         }
-    //     }
-    // }
 
     private async handleDidChangeTextDocument(e: vscode.TextDocumentChangeEvent) {
         if (!e.reason) {
@@ -417,11 +392,9 @@ export class AppContext implements IAppContext {
     }
 
     public set readonlyMode(value: boolean) {
-        //if (this._isReadonlyMode !== value) {
-            this._isReadonlyMode = value;
-            vscode.commands.executeCommand('setContext', ContextKeys.isReadonlyMode, value);
-            this._eventEmitter.emit(ContextEvents.isReadonlyModeChanged, value);
-        //}
+        this._isReadonlyMode = value;
+        vscode.commands.executeCommand('setContext', ContextKeys.isReadonlyMode, value);
+        this._eventEmitter.emit(ContextEvents.isReadonlyModeChanged, value);
     }
 
     public get isEditorActive(): boolean {

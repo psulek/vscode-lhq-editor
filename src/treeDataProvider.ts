@@ -181,7 +181,6 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
             }
         }
 
-        //this._onDidChangeTreeData.fire(undefined);
         this.refreshTree(undefined);
 
         if (this.currentRootModel) {
@@ -253,7 +252,6 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
             return;
         }
 
-        // after previous await, document can be closed now...
         if (!this.checkActiveDoc('clearSelection')) {
             return;
         }
@@ -293,7 +291,6 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
             return;
         }
 
-        // after previous await, document can be closed now...
         if (!this.checkActiveDoc('setSelectedItems')) {
             return;
         }
@@ -331,7 +328,6 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
             return Promise.reject();
         }
 
-        // after previous await, document can be closed now...
         if (!this.checkActiveDoc('handleDrag')) {
             return Promise.reject();
         }
@@ -389,7 +385,6 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
             return;
         }
 
-        // document was closed in the meantime
         if (!this._activeDoc) {
             return;
         }
@@ -474,8 +469,6 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
             void this.clearSelection();
         }
 
-        // refresh whole tree view
-        //this._onDidChangeTreeData.fire(undefined);
         this.refreshTree(undefined);
     }
 

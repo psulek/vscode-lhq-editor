@@ -9,18 +9,14 @@ import { ConfirmBoxOptions, MatchForSubstringResult, NotificationBoxOptions } fr
 
 import 'reflect-metadata';
 
-
-
-let _logger: VsCodeLogger = null!; //= new VsCodeLogger();
-// let _cultures: CulturesMap = {};
-
-let _isDebugMode = false; // Default to false
+let _logger: VsCodeLogger = null!;
+let _isDebugMode = false;
 
 const treePathSeparator = '/';
 
 export function initializeDebugMode(ctx: vscode.ExtensionContext) {
-    //_isDebugMode = ctx.mode === vscode.ExtensionMode.Development;
     // TODO: remove this when the extension is stable
+    // TODO:_isDebugMode = ctx.mode === vscode.ExtensionMode.Development;
 
     _logger = new VsCodeLogger(ctx);
     _isDebugMode = false;
@@ -108,7 +104,6 @@ export function findCategoryByPaths(rootModel: IRootModelElement,
 export type FileFilter = { [name: string]: string[] };
 
 export type ShowFileDialogOptions = {
-    //canSelectMany?: boolean;
     filters?: FileFilter;
     title?: string;
     defaultUri?: vscode.Uri;
@@ -117,7 +112,6 @@ export type ShowFileDialogOptions = {
 export async function showOpenFileDialog(label: string, dialogOptions?: ShowFileDialogOptions): Promise<vscode.Uri | undefined> {
     const options: vscode.OpenDialogOptions = {
         openLabel: label,
-        //canSelectMany: dialogOptions?.canSelectMany ?? false,
         canSelectMany: false,
         canSelectFiles: true,
         canSelectFolders: false,
@@ -132,7 +126,6 @@ export async function showOpenFileDialog(label: string, dialogOptions?: ShowFile
 
 export async function showSaveFileDialog(label: string, dialogOptions?: ShowFileDialogOptions): Promise<vscode.Uri | undefined> {
     const options: vscode.SaveDialogOptions = {
-        //saveLabel: label,
         title: label,
         filters: dialogOptions?.filters ?? { 'All files': ['*'] },
         defaultUri: dialogOptions?.defaultUri
@@ -308,43 +301,6 @@ export function matchForSubstring(value: string, searchString: string, ignoreCas
 
     return result;
 }
-
-// export async function loadCultures(context?: vscode.ExtensionContext): Promise<CulturesMap> {
-//     if (Object.keys(_cultures).length === 0) {
-//         if (context === undefined) {
-//             logger().log('loadCultures', 'error', 'Failed to load list of cultures. Context is undefined.');
-//             await showMessageBox('err', 'Failed to load list of cultures. Context is undefined. Please report this issue.');
-//             return {};
-//         }
-//         const culturesFileUri = vscode.Uri.joinPath(context.extensionUri, 'dist', 'cultures.json');
-//         try {
-//             const rawContent = await vscode.workspace.fs.readFile(culturesFileUri);
-//             const contentString = new TextDecoder().decode(rawContent);
-//             const items = JSON.parse(contentString) as CultureInfo[];
-//             for (const culture of items) {
-//                 _cultures[culture.name] = culture;
-//             }
-
-//         } catch (error) {
-//             logger().log('loadCultures', 'error', 'Failed to read or parse dist/cultures.json');
-//             await showMessageBox('err', 'Failed to load list of cultures. Please reinstall the extension or report this issue.');
-//         }
-//     }
-
-//     return _cultures;
-// }
-
-// export function findCulture(name: string): CultureInfo | undefined {
-//     if (isNullOrEmpty(name)) {
-//         return undefined;
-//     }
-//     return _cultures[name];
-// }
-
-// export function getCultureDesc(name: string): string {
-//     const culture = findCulture(name);
-//     return culture ? `${culture?.engName ?? ''} (${culture?.name ?? ''})` : name;
-// }
 
 export function generateNonce(): string {
     let text = '';

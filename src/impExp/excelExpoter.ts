@@ -1,5 +1,5 @@
 import * as ExcelJS from 'exceljs';
-import { isNullOrEmpty, type ICategoryElement, type IResourceElement, type IRootModelElement } from '@lhq/lhq-generators';
+import { arraySortBy, type ICategoryElement, type IResourceElement, type IRootModelElement } from '@lhq/lhq-generators';
 import { excelWorksheetName, ExporterEngine, IDataExporter } from './types';
 import path from 'path';
 import { FileFilter } from '../utils';
@@ -27,7 +27,6 @@ export class ExcelDataExporter implements IDataExporter {
         const workbook = new ExcelJS.Workbook();
         const ws = workbook.addWorksheet(excelWorksheetName);
 
-        // Add headers
         const headerRowStyle: Partial<ExcelJS.Style> = {
             fill: {
                 type: 'pattern',
@@ -47,7 +46,8 @@ export class ExcelDataExporter implements IDataExporter {
         const engName = primaryCulture?.engName ?? primaryLanguage;
         rows.push(`${name.toUpperCase()} (${engName}) [Primary]`);
 
-        model.languages.filter(lang => lang !== primaryLanguage).forEach(lang => {
+        const restLangs = arraySortBy(model.languages as string[], x=>x, 'asc', false).filter(lang => lang !== primaryLanguage);
+        restLangs.forEach(lang => {
             const culture = appContext.findCulture(lang);
             const langName = culture?.name ?? lang;
             const langEngName = culture?.engName ?? lang;
@@ -58,7 +58,7 @@ export class ExcelDataExporter implements IDataExporter {
             cell.style = headerRowStyle;
         });
 
-        const languagesToExport = [primaryLanguage, ...languages.filter(lang => lang !== primaryLanguage)];
+        const languagesToExport = [primaryLanguage, ...restLangs];
         let cellRow = 1;
 
         const columnKeyStyle: Partial<ExcelJS.Style> = {

@@ -14,7 +14,6 @@ export class AppCultures {
             const contentString = new TextDecoder().decode(rawContent);
             const items = JSON.parse(contentString) as CultureInfo[];
             for (const culture of items) {
-                //_cultures[culture.name] = culture;
                 this._cultures.push(culture);
             }
 

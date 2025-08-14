@@ -75,8 +75,6 @@
      * @property {boolean} isPrimary
      */
 
-    //    * @property {string} invalidMessage
-
     const regexValidCharacters = /^[a-zA-Z]+[a-zA-Z0-9_]*$/;
 
     let currentPrimaryLang = 'en';
@@ -90,16 +88,12 @@
     /** @type Array<RegExp> */
     const valuesRegexValidators = [];
 
-    //const errorInvalidUnicodeChars = 'Invalid unicode characters found in the value.';
-
     // returns error string if value is invalid, otherwise returns empty string
     function validateResourceValue(value) {
-        let validData = true;
         if (value !== undefined && value !== null && typeof value === 'string' && value.length > 0) {
-            validData = valuesRegexValidators.every(regex => !regex.test(value));
+            return valuesRegexValidators.every(regex => !regex.test(value));
         }
-
-        return validData;
+        return true;
     }
 
 
@@ -191,12 +185,10 @@
                 type: type,
                 id: id,
             };
-            //console.log(`Last focused element changed to: `, lastFocusedElement);
         } else if (isParametersEditableSpan(target)) {
             lastFocusedElement = {
                 type: 'tags'
             };
-            //console.log(`Last focused element changed to: `, lastFocusedElement);
         }
     });
 
@@ -228,13 +220,7 @@
                     window.pageApp.internalEditParameters(true);
                     document.getElementById('editParameters').focus();
                 }
-
-                // event.preventDefault();
-                // event.stopPropagation();
             } else if (event.key === 'F2') {
-                // const item = window.pageApp.item;
-                // const data = { elementType: item.elementType, paths: toRaw(item.paths) };
-                // postMessage({ command: 'focusTree', ...data }, 'Focus tree on F2 key press');
 
                 const item = window.pageApp.item;
                 const data = { elementType: item.elementType, paths: toRaw(item.paths) };
@@ -300,8 +286,6 @@
                 const uid = `${message.field}-invalid`;
 
                 if (message.action === 'add') {
-                    // showTooltip(`${message.field}-invalid`, message.message, elem);
-
                     /** @type {InvalidDataError} */
                     const error = {
                         uid: uid,
@@ -323,7 +307,6 @@
                 */
 
                 if (window.pageApp.item && message.paths) {
-                    // window.pageApp.supressOnChange = true;
                     window.pageApp.supressOnChange = 'onetime';
 
                     window.pageApp.$nextTick(() => {
@@ -350,7 +333,6 @@
                 const autoFocus = message.autoFocus ?? false;
                 const restoreFocusedInput = message.restoreFocusedInput ?? false;
 
-                //const file = message.file;
                 usedCultures = message.cultures || [];
                 if (usedCultures.length === 0) {
                     usedCultures = [{
@@ -485,9 +467,6 @@
     function setNewElement(element, modelProperties) {
         if (!element) { return; }
 
-        // backup focused element on document to global 'focusedElem' and restore that elem to be focused on end of this fn
-        //const focusedElem = document.activeElement;
-
         /** @type TranslationItem[] */
         const translations = [];
 
@@ -524,7 +503,6 @@
         window.pageApp.modelProperties = modelProperties ?? getDefaultModelProperties();
         window.pageApp.modelProperties.layoutModes = [{ name: 'Hierarchical tree', value: true }, { 'name': 'Flat list', value: false }];
         window.pageApp.modelPropertiesBackup = modelProperties
-            // ? Object.assign({}, modelProperties)
             ? structuredClone(modelProperties)
             : getDefaultModelProperties();
 
@@ -599,7 +577,6 @@
             if (item.tooltip.isConnected) { item.tooltip.remove(); }
             if (tooltipsMap.has(item.uid)) {
                 tooltipsMap.delete(item.uid);
-                //logMsg(`[Tooltip] Removed tooltip '${item.uid}'.`);
             }
             item.tooltip = null;
         }
@@ -611,14 +588,12 @@
             if (item.hideTimeoutId) { clearTimeout(item.hideTimeoutId); }
             if (item.removeTimeoutId) { clearTimeout(item.removeTimeoutId); }
             item.tooltip.classList.remove('tooltip-fade-out');
-            //logMsg(`[Tooltip] Cancel removal of tooltip '${item.uid}'.`);
         }
     }
 
     function hideTooltip(uid) {
         const item = tooltipsMap.get(uid);
         if (item) {
-            //logMsg(`[Tooltip] Hiding tooltip '${item.uid}'.`);
             cancelRemoval(item);
             removeTooltip(item);
         }
@@ -630,7 +605,6 @@
         if (translations) {
             const focusedElem = document.activeElement;
             translations.querySelectorAll('tr>td[data-focused]').forEach(td => {
-                // find next sibling to td
                 const next = td.nextElementSibling;
                 if (next) {
                     const textArea = next.querySelector('textarea');
@@ -652,7 +626,6 @@
             const now = Date.now();
             tooltipsMap.values().filter(x => (now - x.date) > 300).forEach(item => {
                 if (item.tooltip && !item.tooltip.contains(event.target)) {
-                    //logMsg(`[Tooltip] click outside, remove/cancel tooltip '${item.uid}'.`);
                     cancelRemoval(item);
                     removeTooltip(item);
                 }
@@ -719,8 +692,6 @@
         let tooltip = document.createElement('div');
         tooltip.textContent = message;
         tooltip.classList.add('tooltip'); // Add the main tooltip class
-        // let hideTimeoutId;
-        // let removeTimeoutId;
         const tooltipItem = {
             tooltip: tooltip,
             uid: uid,
@@ -732,13 +703,11 @@
 
         const scheduleRemoval = () => {
             if (tooltipItem.tooltip) {
-                //logMsg(`[Tooltip] scheduled hide timeout(${hideTimeout}) for tooltip '${tooltipItem.uid}'.`);
                 tooltipItem.hideTimeoutId = window.setTimeout(() => {
                     if (tooltipItem.tooltip) {
                         tooltipItem.tooltip.classList.add('tooltip-fade-out');
                     }
 
-                    //logMsg(`[Tooltip] scheduled remove timeout(${removeTimeout}) for tooltip '${tooltipItem.uid}'.`);
                     tooltipItem.removeTimeoutId = window.setTimeout(() => {
                         removeTooltip(tooltipItem);
                     }, removeTimeout);
@@ -750,7 +719,6 @@
         tooltip.addEventListener('mouseleave', scheduleRemoval);
         tooltip.addEventListener('click', (e) => {
             e.stopPropagation();
-            //logMsg(`[Tooltip] click on tooltip, remove/cancel tooltip '${item.uid}'.`);
             cancelRemoval(tooltipItem);
             removeTooltip(tooltipItem);
         });
@@ -768,7 +736,6 @@
             setTimeout(() => {
                 if (!handleClickOutsideInitialized && tooltipItem.tooltip) {
                     handleClickOutsideInitialized = true;
-                    // document.addEventListener('click', handleClickOutside, true);
                 }
             }, 200);
         }
@@ -1026,7 +993,6 @@
 
             /** @param {InvalidDataError} error */
             updateInvalidData(error) {
-                //logMsg(`Update invalid data: `, error);
                 if (error === undefined || error === null) {
                     throw new Error('InvalidDataError is undefined or null');
                 }
@@ -1087,7 +1053,6 @@
                             if (!invalidData.errors.some(x => x.uid === languageName && x.type === 'badunicodechars')) {
                                 const msg = `Invalid unicode characters found in ${getCultureName(languageName)} translation.`;
                                 this.updateInvalidData({ uid: languageName, message: msg, type: 'badunicodechars' });
-                                //logMsg(`Invalid unicode characters found in ${getCultureName(languageName)} translation, updating invalidData: `, msg);
                             }
                         } else {
                             const invalidData = this.invalidData;
@@ -1213,41 +1178,8 @@
             },
 
             setTranslationValue(event) {
-                //@input="setCodeGeneratorPropertyValue(group, setting.name, $event.target.value)"
                 this.resizeTextarea(event.target);
-
-                // const lang = event.target.dataset['lang'];
-                // const translation = this.item.translations.find(x => x.valueRef.languageName === lang);
-                // if (!translation) {
-                //     logMsg(`Translation for language '${lang}' not found.`);
-                //     return;
-                // }
-
-                // const valid = validateResourceValue(event.target.value);
-                // translation.invalidMessage = valid ? '' : 'Invalid unicode characters found in the value.';
             },
-
-            // onTranslationValueChange(lang, value) {
-            //     const translation = this.item.translations.find(x => x.valueRef.languageName === lang);
-            //     if (!translation) {
-            //         logMsg(`Translation for language '${lang}' not found.`);
-            //         return;
-            //     }
-
-            //     const valid = validateResourceValue(value);
-            //     translation.invalidMessage = valid ? '' : 'Invalid unicode characters found in the value.';
-            // },
-
-            // validateTranslationValue(lang) {
-            //     const translation = this.item.translations.find(x => x.valueRef.languageName === lang);
-            //     if (!translation) {
-            //         logMsg(`Translation for language '${lang}' not found.`);
-            //         return;
-            //     }
-
-            //     const valid = validateResourceValue(event.target.value);
-            //     translation.invalidMessage = valid ? '' : 'Invalid unicode characters found in the value.';
-            // },
 
             focusOnTranslation(event) {
                 if (!event.target) {
@@ -1259,14 +1191,6 @@
                 if (cell) {
                     cell.dataset['focused'] = 'true';
                 }
-
-                // /** @type {InvalidDataInfo} */
-                // const invalidData = this.invalidData;
-                // const textArea = event.target;
-                // const error = invalidData.errors.find(x => x.element === textArea);
-                // if (error) {
-                //     showTooltip(error.uid, error.message, textArea);
-                // }
             },
 
             blurOnTranslation(event) {
@@ -1327,8 +1251,6 @@
                         enabled: false
                     },
 
-                    //placeholder: 'Enter parameters for resource (optional)',
-
                     templates: {
                         tag: function (tagData) {
                             const title = tagData.__isValid !== true ? tagData.__isValid : 'Double click to edit parameter';
@@ -1354,7 +1276,6 @@
                     },
 
                     transformTag: function (tagData, originalData) {
-                        //logMsg('Transforming tag:', tagData, originalData);
                         if (tagData.order === undefined) {
                             const maxOrder = Math.max(...this.value.map(x => x.order), -1);
                             tagData.order = maxOrder + 1;
@@ -1368,7 +1289,6 @@
                 tagify.DOM.input.addEventListener('focus', function () {
                     const tagsElem = this.parentNode;
                     if (tagsElem) {
-                        // logMsg('Tagify input focused');
                         tagsElem.classList.add('focus-border');
                     }
                 });
@@ -1705,6 +1625,4 @@
             }
         }
     }).mount('#app');
-
-    //window.pageApp = pageApp;
 }());

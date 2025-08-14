@@ -116,12 +116,6 @@ export class VirtualRootElement extends VirtualTreeElement implements IVirtualRo
     }
 
     public refresh(): void {
-        // let label = 'Languages';
-        // if (!appContext.languagesVisible) {
-        //     const primary = this.root.primaryLanguage ?? '';
-        //     label += `: ${this.root.languages?.length ?? 0} (primary: ${primary})`;
-        // }
-
         const primary = this.root.primaryLanguage ?? '';
         const label = `Languages: ${this.root.languages?.length ?? 0} (primary: ${primary})`;
 
@@ -207,14 +201,3 @@ export function validateTreeElementName(elementType: TreeElementType, name: stri
 
     return null;
 }
-
-// export function setTreeElementUid(element: ITreeElement): void {
-//     const id = element.data['uid'] as string ?? '';
-//     if (isNullOrEmpty(id)) {
-//         ModelUtils.setTempData(element, 'uid', crypto.randomUUID());
-//     }
-// }
-
-// export function getTreeElementUid(element: ITreeElement): string {
-//     return element.data['uid'] as string ?? '';
-// }

@@ -1,5 +1,5 @@
 import type { FormattingOptions, ICodeGeneratorElement, IRootModelElement, ITreeElement, LhqModel, LhqModelOptionsResources, TemplateMetadataDefinition, TreeElementType } from '@lhq/lhq-generators';
-import type { MarkdownString, MessageOptions, TextDocument, ThemeColor, Uri, Webview } from 'vscode';
+import type { MarkdownString, TextDocument, ThemeColor, Uri, Webview } from 'vscode';
 
 export type SearchTreeKind = 'path' | 'name' | 'translation' | 'language';
 
@@ -61,8 +61,6 @@ export type CultureInfo = {
     lcid: number;
     isNeutral: boolean;
 }
-
-//export type CulturesMap = Record<string, CultureInfo>;
 
 export type ValidationError = { message: string, detail?: string };
 
@@ -282,12 +280,6 @@ export type SelectionBackup = Array<{
     type: TreeElementType;
     fullPath: string;
 }>;
-
-// export type MessageBoxOptions = {
-//     logger?: boolean
-//     detail?: string;
-//     showDetail?: boolean;
-// }
 
 export type NotificationBoxOptions = {
     logger?: boolean

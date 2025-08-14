@@ -1,5 +1,5 @@
 import type { ImportModelMode, ImportModelOptions, ImportResourceItem, IRootModelElement } from '@lhq/lhq-generators';
-import { FileFilter } from '../utils';
+import type { FileFilter } from '../utils';
 
 export type ImportPreparedData = {
     error: string | undefined;

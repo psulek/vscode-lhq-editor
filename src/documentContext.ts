@@ -2,16 +2,15 @@ import * as vscode from 'vscode';
 import path from 'node:path';
 import fse from 'fs-extra';
 import { nextTick } from 'node:process';
-import { createTreeElementPaths, delay, generateNonce, getElementFullPath, getGeneratorAppErrorMessage, isValidDocument, logger, showConfirmBox, showOpenFileDialog, showMessageBox, showNotificationBox, showSaveFileDialog } from './utils';
+import { createTreeElementPaths, delay, generateNonce, getElementFullPath, getGeneratorAppErrorMessage, isValidDocument, logger, showConfirmBox, showMessageBox, showNotificationBox } from './utils';
 import { AppToPageMessage, ClientPageError, ClientPageModelProperties, ClientPageSettingsError, CultureInfo, IDocumentContext, IVirtualLanguageElement, IVirtualRootElement, NotifyDocumentActiveChangedCallback, PageToAppMessage, SelectionBackup, StatusBarItemUpdateRequestCallback, ValidationError } from './types';
-import { CategoryLikeTreeElementToJsonOptions, CategoryOrResourceType, CodeGeneratorGroupSettings, detectFormatting, FormattingOptions, GeneratedFile, Generator, generatorUtils, HbsTemplateManager, ICategoryLikeTreeElement, ImportModelErrorKind, ImportModelMode, ImportModelResult, IResourceElement, IResourceParameterElement, IResourceValueElement, IRootModelElement, isNullOrEmpty, ITreeElement, LhqModel, LhqModelResourceTranslationState, LhqValidationResult, modelConst, ModelUtils, strCompare, TreeElementType } from '@lhq/lhq-generators';
+import { CategoryLikeTreeElementToJsonOptions, CategoryOrResourceType, CodeGeneratorGroupSettings, detectFormatting, FormattingOptions, GeneratedFile, Generator, generatorUtils, HbsTemplateManager, ICategoryLikeTreeElement, ImportModelErrorKind, ImportModelResult, IResourceElement, IResourceParameterElement, IResourceValueElement, IRootModelElement, isNullOrEmpty, ITreeElement, LhqModel, LhqModelResourceTranslationState, LhqValidationResult, modelConst, ModelUtils, strCompare, TreeElementType } from '@lhq/lhq-generators';
 import { filterTreeElements, filterVirtualTreeElements, isVirtualTreeElement, validateTreeElementName, VirtualRootElement } from './elements';
 import { AvailableCommands, Commands, getCurrentFolder } from './context';
 import { CodeGenStatus } from './codeGenStatus';
 import { ImportFileSelector } from './impExp/importFileSelector';
 import { ExportFileSelectedData, ImportFileSelectedData } from './impExp/types';
 import { ImportExportManager } from './impExp/manager';
-import { ExcelDataExporter } from './impExp/excelExpoter';
 import { ExportFileSelector } from './impExp/exportFileSelector';
 
 type LangTypeMode = 'all' | 'neutral' | 'country';
@@ -236,7 +235,6 @@ export class DocumentContext implements IDocumentContext {
             valueRef: Partial<IResourceValueElement>;
             culture: CultureInfo;
             isPrimary: boolean;
-            //invalidMessage?: string;
         }
 
         if (elem && !isVirtualTreeElement(elem)) {
@@ -276,11 +274,6 @@ export class DocumentContext implements IDocumentContext {
 
             const newDescription = element.description as string | undefined;
             if (newDescription !== elem.description) {
-
-                // if (!this.checkForInvalidUnicodeChars(elem, elemFullPath, 'description', newDescription)) {
-                //     return;
-                // }
-
                 elem.description = newDescription;
                 changed = true;
             }
@@ -316,12 +309,6 @@ export class DocumentContext implements IDocumentContext {
                 const newValues = values.map(x => `${x.languageName}:${x.value}:${x.locked}`).join(',');
 
                 if (newValues !== oldValues) {
-
-                    // if (!this.checkForInvalidUnicodeChars(elem, elemFullPath, 'description', newDescription)) {
-                    //     return;
-                    // }
-
-
                     changed = true;
                     res.removeValues();
                     res.addValues(values, { existing: 'skip' });
@@ -350,40 +337,39 @@ export class DocumentContext implements IDocumentContext {
         }
     }
 
-    private checkForInvalidUnicodeChars(elem: ITreeElement, elemFullPath: string, field: string, value: string | undefined) {
-        if (isNullOrEmpty(value)) {
-            return true;
-        }
+    // private checkForInvalidUnicodeChars(elem: ITreeElement, elemFullPath: string, field: string, value: string | undefined) {
+    //     if (isNullOrEmpty(value)) {
+    //         return true;
+    //     }
 
-        const hasInvalidChars = ModelUtils.containsInvalidUnicodeChars(value);
+    //     const hasInvalidChars = ModelUtils.containsInvalidUnicodeChars(value);
 
-        if (hasInvalidChars) {
-            const validationError = 'Invalid unicode characters found in the value. ';
-            this.setPageError(elem, field, validationError);
+    //     if (hasInvalidChars) {
+    //         const validationError = 'Invalid unicode characters found in the value. ';
+    //         this.setPageError(elem, field, validationError);
 
-            this.sendMessageToHtmlPage({
-                command: 'invalidData',
-                fullPath: elemFullPath,
-                message: validationError,
-                action: 'add',
-                field: field
-            });
-            return;
-        } else {
-            if (this.removePageError(elem, field)) {
-                this.sendMessageToHtmlPage({
-                    command: 'invalidData',
-                    fullPath: elemFullPath,
-                    message: '',
-                    action: 'remove',
-                    field: field
-                });
-            }
-        }
-    }
+    //         this.sendMessageToHtmlPage({
+    //             command: 'invalidData',
+    //             fullPath: elemFullPath,
+    //             message: validationError,
+    //             action: 'add',
+    //             field: field
+    //         });
+    //         return;
+    //     } else {
+    //         if (this.removePageError(elem, field)) {
+    //             this.sendMessageToHtmlPage({
+    //                 command: 'invalidData',
+    //                 fullPath: elemFullPath,
+    //                 message: '',
+    //                 action: 'remove',
+    //                 field: field
+    //             });
+    //         }
+    //     }
+    // }
 
     public async commitChanges(message: string): Promise<boolean> {
-
         if (this._disposed) {
             logger().log(this, 'debug', `commitChanges [${message}] -> DocumentContext is disposed. Ignoring changes.`);
             return false;
@@ -403,7 +389,8 @@ export class DocumentContext implements IDocumentContext {
         const newModel = ModelUtils.elementToModel<LhqModel>(this._rootModel!, {
             values: {
                 eol: 'CRLF', // backward compatibility, always use CRLF in values new lines
-                sanitize: false // do not sanitize now, maybe later...
+                // NOTE: do not sanitize now, maybe later...
+                sanitize: false
             }
         });
         const serializedRoot = ModelUtils.serializeModel(newModel, this._documentFormatting);
@@ -767,20 +754,6 @@ export class DocumentContext implements IDocumentContext {
         }
 
         try {
-            // const currentFolder = appContext.getCurrentFolder();
-            // const date = new Date().toISOString().replace(/[:.-]/g, '').slice(0, 15); // format: YYYYMMDDTHHMMSS
-            // const fileName = currentFolder ? path.join(currentFolder.fsPath, `exported-${date}`) : `exported-${date}`;
-            // const newFile = await showSaveFileDialog('Enter file name where to export resources', {
-            //     filters: { 'Excel files': ['xlsx'] },
-            //     defaultUri: currentFolder ? vscode.Uri.file(fileName) : undefined,
-            //     title: 'Export resources to Excel file'
-            // });
-
-            // if (!newFile) {
-            //     return;
-            // }
-
-            //await new ExcelDataExporter().exportToFile(newFile.fsPath, this.rootModel, this.fileName);
             const exportInfo = await ExportFileSelector.showRoot(this._exportFileSelectedData, this.rootModel);
             if (!exportInfo) {
                 return;
@@ -877,7 +850,6 @@ export class DocumentContext implements IDocumentContext {
                     importData.cloneSource = false;
                     importData.importNewLanguages = true;
                     importData.importNewElements = importInfo.allowNewElements;
-                    // importData.importNewElements = importInfo.mode === 'importAsNew';
 
                     importResult = ModelUtils.importModel(rootModel, importInfo.mode, importData);
                 } else {
@@ -1119,16 +1091,8 @@ export class DocumentContext implements IDocumentContext {
             }
         }
 
-        if (error) {
-            if (showError === true) {
-                showNotificationBox('warn', error.message + '\n' + error.detail);
-            } else {
-                // let msg = error.message;
-                // if (!isNullOrEmpty(error.detail)) {
-                //     msg += `\n${ error.detail } `;
-                // }
-                // logger().log('this', 'error', msg);
-            }
+        if (error && showError === true) {
+            showNotificationBox('warn', error.message + '\n' + error.detail);
         }
 
         return error;
@@ -1352,8 +1316,6 @@ export class DocumentContext implements IDocumentContext {
             includeCategories: false,
             includeResources: false
         };
-
-        // const autoFocus = appContext.getConfig().autoFocusEditor;
 
         const message: AppToPageMessage = {
             command: 'loadPage',
@@ -1851,7 +1813,6 @@ export class DocumentContext implements IDocumentContext {
     }
 
     private async findInTreeView(): Promise<void> {
-        // await vscode.commands.executeCommand('lhqTreeView.focus');
         await vscode.commands.executeCommand(Commands.focusTree);
         await vscode.commands.executeCommand('list.find', 'lhqTreeView');
     }

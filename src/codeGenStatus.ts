@@ -14,10 +14,8 @@ type LastStatusInfo = {
 export class CodeGenStatus implements ICodeGenStatus {
     private _docContext: IDocumentContext;
     private _inProgress = false;
-    //private _lastStatus: CodeGeneratorStatusInfo | undefined;
     private _lastStatus: LastStatusInfo | undefined;
     private _uid = '';
-    // private _statusBar: vscode.StatusBarItem;
     private readonly _requestStatusBarItemUpdate: StatusBarItemUpdateRequestCallback;
 
     constructor(docContext: IDocumentContext, requestStatusBarItemUpdate: StatusBarItemUpdateRequestCallback) {
@@ -48,7 +46,6 @@ export class CodeGenStatus implements ICodeGenStatus {
     
     public restoreLastStatus(): void {
         if (this._lastStatus && this._lastStatus.updateInfo) {
-            //this.update(this._lastStatus);
             this._requestStatusBarItemUpdate(this._docContext, this._lastStatus.updateInfo);
         }
     }
@@ -63,32 +60,26 @@ export class CodeGenStatus implements ICodeGenStatus {
         let colorId: string | undefined;
 
         const result = crypto.randomUUID();
-        //this._lastStatus = info;
         this._uid = result;
 
         const suffix = ' (lhq-editor)';
         let textSuffix = true;
-        //const filename = this._docContext.fileName;
         const filename = path.basename(this._docContext.fileName);
         const templateId = this._docContext.codeGeneratorTemplateId;
 
         switch (info.kind) {
             case 'active':
-                // text = `$(sync~spin) LHQ generating code for ${filename}`;
                 text = `$(sync~spin) ${filename}: generating code ...`;
                 tooltip = `Running code generator template **${templateId}** ...`;
                 break;
 
             case 'idle':
-                // textSuffix = false;
-                // text = '$(run-all) LHQ (template: ' + templateId + ')';
                 text = `$(run-all) ` + (isNullOrEmpty(filename) ? 'LHQ' : filename);
                 command = GlobalCommands.runGenerator;
                 tooltip = `Click to run code generator template **${templateId}**`;
                 break;
 
             case 'error':
-                // text = `$(error) ${info.message}`;
                 text = `$(error) ${filename}: ${info.message}`;
                 backgroundId = 'statusBarItem.errorBackground';
                 colorId = 'statusBarItem.errorForeground';
@@ -104,7 +95,6 @@ export class CodeGenStatus implements ICodeGenStatus {
 
             case 'status':
                 const icon = info.success ? 'check' : 'error';
-                // text = info.success ? `$(check) ${info.message}` : `$(error) ${info.message}`;
                 text = `$(${icon}) ${filename}: ${info.message}`;
                 tooltip = '';
                 backgroundId = info.success
