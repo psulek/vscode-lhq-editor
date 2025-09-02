@@ -148,9 +148,11 @@ export async function showConfirmBox(message: string, detail?: string, options?:
     const warn = options?.warn ?? false;
     const yes = options?.yesText ?? 'Yes';
     const no = options?.noText ?? 'No';
+    const noHidden = options?.noHidden ?? false;
+    const btns = noHidden ? [yes] : [yes, no];
     const result = warn ?
-        await vscode.window.showWarningMessage(msg, { modal: true, detail }, yes, no) :
-        await vscode.window.showInformationMessage(msg, { modal: true, detail }, yes, no);
+        await vscode.window.showWarningMessage(msg, { modal: true, detail }, ...btns) :
+        await vscode.window.showInformationMessage(msg, { modal: true, detail }, ...btns);
 
     return result === undefined ? undefined : result === yes;
 }

@@ -154,11 +154,11 @@
                                     </div>
                                 </td>
                                 <td>
+                                    <!-- :placeholder="'Enter translation for ' + translation.culture" -->
                                     <textarea ref="translationTextArea" v-model="translation.valueRef.value" rows="1"
                                         @input="setTranslationValue" :data-lang="translation.valueRef.languageName"
-                                        :placeholder="'Enter translation for ' + translation.culture"
                                         :readonly="translation.valueRef.locked"
-                                        :class="{ 'locked': translation.valueRef.locked }" @focus="focusOnTranslation"
+                                        :class="'translationTextArea ' + { 'locked': translation.valueRef.locked }" @focus="focusOnTranslation"
                                         @blur="blurOnTranslation"
                                         :title="translation.valueRef.locked ? 'Editing of translation is locked.':''"></textarea>
                                     <div v-if="getTranslationUnicodeError(translation)"

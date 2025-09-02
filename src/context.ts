@@ -74,6 +74,8 @@ export const ContextEvents = {
     isReadonlyModeChanged: 'isReadonlyModeChanged'
 };
 
+export const CustomEditorViewType = 'lhq.customEditor';
+
 export class AppContext implements IAppContext {
     private _ctx!: vscode.ExtensionContext;
     private _isEditorActive = false;
@@ -165,7 +167,7 @@ export class AppContext implements IAppContext {
         this._lhqTreeDataProvider = new LhqTreeDataProvider(this._ctx);
         this._lhqEditorProvider = new LhqEditorProvider(this._ctx, this._lhqTreeDataProvider);
         this._ctx.subscriptions.push(
-            vscode.window.registerCustomEditorProvider(LhqEditorProvider.viewType, this._lhqEditorProvider, {
+            vscode.window.registerCustomEditorProvider(CustomEditorViewType, this._lhqEditorProvider, {
                 webviewOptions: {
                     retainContextWhenHidden: true,
                 },

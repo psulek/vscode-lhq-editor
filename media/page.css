@@ -497,3 +497,8 @@ select[disabled] {
 
   color: var(--vscode-input-placeholderForeground);
 }
+
+
+.translationTextArea{
+    color: inherit;
+}

@@ -9,7 +9,7 @@ import { DocumentContext } from './documentContext';
 import { AvailableCommands, Commands, ContextEvents, GlobalCommands } from './context';
 
 export class LhqEditorProvider implements vscode.CustomTextEditorProvider {
-    public static readonly viewType = 'lhq.customEditor';
+    // public static readonly viewType = 'lhq.customEditor';
 
     private readonly _documents = new Map<string, DocumentContext>();
     private readonly _debouncedOnSelectionChanged: SelectionChangedCallback = undefined!;
@@ -260,9 +260,14 @@ export class LhqEditorProvider implements vscode.CustomTextEditorProvider {
     private validateOnOpen(docCtx: DocumentContext): void {
         setTimeout(async () => {
             try {
+                if (!await docCtx.upgradeModelIfNeeded()) {
+                    return;
+                }
+                
                 await docCtx.validateLanguages();
+
             } catch (error) {
-                logger().log(this, 'error', `validateOnOpen -> Error while validating languages: ${error}`);                
+                logger().log(this, 'error', `validateOnOpen -> Error while validating languages: ${error}`);
             }
         }, 100);
     }

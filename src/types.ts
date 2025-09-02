@@ -289,7 +289,8 @@ export type ConfirmBoxOptions = {
     logger?: boolean
     warn?: boolean;
     yesText?: string;
-    noText?: string
+    noText?: string;
+    noHidden?: boolean;
 }
 
 export interface ICodeGenStatus {

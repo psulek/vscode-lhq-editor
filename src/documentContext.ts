@@ -6,7 +6,7 @@ import { createTreeElementPaths, delay, generateNonce, getElementFullPath, getGe
 import { AppToPageMessage, ClientPageError, ClientPageModelProperties, ClientPageSettingsError, CultureInfo, IDocumentContext, IVirtualLanguageElement, IVirtualRootElement, NotifyDocumentActiveChangedCallback, PageToAppMessage, SelectionBackup, StatusBarItemUpdateRequestCallback, ValidationError } from './types';
 import { CategoryLikeTreeElementToJsonOptions, CategoryOrResourceType, CodeGeneratorGroupSettings, detectFormatting, FormattingOptions, GeneratedFile, Generator, generatorUtils, HbsTemplateManager, ICategoryLikeTreeElement, ImportModelErrorKind, ImportModelResult, IResourceElement, IResourceParameterElement, IResourceValueElement, IRootModelElement, isNullOrEmpty, ITreeElement, LhqModel, LhqModelResourceTranslationState, LhqValidationResult, modelConst, ModelUtils, strCompare, TreeElementType } from '@lhq/lhq-generators';
 import { filterTreeElements, filterVirtualTreeElements, isVirtualTreeElement, validateTreeElementName, VirtualRootElement } from './elements';
-import { AvailableCommands, Commands, getCurrentFolder } from './context';
+import { AvailableCommands, Commands, CustomEditorViewType, getCurrentFolder } from './context';
 import { CodeGenStatus } from './codeGenStatus';
 import { ImportFileSelector } from './impExp/importFileSelector';
 import { ExportFileSelectedData, ImportFileSelectedData } from './impExp/types';
@@ -369,6 +369,20 @@ export class DocumentContext implements IDocumentContext {
     //     }
     // }
 
+    private serializeRootModel(otherRootModel?: IRootModelElement): { json: string; model: LhqModel } {
+        otherRootModel = otherRootModel ?? this._rootModel!;
+        const model = ModelUtils.rootElementToModel(otherRootModel, {
+            values: {
+                eol: 'CRLF', // backward compatibility, always use CRLF in values new lines
+                // NOTE: do not sanitize now, maybe later...
+                sanitize: false
+            }
+        });
+
+        const json = ModelUtils.serializeModel(model, this._documentFormatting);
+        return { json, model };
+    }
+
     public async commitChanges(message: string): Promise<boolean> {
         if (this._disposed) {
             logger().log(this, 'debug', `commitChanges [${message}] -> DocumentContext is disposed. Ignoring changes.`);
@@ -386,14 +400,15 @@ export class DocumentContext implements IDocumentContext {
         }
 
         this.validateDocument();
-        const newModel = ModelUtils.elementToModel<LhqModel>(this._rootModel!, {
-            values: {
-                eol: 'CRLF', // backward compatibility, always use CRLF in values new lines
-                // NOTE: do not sanitize now, maybe later...
-                sanitize: false
-            }
-        });
-        const serializedRoot = ModelUtils.serializeModel(newModel, this._documentFormatting);
+        // const newModel = ModelUtils.rootElementToModel(this._rootModel!, {
+        //     values: {
+        //         eol: 'CRLF', // backward compatibility, always use CRLF in values new lines
+        //         // NOTE: do not sanitize now, maybe later...
+        //         sanitize: false
+        //     }
+        // });
+        // const serializedRoot = ModelUtils.serializeModel(newModel, this._documentFormatting);
+        const { json: serializedRoot, model: newModel } = this.serializeRootModel();
 
         const edit = new vscode.WorkspaceEdit();
         const doc = this._textDocument;
@@ -551,6 +566,69 @@ export class DocumentContext implements IDocumentContext {
         }
     }
 
+    public async upgradeModelIfNeeded(): Promise<boolean> {
+        const root = this._rootModel;
+        if (!root) {
+            return false;
+        }
+
+        let result = true;
+        appContext.readonlyMode = true;
+
+        try {
+            if (ModelUtils.upgradeRequired(root)) {
+                const doUpgrade = await showConfirmBox('File upgrade required',
+                    `The file '${this.fileName}' needs to be upgraded to the latest version (${modelConst.ModelVersions.model}).\n`,
+                    { yesText: 'Upgrade', noHidden: true });
+
+
+                if (!doUpgrade) {
+                    showNotificationBox('warn', `File upgrade was cancelled. Closing the file, as LHQ Editor does not support older file versions.`);
+                    await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
+                    return false;
+                }
+
+                const upgradeResult = ModelUtils.upgradeModel(root);
+                if (upgradeResult.success && upgradeResult.rootModel) {
+                    await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
+
+                    const json = this.serializeRootModel(upgradeResult.rootModel).json;
+                    await fse.writeFile(this.fileName, json, { encoding: 'utf8' });
+
+                    await vscode.commands.executeCommand('workbench.action.files.revert');
+
+                    const reopen = await showConfirmBox(`Upgrading file to the latest version was successful.`,
+                        `File '${this.fileName}' was successfully upgraded to the latest version (${modelConst.ModelVersions.model}).`,
+                        { yesText: 'Reopen file', noHidden: true });
+
+                    const uri = this._documentUri!;
+                    if (reopen) {
+                        nextTick(async () => {
+                            try {
+                                await vscode.commands.executeCommand('vscode.openWith', uri, CustomEditorViewType, { preview: false });
+                            } catch (error) {
+                                logger().log(this, 'error', `upgradeModelIfNeeded -> Error while reopening upgraded document`, error as Error);
+                            }
+                        });
+                    }
+
+                } else if (!isNullOrEmpty(upgradeResult.error)) {
+                    result = false;
+                    await showMessageBox('err', `Upgrading file to the latest version (${modelConst.ModelVersions.model}) failed.`,
+                        upgradeResult.error!);
+                }
+            }
+        }
+        catch (error) {
+            logger().log(this, 'error', `upgradeModelIfNeeded -> Error while upgrading model`, error as Error);
+        }
+        finally {
+            appContext.readonlyMode = false;
+        }
+
+        return result;
+    }
+
     public async validateLanguages(): Promise<boolean> {
         const root = this._rootModel;
         if (!root) {
@@ -596,7 +674,6 @@ export class DocumentContext implements IDocumentContext {
         appContext.readonlyMode = true;
 
         try {
-
             // list of all languages used in resources
             let resourceLanguages = new Set<string>();
             root.iterateTree(element => {
