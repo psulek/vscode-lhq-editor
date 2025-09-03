@@ -339,38 +339,6 @@ export class DocumentContext implements IDocumentContext {
         }
     }
 
-    // private checkForInvalidUnicodeChars(elem: ITreeElement, elemFullPath: string, field: string, value: string | undefined) {
-    //     if (isNullOrEmpty(value)) {
-    //         return true;
-    //     }
-
-    //     const hasInvalidChars = ModelUtils.containsInvalidUnicodeChars(value);
-
-    //     if (hasInvalidChars) {
-    //         const validationError = 'Invalid unicode characters found in the value. ';
-    //         this.setPageError(elem, field, validationError);
-
-    //         this.sendMessageToHtmlPage({
-    //             command: 'invalidData',
-    //             fullPath: elemFullPath,
-    //             message: validationError,
-    //             action: 'add',
-    //             field: field
-    //         });
-    //         return;
-    //     } else {
-    //         if (this.removePageError(elem, field)) {
-    //             this.sendMessageToHtmlPage({
-    //                 command: 'invalidData',
-    //                 fullPath: elemFullPath,
-    //                 message: '',
-    //                 action: 'remove',
-    //                 field: field
-    //             });
-    //         }
-    //     }
-    // }
-
     private serializeRootModel(otherRootModel?: IRootModelElement): { json: string; model: LhqModel } {
         otherRootModel = otherRootModel ?? this._rootModel!;
         const model = ModelUtils.rootElementToModel(otherRootModel, {

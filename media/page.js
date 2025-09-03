@@ -484,10 +484,12 @@
         });
 
 
+        /** @type TranslationItem[] */
+        const rest_translations = [];
         usedCultures.forEach(culture => {
             if (culture.name !== currentPrimaryLang) {
                 const value = element.values.find(x => x.languageName === culture.name);
-                translations.push({
+                rest_translations.push({
                     valueRef: value ?? { languageName: culture.name, value: '' },
                     culture: getCultureName(culture.name),
                     isPrimary: false,
@@ -495,6 +497,11 @@
                 });
             }
         });
+        if (rest_translations.length > 0) {
+            rest_translations.sort((a, b) => a.culture.localeCompare(b.culture, undefined, { sensitivity: 'base' }));
+            translations.push(...rest_translations);
+        }
+
 
         element.translations = translations;
         logMsg(`Setting new element:  ${getFullPath(element)} (${element.elementType})`, element, ' and modelProperties: ', modelProperties);

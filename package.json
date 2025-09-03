@@ -415,13 +415,15 @@
     ]
   },
   "scripts": {
-    "vscode:prepublish": "pnpm run package",
+    "vscode:prepublish": "pnpm run compile-prod",
+    "package": "npx vsce package",
+    "publish": "npx vsce publish",
     "compile": "pnpm run check-types && pnpm run lint && node esbuild.js",
+    "compile-prod": "pnpm run check-types && pnpm run lint && node esbuild.js --production",
+    "compile-tests": "tsc -p . --outDir out",
     "watch": "npm-run-all -p watch:*",
     "watch:esbuild": "node esbuild.js --watch",
     "watch:tsc": "tsc --noEmit --watch --project tsconfig.json",
-    "package": "pnpm run check-types && pnpm run lint && node esbuild.js --production",
-    "compile-tests": "tsc -p . --outDir out",
     "watch-tests": "tsc -p . -w --outDir out",
     "pretest": "pnpm run compile-tests && pnpm run compile && pnpm run lint",
     "check-types": "tsc --noEmit",
@@ -447,7 +449,7 @@
     "typescript": "^5.8.3"
   },
   "dependencies": {
-    "@lhq/lhq-generators": "1.0.0-rc.126",
+    "@lhq/lhq-generators": "1.0.0-rc.128",
     "class-transformer": "^0.5.1",
     "exceljs": "^4.4.0",
     "fs-extra": "11.3.0",
