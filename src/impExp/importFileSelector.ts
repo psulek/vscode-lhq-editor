@@ -121,7 +121,7 @@ export class ImportFileSelector {
                     if (result.file) {
                         return result;
                     } else {
-                        await showMessageBox('err', 'Please select file to import first.', undefined, false);
+                        await showMessageBox('err', 'Please select file to import first.', undefined, {logger: false});
                     }
                     break;
                 }

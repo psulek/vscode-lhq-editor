@@ -133,7 +133,7 @@ export class ExportFileSelector {
                     if (result.file) {
                         return result;
                     } else {
-                        await showMessageBox('err', 'Please select file to export to !', undefined, false);
+                        await showMessageBox('err', 'Please select file to export to !', undefined, {logger: false});
                     }
                     break;
                 }

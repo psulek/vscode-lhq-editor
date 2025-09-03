@@ -76,6 +76,9 @@ export const ContextEvents = {
 
 export const CustomEditorViewType = 'lhq.customEditor';
 
+export const ModelV3_Info = "https://github.com/psulek/lhqeditor/wiki/LHQ-Model-v3-Changes";
+
+
 export class AppContext implements IAppContext {
     private _ctx!: vscode.ExtensionContext;
     private _isEditorActive = false;

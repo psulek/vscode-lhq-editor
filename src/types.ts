@@ -291,7 +291,14 @@ export type ConfirmBoxOptions = {
     yesText?: string;
     noText?: string;
     noHidden?: boolean;
+    extraButtons?: string[];
 }
+
+export type MessageBoxOptions = {
+    logger?: boolean
+    buttons?: string[];
+}
+
 
 export interface ICodeGenStatus {
     get inProgress(): boolean;

@@ -5,7 +5,7 @@ import type { FileInfo, ReadFileInfoOptions, ITreeElementPaths, ITreeElement, IR
 import { AppError, fileUtils, isNullOrEmpty, ModelUtils, strCompare } from '@lhq/lhq-generators';
 
 import { ILogger, LogType, VsCodeLogger } from './logger';
-import { ConfirmBoxOptions, MatchForSubstringResult, NotificationBoxOptions } from './types';
+import { ConfirmBoxOptions, MatchForSubstringResult, MessageBoxOptions, NotificationBoxOptions } from './types';
 
 import 'reflect-metadata';
 
@@ -149,7 +149,13 @@ export async function showConfirmBox(message: string, detail?: string, options?:
     const yes = options?.yesText ?? 'Yes';
     const no = options?.noText ?? 'No';
     const noHidden = options?.noHidden ?? false;
+    const extraButtons = options?.extraButtons ?? [];
+
     const btns = noHidden ? [yes] : [yes, no];
+    if (extraButtons.length > 0) {
+        btns.push(...extraButtons);
+    }
+
     const result = warn ?
         await vscode.window.showWarningMessage(msg, { modal: true, detail }, ...btns) :
         await vscode.window.showInformationMessage(msg, { modal: true, detail }, ...btns);
@@ -176,7 +182,14 @@ export function showNotificationBox(type: 'warn' | 'info' | 'err', message: stri
     }
 }
 
-export async function showMessageBox(type: 'warn' | 'info' | 'err', message: string, detail?: string, addTologger?: boolean): Promise<void> {
+export async function showMessageBox(type: 'warn' | 'info' | 'err', message: string, detail: string | undefined, options: MessageBoxOptions): Promise<string | undefined>;
+export async function showMessageBox(type: 'warn' | 'info' | 'err', message: string, detail?: string): Promise<void>;
+export async function showMessageBox(
+    type: 'warn' | 'info' | 'err',
+    message: string,
+    detail?: string,
+    options?: MessageBoxOptions
+): Promise<string | undefined | void> {
     let msg = getMessageBoxText(message);
 
     const msgOptions: vscode.MessageOptions = {
@@ -184,7 +197,7 @@ export async function showMessageBox(type: 'warn' | 'info' | 'err', message: str
         modal: true
     };
 
-    addTologger = addTologger ?? true;
+    const addTologger = options?.logger ?? true;
 
     if (addTologger === true) {
         const logType: LogType = type === 'err' ? 'error' : type === 'warn' ? 'warn' : 'info';
@@ -192,13 +205,20 @@ export async function showMessageBox(type: 'warn' | 'info' | 'err', message: str
         logger().log('', logType, logMsg);
     }
 
-    if (type === 'warn') {
-        await vscode.window.showWarningMessage(msg, msgOptions);
-    } else if (type === 'err') {
-        await vscode.window.showErrorMessage(msg, msgOptions);
+    const buttons: string[] = [];
+    if (options?.buttons && options.buttons.length > 0) {
+        buttons.push(...options.buttons);
     } else {
-        await vscode.window.showInformationMessage(msg, msgOptions);
+        buttons.push('OK');
     }
+
+    if (type === 'warn') {
+        return await vscode.window.showWarningMessage(msg, msgOptions, ...buttons);
+    } else if (type === 'err') {
+        return await vscode.window.showErrorMessage(msg, msgOptions, ...buttons);
+    }
+
+    return await vscode.window.showInformationMessage(msg, msgOptions, ...buttons);
 }
 
 export function toPascalCasing(str: string): string {

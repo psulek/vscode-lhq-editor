@@ -1,12 +1,13 @@
 import * as vscode from 'vscode';
 import path from 'node:path';
 import fse from 'fs-extra';
+import { glob } from 'glob';
 import { nextTick } from 'node:process';
-import { createTreeElementPaths, delay, generateNonce, getElementFullPath, getGeneratorAppErrorMessage, isValidDocument, logger, showConfirmBox, showMessageBox, showNotificationBox } from './utils';
+import { createTreeElementPaths, delay, generateNonce, getElementFullPath, getGeneratorAppErrorMessage, isValidDocument, logger, readFileInfo, showConfirmBox, showMessageBox, showNotificationBox } from './utils';
 import { AppToPageMessage, ClientPageError, ClientPageModelProperties, ClientPageSettingsError, CultureInfo, IDocumentContext, IVirtualLanguageElement, IVirtualRootElement, NotifyDocumentActiveChangedCallback, PageToAppMessage, SelectionBackup, StatusBarItemUpdateRequestCallback, ValidationError } from './types';
-import { CategoryLikeTreeElementToJsonOptions, CategoryOrResourceType, CodeGeneratorGroupSettings, detectFormatting, FormattingOptions, GeneratedFile, Generator, generatorUtils, HbsTemplateManager, ICategoryLikeTreeElement, ImportModelErrorKind, ImportModelResult, IResourceElement, IResourceParameterElement, IResourceValueElement, IRootModelElement, isNullOrEmpty, ITreeElement, LhqModel, LhqModelResourceTranslationState, LhqValidationResult, modelConst, ModelUtils, strCompare, TreeElementType } from '@lhq/lhq-generators';
+import { AppError, AppErrorCodes, AppErrorKinds, CategoryLikeTreeElementToJsonOptions, CategoryOrResourceType, CodeGeneratorGroupSettings, CSharpNamespaceInfo, detectFormatting, FileInfo, FormattingOptions, GeneratedFile, Generator, generatorUtils, HbsTemplateManager, ICategoryLikeTreeElement, ImportModelErrorKind, ImportModelResult, IResourceElement, IResourceParameterElement, IResourceValueElement, IRootModelElement, isNullOrEmpty, ITreeElement, LhqModel, LhqModelResourceTranslationState, LhqValidationResult, modelConst, ModelUtils, namespaceUtils, strCompare, TreeElementType } from '@lhq/lhq-generators';
 import { filterTreeElements, filterVirtualTreeElements, isVirtualTreeElement, validateTreeElementName, VirtualRootElement } from './elements';
-import { AvailableCommands, Commands, CustomEditorViewType, getCurrentFolder } from './context';
+import { AvailableCommands, Commands, CustomEditorViewType, getCurrentFolder, ModelV3_Info } from './context';
 import { CodeGenStatus } from './codeGenStatus';
 import { ImportFileSelector } from './impExp/importFileSelector';
 import { ExportFileSelectedData, ImportFileSelectedData } from './impExp/types';
@@ -71,6 +72,7 @@ export class DocumentContext implements IDocumentContext {
     private _lastRequestPageReload = '';
     private _isReadonly = false;
     private _manualSaving = false;
+    private _autodetectNamespaceDialogActive = false;
 
     private _importFileSelectedData: ImportFileSelectedData = {
         engine: 'MsExcel',
@@ -373,7 +375,7 @@ export class DocumentContext implements IDocumentContext {
         otherRootModel = otherRootModel ?? this._rootModel!;
         const model = ModelUtils.rootElementToModel(otherRootModel, {
             values: {
-                eol: 'CRLF', // backward compatibility, always use CRLF in values new lines
+                //eol: 'CRLF', // backward compatibility, always use CRLF in values new lines
                 // NOTE: do not sanitize now, maybe later...
                 sanitize: false
             }
@@ -400,14 +402,6 @@ export class DocumentContext implements IDocumentContext {
         }
 
         this.validateDocument();
-        // const newModel = ModelUtils.rootElementToModel(this._rootModel!, {
-        //     values: {
-        //         eol: 'CRLF', // backward compatibility, always use CRLF in values new lines
-        //         // NOTE: do not sanitize now, maybe later...
-        //         sanitize: false
-        //     }
-        // });
-        // const serializedRoot = ModelUtils.serializeModel(newModel, this._documentFormatting);
         const { json: serializedRoot, model: newModel } = this.serializeRootModel();
 
         const edit = new vscode.WorkspaceEdit();
@@ -577,10 +571,19 @@ export class DocumentContext implements IDocumentContext {
 
         try {
             if (ModelUtils.upgradeRequired(root)) {
-                const doUpgrade = await showConfirmBox('File upgrade required',
-                    `The file '${this.fileName}' needs to be upgraded to the latest version (${modelConst.ModelVersions.model}).\n`,
-                    { yesText: 'Upgrade', noHidden: true });
+                const btnUpgrade = 'Upgrade';
+                const btnMoreInfo = 'More info';
+                const btn = await showMessageBox('info', 'File upgrade required',
+                    `The file '${this.fileName}' needs to be upgraded to the latest version (${modelConst.ModelVersions.model}).`,
+                    { buttons: [btnUpgrade, btnMoreInfo] });
 
+                if (btn === btnMoreInfo) {
+                    nextTick(async () => {
+                        await vscode.env.openExternal(vscode.Uri.parse(ModelV3_Info));
+                    });
+                }
+
+                const doUpgrade = btn === btnUpgrade;
 
                 if (!doUpgrade) {
                     showNotificationBox('warn', `File upgrade was cancelled. Closing the file, as LHQ Editor does not support older file versions.`);
@@ -590,6 +593,35 @@ export class DocumentContext implements IDocumentContext {
 
                 const upgradeResult = ModelUtils.upgradeModel(root);
                 if (upgradeResult.success && upgradeResult.rootModel) {
+
+                    // let showAutodetectNamespaceDialog = false;
+
+                    // fix missing 'Namespace' for 'Csharp' code generator...
+                    if (upgradeResult.rootModel.codeGenerator) {
+                        const settings = upgradeResult.rootModel.codeGenerator.settings;
+
+                        const propertyNamespace = 'Namespace';
+                        const groupCSharp = 'CSharp';
+                        const templateId = upgradeResult.rootModel.codeGenerator.templateId;
+                        const namespaceValue = ModelUtils
+                            .getCodeGeneratorSettingsConvertor()
+                            .getPropertyValue(templateId, settings, groupCSharp, propertyNamespace);
+
+                        if (namespaceValue && !namespaceValue.isValid && isNullOrEmpty(namespaceValue.value)) {
+                            const namespaceInfo = await this.autoDetectNamespace(upgradeResult.rootModel);
+                            if (namespaceInfo?.namespace && !isNullOrEmpty(namespaceInfo.namespace) && isNullOrEmpty(namespaceInfo.error)) {
+                                const newNamespace = namespaceInfo.namespace.namespace;
+                                const updated = ModelUtils
+                                    .getCodeGeneratorSettingsConvertor()
+                                    .setPropertyValue(templateId, settings, groupCSharp, propertyNamespace, newNamespace);
+
+                                if (updated) {
+                                    showNotificationBox('info', `Code generator template property '${groupCSharp}/${propertyNamespace}' was successfully changed to '${newNamespace}'.`);
+                                }
+                            }
+                        }
+                    }
+
                     await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
 
                     const json = this.serializeRootModel(upgradeResult.rootModel).json;
@@ -718,7 +750,7 @@ export class DocumentContext implements IDocumentContext {
                 } else {
                     await showMessageBox('warn', `Missing languages in the model`,
                         `Please add manually these languages, otherwise you will not see them when editing resources!\n` +
-                        `Missing languages: ${langsNames}. `, false);
+                        `Missing languages: ${langsNames}. `, { logger: false });
 
                     return false;
                 }
@@ -1003,7 +1035,7 @@ export class DocumentContext implements IDocumentContext {
     }
 
     public async runCodeGenerator(): Promise<void> {
-        if (!this.jsonModel) {
+        if (!this.jsonModel || !this._rootModel) {
             logger().log(this, 'debug', 'runCodeGenerator -> No current document or model found.');
             return;
         }
@@ -1030,6 +1062,8 @@ export class DocumentContext implements IDocumentContext {
         const templateId = this.codeGeneratorTemplateId;
         logger().log(this, 'info', `Running code generator template '${templateId}' for: ${filename} `);
 
+        const settings = this._rootModel.codeGenerator?.settings;
+
         this._codeGenStatus.inProgress = true;
 
         let beginStatusUid = '';
@@ -1051,6 +1085,40 @@ export class DocumentContext implements IDocumentContext {
                 msg = `Code generator template '${templateId}' failed.${detail} `;
                 logger().log('this', 'error', msg);
                 return;
+            }
+
+            if (settings) {
+                const validateResult = ModelUtils
+                    .getCodeGeneratorSettingsConvertor()
+                    .validateSettings(templateId, settings);
+
+                if (!isNullOrEmpty(validateResult.error)) {
+                    let msg = `Code generator failed.`;
+                    const group = validateResult.group;
+                    const property = validateResult.property;
+                    const detail = `Validation of template setting(s) failed, '${group}/${property}' -> ${validateResult.error} for: ${filename} `;
+                    this._codeGenStatus.update({
+                        kind: 'error',
+                        message: msg,
+                        detail: detail
+                    });
+
+                    msg = `Code generator template '${templateId}' failed. ${detail} `;
+                    logger().log('this', 'error', msg);
+
+                    // if CSharp generator and Namespace is missing, then offer to auto-detect it
+                    const propertyNamespace = 'Namespace';
+                    const groupCSharp = 'CSharp';
+                    if (validateResult.group === groupCSharp && validateResult.property === propertyNamespace &&
+                        isNullOrEmpty(settings[groupCSharp][propertyNamespace])
+                    ) {
+                        nextTick(() => {
+                            void this.showAutodetectNamespaceDialog();
+                        });
+                    }
+
+                    return;
+                }
             }
 
             const validLangs = await this.validateLanguages();
@@ -1081,13 +1149,14 @@ export class DocumentContext implements IDocumentContext {
 
             if (result.generatedFiles) {
                 const fileNames: string[] = [];
-                const folder = getCurrentFolder();
-                if (!folder) {
+                //const folder = getCurrentFolder();
+                const output = path.dirname(filename);
+                if (isNullOrEmpty(output)) {
                     showNotificationBox('err', 'No folder selected. Please select a folder in the Explorer view.');
                     return;
                 }
 
-                const output = folder.fsPath;
+                //const output = folder.fsPath;
                 if (await fse.pathExists(output) === false) {
                     showNotificationBox('err', `Output folder '${output}' does not exist.Please select a valid folder.`);
                     return;
@@ -1125,6 +1194,15 @@ export class DocumentContext implements IDocumentContext {
                 message: 'Code generator failed.',
                 detail: getGeneratorAppErrorMessage(error as Error) + `\n For file: ${filename}.`
             });
+
+            if (error instanceof AppError) {
+                if (error.kind === AppErrorKinds.templateValidationError && error.code === AppErrorCodes.CsharpNamespaceMissing) {
+                    nextTick(() => {
+                        void this.showAutodetectNamespaceDialog();
+                    });
+                }
+            }
+
         } finally {
             this._codeGenStatus.inProgress = false;
 
@@ -1135,6 +1213,111 @@ export class DocumentContext implements IDocumentContext {
                     }
                 }, 2000);
             }
+        }
+    }
+
+    private async autoDetectNamespace(root: IRootModelElement): Promise<{ namespace: CSharpNamespaceInfo; error: string | undefined } | undefined> {
+        if (!root || !root.codeGenerator || isNullOrEmpty(root.codeGenerator.templateId) || isNullOrEmpty(this.fileName)) {
+            return undefined;
+        }
+
+        const lhqFile = await readFileInfo(this.fileName);
+
+        const csProjectFiles: FileInfo[] = [];
+        const dir = lhqFile.dirname;
+        const csProjectFilesFound = await glob('*.csproj', { cwd: dir, nodir: true });
+
+        const csprojMap = csProjectFilesFound.map(async (csproj) => {
+            const csProjPath = path.join(dir, csproj);
+            const csProjFile = await readFileInfo(csProjPath, { encoding: 'utf-8', loadContent: true });
+            if (csProjFile.exist) {
+                csProjectFiles.push(csProjFile);
+            }
+        });
+
+        await Promise.all(csprojMap);
+
+        const namespaceInfo = namespaceUtils.findNamespaceForModel(lhqFile, csProjectFiles);
+
+        if (namespaceInfo && !isNullOrEmpty(namespaceInfo.namespace)) {
+            const propertyNamespace = 'Namespace';
+            const groupCSharp = 'CSharp';
+            const namespaceError = ModelUtils
+                .getCodeGeneratorSettingsConvertor()
+                .validateSetting(this.codeGeneratorTemplateId, groupCSharp, propertyNamespace, namespaceInfo.namespace, false);
+
+            return { namespace: namespaceInfo, error: namespaceError };
+        }
+
+        return undefined;
+    }
+
+    private async showAutodetectNamespaceDialog(): Promise<void> {
+        const root = this._rootModel;
+        if (!root || !root.codeGenerator || isNullOrEmpty(root.codeGenerator.templateId)) {
+            return;
+        }
+
+        if (this._autodetectNamespaceDialogActive) {
+            return;
+        }
+
+        this._autodetectNamespaceDialogActive = true;
+
+        try {
+            if (!await showConfirmBox('Code generator error', `Namespace value for C# generator is not set, but it is mandatory!\n` +
+                "Do you want to try to auto-detect the namespace value from associated C# project file?")) {
+                return;
+            }
+
+            const dir = path.dirname(this.fileName);
+            const { namespace: namespaceInfo, error: namespaceError } = (await this.autoDetectNamespace(root)) ?? {};
+            if (namespaceInfo && !isNullOrEmpty(namespaceInfo.namespace)) {
+                const csProjectFileName = namespaceInfo.csProjectFileName.full;
+                const namespace = namespaceInfo.namespace;
+                const settings = root.codeGenerator.settings;
+
+                const propertyNamespace = 'Namespace';
+                const groupCSharp = 'CSharp';
+
+                if (!isNullOrEmpty(namespaceError)) {
+                    await showMessageBox('err', `Detected namespace '${namespace}' is not valid!`,
+                        `Detected namespace '${namespace}' from C# project file '${csProjectFileName}' is not valid.\n` +
+                        `Error: ${namespaceError}\n` +
+                        `Please set the namespace value manually in code generator settings.`);
+                    return;
+                }
+
+                if (!await showConfirmBox('Auto-detect namespace',
+                    `Detected namespace '${namespace}' from C# project file '${csProjectFileName}'.\n` +
+                    `Do you want to set this value in code generator settings?`)) {
+                    return;
+                }
+
+                settings[groupCSharp][propertyNamespace] = namespace;
+                const codeGenerator = ModelUtils.createCodeGeneratorElement(this.codeGeneratorTemplateId, settings);
+                root.codeGenerator = codeGenerator;
+
+                const success = await this.commitChanges('saveModelProperties');
+
+                if (success) {
+                    logger().log(this, 'debug', `update() -> Requesting page reload for: ${this.fileName} (for showAutodetectNamespaceDialog)`);
+                    this.reflectSelectedElementToWebview(true);
+
+                    showNotificationBox('info', `Code generator template property '${groupCSharp}/${propertyNamespace}' was successfully changed to '${namespace}'.`);
+
+                    nextTick(() => {
+                        void this.runCodeGenerator();
+                    });
+                }
+
+            } else {
+                await showMessageBox('err', 'Cannot auto-detect namespace!',
+                    `Cannot find valid namespace from associated C# project files in folder: ${dir}.\n` +
+                    `Please set the namespace value manually in code generator settings.`);
+            }
+        } finally {
+            this._autodetectNamespaceDialogActive = false;
         }
     }
 
