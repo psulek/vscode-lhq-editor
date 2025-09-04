@@ -158,8 +158,8 @@
                                     <textarea ref="translationTextArea" v-model="translation.valueRef.value" rows="1"
                                         @input="setTranslationValue" :data-lang="translation.valueRef.languageName"
                                         :readonly="translation.valueRef.locked"
-                                        :class="'translationTextArea ' + { 'locked': translation.valueRef.locked }" @focus="focusOnTranslation"
-                                        @blur="blurOnTranslation"
+                                        :class="'translationTextArea ' + { 'locked': translation.valueRef.locked }"
+                                        @focus="focusOnTranslation" @blur="blurOnTranslation"
                                         :title="translation.valueRef.locked ? 'Editing of translation is locked.':''"></textarea>
                                     <div v-if="getTranslationUnicodeError(translation)"
                                         class="error-text small-2lines-trim">
@@ -176,8 +176,8 @@
             </template>
         </table>
 
-        <div class="modal-dialog-block" v-if="blockPanelVisible">
-            <div class="modal-dialog" v-if="modelProperties.visible">
+        <div class="modal-dialog-block" v-if="blockPanelVisible" id="block-panel">
+            <div class="modal-dialog" v-if="modelPropsCurrents.visible">
                 <div>
                     <table style="width: 100%;">
                         <tr>
@@ -249,17 +249,31 @@
                                                 <tr>
                                                     <td colspan="2" style="padding-top: 8px;">
                                                         <label class="bold uppercase"
-                                                            :class="{ 'error-text': modelProperties.codeGeneratorError && modelProperties.codeGeneratorError.group === group }">
-                                                            {{ group }}
+                                                            :class="{ 'error-text': modelPropsCurrents.codeGeneratorError && modelPropsCurrents.codeGeneratorError.group === group }">
+                                                            {{ getGroupDisplayName(group) }}
+                                                            &nbsp;
+                                                            <span class="codicon codicon-info"
+                                                                style="vertical-align: bottom; cursor: pointer;"
+                                                                :title="getGroupDescription(group)"></span>
                                                         </label>
+                                                        <!-- <span style="font-size: smaller;">
+                                                            {{ getGroupDescription(group) }}
+                                                        </span> -->
                                                     </td>
                                                 </tr>
+                                                <!-- <tr>
+                                                    <td colspan="2" style="padding: 0 0 0 5px; font-size: smaller">
+                                                        <label class="small-2lines-trim">
+                                                            {{ getGroupDescription(group) }}
+                                                        </label>
+                                                    </td>
+                                                </tr> -->
 
                                                 <tr v-for="setting in settings" :key="setting.name"
                                                     class="settingValue">
                                                     <td>
                                                         <label :title="setting.description"
-                                                            :class="{ 'error-text': modelProperties.codeGeneratorError && modelProperties.codeGeneratorError.name === setting.name }"
+                                                            :class="{ 'error-text': modelPropsCurrents.codeGeneratorError && modelPropsCurrents.codeGeneratorError.name === setting.name }"
                                                             @click="focusSettingInput(group, setting.name)">
                                                             {{ setting.displayName }}
                                                         </label>
@@ -331,14 +345,14 @@
                 </div>
                 <div>
                     <div>
-                        <label v-if="modelProperties.codeGeneratorError" class="error-text small-2lines-trim"
+                        <label v-if="modelPropsCurrents.codeGeneratorError" class="error-text small-2lines-trim"
                             style="cursor: pointer;" :title="settingsError" @click="focusOnSettingsError">
                             {{ settingsError }}
                         </label>
                     </div>
                     <div>
                         <button type="button" style="margin-right: 8px;" @click="saveProperties"
-                            :disabled="modelProperties.saving">OK</button>
+                            :disabled="modelPropsCurrents.saving">OK</button>
                         <button type="button" @click="cancelProperties">Cancel</button>
                     </div>
                 </div>

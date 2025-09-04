@@ -39,10 +39,14 @@
      * @typedef {Object} ModelProperties
      * @property {'All' | 'Categories'} resources
      * @property {boolean} categories
-     * @property {boolean} visible
-     * @property {boolean} saving
      * @property {number} modelVersion
      * @property {ICodeGeneratorElement} codeGenerator
+     */
+
+    /**
+     * @typedef {Object} ModelPropsCurrents
+     * @property {boolean} visible
+     * @property {boolean} saving
      * @property {SettingsError | undefined} codeGeneratorError
      */
 
@@ -56,6 +60,7 @@
      * @property {boolean} forceOnChange
      * @property {ModelProperties} modelProperties
      * @property {ModelProperties} modelPropertiesBackup
+     * @property {ModelPropsCurrents} modelPropsCurrents
      * @property {TemplateMetadataDefinition} templateDefinition
      * @property {boolean} blockPanelVisible
      */
@@ -79,6 +84,7 @@
 
     let currentPrimaryLang = 'en';
     let templatesMetadata = {};
+    let templateGroupsDefs = {}; // Record<string, {displayName: string, description: string}>; key = group name
     let savePropertiesTimer = undefined;
     let cancelSettingsChangesRequestSent = false;
 
@@ -127,11 +133,15 @@
 
     function getDefaultModelProperties() {
         return {
-            visible: false,
-            saving: false,
-            codeGenerator: { templateId: '' },
-            codeGeneratorError: undefined
+            // visible: false,
+            // saving: false,
+            // codeGeneratorError: undefined,
+            codeGenerator: { templateId: '' }
         };
+    }
+
+    function getDefaultModelPropsCurrents() {
+        return { visible: false, saving: false, codeGeneratorError: undefined };
     }
 
     function isParametersEditableSpan(htmlElem) {
@@ -169,6 +179,12 @@
         }
 
         if (['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON'].includes(target.tagName)) {
+            const blockPanel = target.closest('div#block-panel');
+            if (blockPanel) {
+                //console.warn('Focused element is inside block panel, ignoring.', target);
+                return;
+            }
+
             let type = 'input';
             let id = target.id;
             if (target.tagName === 'TEXTAREA' && !id) {
@@ -198,7 +214,7 @@
             event.preventDefault();
             event.stopPropagation();
 
-            if (window.pageApp && window.pageApp.modelProperties.visible) {
+            if (window.pageApp && window.pageApp.modelPropsCurrents.visible) {
                 window.pageApp.saveProperties();
             }
 
@@ -212,7 +228,7 @@
                     });
                 }
 
-                if (window.pageApp && window.pageApp.modelProperties.visible) {
+                if (window.pageApp && window.pageApp.modelPropsCurrents.visible) {
                     window.pageApp.cancelProperties();
                 }
 
@@ -355,6 +371,7 @@
 
                 window.pageApp.modelProperties = getDefaultModelProperties();
                 window.pageApp.modelPropertiesBackup = structuredClone(getDefaultModelProperties());
+                window.pageApp.modelPropsCurrents = getDefaultModelPropsCurrents();
                 window.pageApp.templateDefinition = {};
 
                 window.pageApp.$nextTick(() => {
@@ -403,6 +420,7 @@
                         if (message.confirmed) {
                             if (message.result && window.pageApp.modelProperties && window.pageApp.modelProperties.codeGenerator) {
                                 window.pageApp.modelProperties.codeGenerator.settings = message.result;
+                                window.pageApp.modelPropsCurrents.codeGeneratorError = undefined;
                             }
                         }
                         break;
@@ -512,6 +530,7 @@
         window.pageApp.modelPropertiesBackup = modelProperties
             ? structuredClone(modelProperties)
             : getDefaultModelProperties();
+        window.pageApp.modelPropsCurrents = getDefaultModelPropsCurrents();
 
         const templateId = modelProperties.codeGenerator?.templateId ?? '';
 
@@ -520,12 +539,17 @@
             ? structuredClone(templatesMetadata[templateId])
             : undefined;
 
+        templateGroupsDefs = {};
         if (templateDefinition) {
             const settingsObj = {};
             for (const [group, settings] of Object.entries(templateDefinition.settings)) {
+                templateGroupsDefs[group] = {
+                    displayName: settings.displayName ?? group,
+                    description: settings.description ?? ''
+                };
                 settingsObj[group] = {};
-                if (settings && Array.isArray(settings)) {
-                    settings.forEach(setting => {
+                if (settings && settings.properties && Array.isArray(settings.properties)) {
+                    settings.properties.forEach(setting => {
                         settingsObj[group][setting.name] = setting;
                     });
                 }
@@ -770,22 +794,9 @@
         },
         supressOnChange: undefined,
         forceOnChange: false,
-        modelProperties: {
-            visible: false,
-            saving: false,
-            codeGenerator: {
-                templateId: ''
-            },
-            codeGeneratorError: undefined
-        },
-        modelPropertiesBackup: {
-            visible: false,
-            saving: false,
-            codeGenerator: {
-                templateId: ''
-            },
-            codeGeneratorError: undefined
-        },
+        modelProperties: getDefaultModelProperties(),
+        modelPropertiesBackup: getDefaultModelProperties(),
+        modelPropsCurrents: getDefaultModelPropsCurrents(),
         templateDefinition: {},
         blockPanelVisible: false
     };
@@ -816,6 +827,22 @@
 
             isCategoryLike() {
                 return this.item && this.item.elementType === 'category' || this.item.elementType === 'model';
+            },
+
+            getGroupDisplayName() {
+                return (group) => {
+                    return Object.prototype.hasOwnProperty.call(templateGroupsDefs, group)
+                        ? templateGroupsDefs[group].displayName
+                        : group;
+                };
+            },
+
+            getGroupDescription() {
+                return (group) => {
+                    return Object.prototype.hasOwnProperty.call(templateGroupsDefs, group)
+                        ? templateGroupsDefs[group].description
+                        : group;
+                };
             },
 
             getCodeGeneratorPropertyReadonly() {
@@ -875,7 +902,7 @@
 
             settingsError() {
                 /** @type SettingsError | undefined */
-                const error = this.modelProperties.codeGeneratorError;
+                const error = this.modelPropsCurrents.codeGeneratorError;
                 return error ? `${error.group} / ${error.name} / ${error.message}` : '';
             }
         },
@@ -1442,7 +1469,7 @@
                 }
 
                 this.blockPanelVisible = true;
-                this.modelProperties.visible = true;
+                this.modelPropsCurrents.visible = true;
 
                 this.$nextTick(() => {
                     this.$refs.layoutMode.focus();
@@ -1481,22 +1508,22 @@
                 if (reset === true) {
                     this.modelProperties = structuredClone(toRaw(this.modelPropertiesBackup));
                 }
-                this.modelProperties.visible = false;
+                this.modelPropsCurrents.visible = false;
                 this.blockPanelVisible = false;
             },
 
             saveProperties() {
-                if (this.modelProperties.saving) {
+                if (this.modelPropsCurrents.saving) {
                     return;
                 }
 
-                this.modelProperties.saving = true;
-                this.modelProperties.codeGeneratorError = undefined;
+                this.modelPropsCurrents.saving = true;
+                this.modelPropsCurrents.codeGeneratorError = undefined;
 
                 const msg = { command: 'saveProperties', modelProperties: toRaw(this.modelProperties) };
 
                 savePropertiesTimer = setTimeout(() => {
-                    this.modelProperties.saving = false;
+                    this.modelPropsCurrents.saving = false;
                     this.handleSavePropertiesResult(undefined, false);
                 }, 5000);
 
@@ -1506,7 +1533,7 @@
             handleSavePropertiesResult(error, closeDialog) {
                 logMsg('Handling save properties result, error: ', error, ', closeDialog: ', closeDialog);
 
-                this.modelProperties.codeGeneratorError = error;
+                this.modelPropsCurrents.codeGeneratorError = error;
                 if (savePropertiesTimer) {
                     clearTimeout(savePropertiesTimer);
                     savePropertiesTimer = undefined;
@@ -1517,7 +1544,7 @@
                     closeDialog = false;
                 }
 
-                this.modelProperties.saving = false;
+                this.modelPropsCurrents.saving = false;
                 if (closeDialog) {
                     logMsg('Closing properties dialog');
                     this.closePropertiesDialog(false);
@@ -1527,7 +1554,7 @@
             },
 
             focusOnSettingsError() {
-                const error = this.modelProperties.codeGeneratorError;
+                const error = this.modelPropsCurrents.codeGeneratorError;
                 if (!error) {
                     return;
                 }
