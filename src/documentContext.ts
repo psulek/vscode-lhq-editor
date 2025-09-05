@@ -341,14 +341,8 @@ export class DocumentContext implements IDocumentContext {
 
     private serializeRootModel(otherRootModel?: IRootModelElement): { json: string; model: LhqModel } {
         otherRootModel = otherRootModel ?? this._rootModel!;
-        const model = ModelUtils.rootElementToModel(otherRootModel, {
-            values: {
-                //eol: 'CRLF', // backward compatibility, always use CRLF in values new lines
-                // NOTE: do not sanitize now, maybe later...
-                sanitize: false
-            }
-        });
 
+        const model = ModelUtils.rootElementToModel(otherRootModel);
         const json = ModelUtils.serializeModel(model, this._documentFormatting);
         return { json, model };
     }
