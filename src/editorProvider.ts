@@ -263,7 +263,7 @@ export class LhqEditorProvider implements vscode.CustomTextEditorProvider {
                 if (!await docCtx.upgradeModelIfNeeded()) {
                     return;
                 }
-                
+
                 await docCtx.validateLanguages();
 
             } catch (error) {
@@ -292,8 +292,8 @@ export class LhqEditorProvider implements vscode.CustomTextEditorProvider {
 
             void this.runCodeGenerator().finally(async () => {
                 if (appContext.firstTimeRun) {
-                    const runGeneratorOnSave = await showConfirmBox('Associated code generator was run automatically after save.',
-                        'Do you want to always run code generator on save?');
+                    const runGeneratorOnSave = await showConfirmBox('Associated code generator was run automatically after save.\n' +
+                        'Do you want to always run code generator on save?', undefined, { modal: false });
 
                     if (runGeneratorOnSave !== undefined) {
                         await appContext.updateConfig({ runGeneratorOnSave });

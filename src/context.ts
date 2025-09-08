@@ -120,6 +120,8 @@ export class AppContext implements IAppContext {
     public async init(ctx: vscode.ExtensionContext, reset: boolean = false): Promise<void> {
         this._ctx = ctx;
 
+        initializeDebugMode(ctx);
+
         this._appConfig = new AppConfig();
         (globalThis as any).appConfig = this._appConfig;
 
@@ -147,7 +149,7 @@ export class AppContext implements IAppContext {
         this.isEditorActive = false;
         this.setTreeSelection([]);
 
-        initializeDebugMode(ctx);
+        //initializeDebugMode(ctx);
 
         this._ctx.subscriptions.push(
             vscode.commands.registerCommand(GlobalCommands.showOutput, () => {
@@ -238,7 +240,7 @@ export class AppContext implements IAppContext {
 
     private async initGenerator(context: vscode.ExtensionContext): Promise<void> {
         try {
-            const hbsTemplatesDir = vscode.Uri.joinPath(context.extensionUri, 'node_modules', '@lhq/lhq-generators/hbs').fsPath;
+            const hbsTemplatesDir = vscode.Uri.joinPath(context.extensionUri, 'dist', 'hbs').fsPath;
 
             const metadataFile = path.join(hbsTemplatesDir, 'metadata.json');
             const metadataContent = await fse.readFile(metadataFile, { encoding: 'utf-8' });
@@ -267,6 +269,7 @@ export class AppContext implements IAppContext {
 
             Generator.initialize(generatorInit);
         } catch (error) {
+            console.log(error);
             logger().log(this, 'error', `Failed to initialize generator: ${error instanceof Error ? error.message : 'Unknown error'}`);
             showNotificationBox('err', `Failed to initialize lhq generator! Please report this issue.`);
         }

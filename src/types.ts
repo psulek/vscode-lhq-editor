@@ -1,4 +1,4 @@
-import type { FormattingOptions, ICodeGeneratorElement, IRootModelElement, ITreeElement, LhqModel, LhqModelOptionsResources, TemplateMetadataDefinition, TreeElementType } from '@lhq/lhq-generators';
+import type { FormattingOptions, ICodeGeneratorElement, IRootModelElement, ITreeElement, LhqModel, LhqModelOptionsResources, LhqModelOptionsValues, TemplateMetadataDefinition, TreeElementType } from '@lhq/lhq-generators';
 import type { MarkdownString, TextDocument, ThemeColor, Uri, Webview } from 'vscode';
 
 export type SearchTreeKind = 'path' | 'name' | 'translation' | 'language';
@@ -74,8 +74,9 @@ export type ClientPageModelProperties = {
     resources: LhqModelOptionsResources;
     categories: boolean;
     modelVersion: number;
-    visible: boolean;
+    //visible: boolean;
     codeGenerator: ICodeGeneratorElement;
+    values: LhqModelOptionsValues;
 }
 
 export type ClientPageSettingsError = {
@@ -292,6 +293,7 @@ export type ConfirmBoxOptions = {
     noText?: string;
     noHidden?: boolean;
     extraButtons?: string[];
+    modal?: boolean
 }
 
 export type MessageBoxOptions = {

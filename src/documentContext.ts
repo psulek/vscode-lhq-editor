@@ -1549,8 +1549,9 @@ export class DocumentContext implements IDocumentContext {
                 resources: rootModel.options.resources,
                 categories: rootModel.options.categories,
                 modelVersion: rootModel.version,
-                visible: false,
-                codeGenerator: rootModel.codeGenerator ?? { templateId: '', settings: {} as CodeGeneratorGroupSettings, version: modelConst.ModelVersions.codeGenerator }
+                //visible: false,
+                codeGenerator: rootModel.codeGenerator ?? { templateId: '', settings: {} as CodeGeneratorGroupSettings, version: modelConst.ModelVersions.codeGenerator },
+                values: rootModel.options.values ?? {},
             },
             autoFocus: false,
             restoreFocusedInput
@@ -1667,6 +1668,16 @@ export class DocumentContext implements IDocumentContext {
 
             root.options.categories = modelProperties.categories;
             root.options.resources = modelProperties.categories ? modelProperties.resources : 'All';
+
+            const sanitize = modelProperties.values.sanitize;
+            if (modelProperties.values.eol !== undefined || sanitize !== undefined) {
+                root.options.values = {
+                    eol: modelProperties.values.eol,
+                    sanitize: sanitize === undefined || sanitize === false ? undefined : true
+                };
+            } else {
+                root.options.values = undefined;
+            }
 
             const templateId = modelProperties.codeGenerator.templateId;
 

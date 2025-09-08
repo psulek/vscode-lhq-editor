@@ -22,26 +22,29 @@ Theme (light or dark) is automatically detect from vscode theme.
 
 ## Commands
 
-| Command                       | Keybinding       |
-| ------------------------------| ---------------- |
-| LHQ: Focus Tree View          | `F2`             |
-| LHQ: Focus Editor             | `Ctrl + Enter`   |
-| LHQ: Model Properties         | none             |
-| LHQ: Add element              | none             |
-| LHQ: Add language             | `Insert`         |
-| LHQ: Add resource             | `Insert`         |
-| LHQ: Add category             | `Ctrl + Insert`  |
-| LHQ: Rename element           | `Ctrl + R`       |
-| LHQ: Delete element           | `Delete`         |
-| LHQ: Duplicate element        | `Ctrl + D`       |
-| LHQ: Delete language          | `Delete`         |
-| LHQ: Find in Tree             | `Ctr+F`          |
-| LHQ: Advanced Find            | `Ctr +Alt + F`   |
-| LHQ: Mark language as primary | none             |
-| LHQ: Toggle languages (show)  | none             |
-| LHQ: Toggle languages (hide)  | none             |
-| LHQ: Run code generator       | none             |
-| LHQ: Import from Excel        | none             |
+| Command                         | Keybinding       | Description
+| --------------------------------| ---------------- |--------------
+| LHQ: Focus Tree View            | `F2`             | Focus the LHQ Tree View, only when lhq editor panel is active
+| LHQ: Focus Editor               | `Ctrl + Enter`   | Focus the LHQ Editor, only when lhq tree view is active
+| LHQ: Model Properties           | none             | Show model properties dialog for the current LHQ file
+| LHQ: Add element                | none             | Shows 'Add Element' dialog to add new category or resource to current LHQ file
+| LHQ: Add language               | `Insert`         | Shows 'Add Language' dialog to add new language to current LHQ file
+| LHQ: Add category               | `Ctrl + Insert`  | Shows 'Add Category' dialog to add new category to current category
+| LHQ: Add resource               | `Insert`         | Shows 'Add Resource' dialog to add new resource to current category
+| LHQ: Rename element             | `Ctrl + R`       | Rename name of currently selected element (category or resource)
+| LHQ: Delete element(s)          | `Delete`         | Delete currently selected element (category or resource)
+| LHQ: Duplicate element          | `Ctrl + D`       | Duplicate currently selected element (category or resource)
+| LHQ: Delete language(s)         | `Delete`         | Delete currently selected language
+| LHQ: Find in Tree               | `Ctr+F`          | Shows simple 'Find in Tree' input box to search for text in the tree view
+| LHQ: Advanced Find              | `Ctr + Alt + F`  | Shows 'Advanced Find' dialog to search for text in the tree view with more options
+| LHQ: Mark language as primary   | none             | Mark currently selected language as primary language
+| LHQ: Toggle languages (show)    | none             | Toggle/show all languages in the tree view
+| LHQ: Toggle languages (hide)    | none             | Toggle/hide all languages in the tree view
+| LHQ: Create strings localization file | none | Create a new LHQ file with selected code generator template and 'English' as the primary language
+| LHQ: Run code generator         | none             | Run associated code generator for the current LHQ file
+| LHQ: Import resources from file | none             | Import translations from Excel file
+| LHQ: Export resources to file   | none             | Export resources to a file (Currently only Microsoft Excel *.xlsx)
+
 
 ## Install
 

@@ -222,6 +222,44 @@
                                 </label>
                             </td>
                         </tr>
+                        <tr>
+                            <td colspan="2" style="padding-top: 8px;">
+                                <label class="bold uppercase">Translation values:</label>
+                            </td>
+                        </tr>
+
+                        <tr>
+                            <td>
+                                Line endings:
+                            </td>
+                            <td>
+                                <div style="display: flex;flex-direction: row;gap: 0.3em; align-items: center;">
+                                    <select id="valuesEolOptions" :value="modelProperties.values.eol ?? ''"
+                                        ref="valuesEolOptions" @change="setValuesEolOptions($event.target.value)">
+                                        <option v-for="option in modelProperties.valuesEolOptions" :key="option.name"
+                                            :value="option.value">
+                                            {{ option.name }}
+                                        </option>
+                                    </select>
+                                    <div class="codicon codicon-info" :title="getValuesEolOptionsInfo()">
+                                    </div>
+                                </div>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>
+                                <!-- Sanitize translations: -->
+                                &nbsp;
+                            </td>
+                            <td style="padding-top: 0;">
+                                <label
+                                    title="Sanitize translations on save (non-breaking spaces will be replaced with space and unsupported characters will be removed.)">
+                                    <input type="checkbox" :checked="modelProperties.values.sanitize ?? false"
+                                        style="width: auto;" @change="setValuesSanitize($event.target.checked)">
+                                    Sanitize unsupported unicode characters
+                                </label>
+                            </td>
+                        </tr>
                         <tr class="template">
                             <td>
                                 <strong>Code Generator Template:</strong>
@@ -256,18 +294,8 @@
                                                                 style="vertical-align: bottom; cursor: pointer;"
                                                                 :title="getGroupDescription(group)"></span>
                                                         </label>
-                                                        <!-- <span style="font-size: smaller;">
-                                                            {{ getGroupDescription(group) }}
-                                                        </span> -->
                                                     </td>
                                                 </tr>
-                                                <!-- <tr>
-                                                    <td colspan="2" style="padding: 0 0 0 5px; font-size: smaller">
-                                                        <label class="small-2lines-trim">
-                                                            {{ getGroupDescription(group) }}
-                                                        </label>
-                                                    </td>
-                                                </tr> -->
 
                                                 <tr v-for="setting in settings" :key="setting.name"
                                                     class="settingValue">

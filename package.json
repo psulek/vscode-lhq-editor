@@ -168,7 +168,7 @@
       {
         "command": "lhqTreeView.createNewLhqFile",
         "category": "LHQ",
-        "title": "Create strings localization file (LHQ Editor)",
+        "title": "Create strings localization file",
         "icon": "$(new-file)"
       },
       {
@@ -415,9 +415,9 @@
     ]
   },
   "scripts": {
-    "vscode:prepublish": "pnpm run compile-prod",
-    "package": "npx vsce package",
-    "publish": "npx vsce publish",
+    "vscode:prepublish": "pnpm run compile",
+    "package": "pnpm vsce package --no-dependencies",
+    "publish": "pnpm vsce publish --no-dependencies",
     "compile": "pnpm run check-types && pnpm run lint && node esbuild.js",
     "compile-prod": "pnpm run check-types && pnpm run lint && node esbuild.js --production",
     "compile-tests": "tsc -p . --outDir out",

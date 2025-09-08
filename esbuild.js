@@ -26,10 +26,14 @@ const esbuildProblemMatcherPlugin = {
 
 const copyFilesPlugin = copy({
     resolveFrom: 'cwd',
-    assets: {
-        from: ['./media/cultures.json'],
-        to: ['./dist/'],
+    assets: [{
+        from: './media/cultures.json',
+        to: './dist/',
     },
+    {
+        from: './node_modules/@lhq/lhq-generators/hbs/**/*',
+        to: './dist/hbs',
+    }],
     watch: watch
 });
 

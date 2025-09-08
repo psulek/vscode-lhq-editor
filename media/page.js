@@ -527,6 +527,7 @@
 
         window.pageApp.modelProperties = modelProperties ?? getDefaultModelProperties();
         window.pageApp.modelProperties.layoutModes = [{ name: 'Hierarchical tree', value: true }, { 'name': 'Flat list', value: false }];
+        window.pageApp.modelProperties.valuesEolOptions = [{ name: 'Default', value: '' }, { name: 'LF', value: 'LF' }, { 'name': 'CRLF', value: 'CRLF' }];
         window.pageApp.modelPropertiesBackup = modelProperties
             ? structuredClone(modelProperties)
             : getDefaultModelProperties();
@@ -842,6 +843,29 @@
                     return Object.prototype.hasOwnProperty.call(templateGroupsDefs, group)
                         ? templateGroupsDefs[group].description
                         : group;
+                };
+            },
+
+            getValuesEolOptionsInfo() {
+                return () => {
+                    const eol = this.modelProperties.values?.eol;
+                    if (eol === undefined) {
+                        return 'Line endings are not modified, use system default.';
+                    }
+
+                    return eol === 'LF' ? 'Line endings are set to LF (\\n).' : 'Line endings are set to CRLF (\\r\\n).';
+                };
+            },
+
+            setValuesEolOptions() {
+                return (value) => {
+                    this.modelProperties.values.eol = value === '' ? undefined : value;
+                };
+            },
+
+            setValuesSanitize() {
+                return (value) => {
+                    this.modelProperties.values.sanitize = value === false ? undefined : value;
                 };
             },
 
@@ -1507,6 +1531,8 @@
             closePropertiesDialog(reset) {
                 if (reset === true) {
                     this.modelProperties = structuredClone(toRaw(this.modelPropertiesBackup));
+                } else {
+                    this.modelPropertiesBackup = structuredClone(toRaw(this.modelProperties));
                 }
                 this.modelPropsCurrents.visible = false;
                 this.blockPanelVisible = false;

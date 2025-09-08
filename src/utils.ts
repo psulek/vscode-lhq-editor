@@ -138,6 +138,7 @@ export async function showConfirmBox(message: string, detail?: string, options?:
     const msg = getMessageBoxText(message);
 
     const addTologger = options?.logger ?? (options?.warn === true);
+    const modal = options?.modal ?? true;
 
     if (addTologger) {
         const logType: LogType = options?.warn === true ? 'warn' : 'info';
@@ -157,8 +158,8 @@ export async function showConfirmBox(message: string, detail?: string, options?:
     }
 
     const result = warn ?
-        await vscode.window.showWarningMessage(msg, { modal: true, detail }, ...btns) :
-        await vscode.window.showInformationMessage(msg, { modal: true, detail }, ...btns);
+        await vscode.window.showWarningMessage(msg, { modal, detail }, ...btns) :
+        await vscode.window.showInformationMessage(msg, { modal, detail }, ...btns);
 
     return result === undefined ? undefined : result === yes;
 }
