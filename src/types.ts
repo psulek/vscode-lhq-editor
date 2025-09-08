@@ -173,6 +173,7 @@ export interface IAppConfig {
     get runGeneratorOnSave(): boolean;
 }
 
+export type FirstTimeUsage = 'runGeneratorOnSave';
 
 export interface IAppContext {
     updateConfig(newConfig: Partial<IAppConfig>): Promise<void>;
@@ -192,14 +193,13 @@ export interface IAppContext {
     get languagesVisible(): boolean;
     set languagesVisible(visible: boolean);
 
-    get firstTimeRun(): boolean;
-    set firstTimeRun(value: boolean);
-
     get readonlyMode(): boolean;
     set readonlyMode(value: boolean);
 
     on(event: string, listener: (...args: any[]) => void): this;
     off(event: string, listener: (...args: any[]) => void): this;
+
+    getFirstTimeUsage(key: FirstTimeUsage): boolean;
 
     clearTreeContextValues(): void;
     getFileUri(...pathParts: string[]): Uri;

@@ -2,7 +2,7 @@ import path from 'path';
 import * as vscode from 'vscode';
 import fse from 'fs-extra';
 import { glob } from 'glob';
-import { AppToPageMessage, CheckAnyActiveDocumentCallback, CultureInfo, IAppConfig, IAppContext, ITreeContext, IVirtualLanguageElement, SelectionChangedCallback } from './types';
+import { AppToPageMessage, CheckAnyActiveDocumentCallback, CultureInfo, FirstTimeUsage, IAppConfig, IAppContext, ITreeContext, IVirtualLanguageElement, SelectionChangedCallback } from './types';
 import { Generator, GeneratorInitialization, HbsTemplateManager, ITreeElement, ModelUtils, generatorUtils, isNullOrEmpty, strCompare } from '@lhq/lhq-generators';
 import { VirtualTreeElement } from './elements';
 import {
@@ -19,7 +19,7 @@ import { AppConfig } from './config';
 
 const globalStateKeys = {
     languagesVisible: 'lhqeditor.languagesVisible',
-    firstTimeRun: 'lhqeditor.firstTimeRun'
+    firstTimeRunPrefix: 'lhqeditor.firstTimeRun.'
 };
 
 export const Commands = {
@@ -52,7 +52,6 @@ export const GlobalCommands = {
 };
 
 export type AvailableCommands = typeof Commands[keyof typeof Commands];
-
 
 export const ContextKeys = {
     isEditorActive: 'lhqEditorIsActive',
@@ -91,9 +90,9 @@ export class AppContext implements IAppContext {
     private _pageHtml: string = '';
     private _eventEmitter = new EventEmitter();
     private _checkAnyActiveDocumentCallback: CheckAnyActiveDocumentCallback | undefined;
-    private _firstTimeRunCached: boolean | undefined;
     private _appConfig: AppConfig = null!;
     private _cultures: CultureInfo[] = [];
+    private _cacheFirstTimeUsage: Map<string, boolean> = new Map<string, boolean>();
 
     public setSelectionChangedCallback(callback: SelectionChangedCallback): void {
         this._onSelectionChanged = callback;
@@ -117,6 +116,22 @@ export class AppContext implements IAppContext {
         return getCurrentFolder();
     }
 
+    public getFirstTimeUsage(key: FirstTimeUsage): boolean {
+        const cache = this._cacheFirstTimeUsage;
+        if (!cache.has(key)) {
+            const fullKey = globalStateKeys.firstTimeRunPrefix + key;
+            const isFirstTime = this._ctx.globalState.get<boolean>(fullKey);
+            if (isFirstTime === undefined) {
+                cache.set(key, false);
+                this._ctx.globalState.update(fullKey, false);
+            }
+
+            return isFirstTime ?? true;
+        }
+
+        return false;
+    }
+
     public async init(ctx: vscode.ExtensionContext, reset: boolean = false): Promise<void> {
         this._ctx = ctx;
 
@@ -133,13 +148,7 @@ export class AppContext implements IAppContext {
         }
 
         if (reset) {
-            const keys = Object.values(globalStateKeys);
-            await Promise.all(keys.map(key => ctx.globalState.update(key, undefined)));
-        }
-
-        this._firstTimeRunCached = this.firstTimeRun;
-        if (this._firstTimeRunCached) {
-            this.firstTimeRun = false;
+            await this.reset();
         }
 
         await this.initGenerator(ctx);
@@ -148,8 +157,6 @@ export class AppContext implements IAppContext {
         this.languagesVisible = this.languagesVisible;
         this.isEditorActive = false;
         this.setTreeSelection([]);
-
-        //initializeDebugMode(ctx);
 
         this._ctx.subscriptions.push(
             vscode.commands.registerCommand(GlobalCommands.showOutput, () => {
@@ -182,6 +189,13 @@ export class AppContext implements IAppContext {
 
         // commands
         vscode.commands.registerCommand(GlobalCommands.createNewLhqFile, () => this.createNewLhqFile());
+    }
+
+    private async reset() {
+        //const keys = Object.values(globalStateKeys);
+
+        const keys = this._ctx.globalState.keys();
+        await Promise.all(keys.map(key => this._ctx.globalState.update(key, undefined)));
     }
 
     private async initCultures(): Promise<void> {
@@ -381,18 +395,6 @@ export class AppContext implements IAppContext {
     public set languagesVisible(visible: boolean) {
         this._ctx.globalState.update(globalStateKeys.languagesVisible, visible);
         vscode.commands.executeCommand('setContext', ContextKeys.hasLanguagesVisible, visible);
-    }
-
-    public get firstTimeRun(): boolean {
-        if (this._firstTimeRunCached === undefined) {
-            return this._ctx.globalState.get<boolean>(globalStateKeys.firstTimeRun, true);
-        }
-
-        return this._firstTimeRunCached;
-    }
-
-    public set firstTimeRun(value: boolean) {
-        this._ctx.globalState.update(globalStateKeys.firstTimeRun, value);
     }
 
     public get readonlyMode(): boolean {

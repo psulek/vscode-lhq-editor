@@ -291,7 +291,8 @@ export class LhqEditorProvider implements vscode.CustomTextEditorProvider {
             }
 
             void this.runCodeGenerator().finally(async () => {
-                if (appContext.firstTimeRun) {
+                // if (appContext.firstTimeRun) {
+                if (appContext.getFirstTimeUsage('runGeneratorOnSave')) {
                     const runGeneratorOnSave = await showConfirmBox('Associated code generator was run automatically after save.\n' +
                         'Do you want to always run code generator on save?', undefined, { modal: false });
 
