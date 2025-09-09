@@ -6,6 +6,7 @@
   "publisher": "psulek-solo",
   "license": "MIT",
   "author": "Peter Šulek",
+  "icon": "./media/logo.png",
   "repository": {
     "type": "git",
     "url": "https://github.com/psulek/vscode-lhq-editor"
@@ -34,6 +35,13 @@
   ],
   "main": "./dist/extension.js",
   "contributes": {
+    "iconThemes": [
+      {
+        "id": "lhq-icons",
+        "label": "LHQ File Icons",
+        "path": "./lhq-theme.json"
+      }
+    ],
     "configurationDefaults": {
       "workbench.editorAssociations": {
         "{git,gitlens}:/**/*.{lhq}": "default"

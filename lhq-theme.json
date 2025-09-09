@@ -1,0 +1,13 @@
+{
+  "iconDefinitions": {
+    "lhqIcon": {
+      "iconPath": "./media/logo.png"
+    }
+  },
+  "fileExtensions": {
+    "lhq": "lhqIcon"
+  },
+  "folder": {},
+  "rootFolder": "folder",
+  "file": "file"
+}
