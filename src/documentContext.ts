@@ -556,8 +556,6 @@ export class DocumentContext implements IDocumentContext {
                 const upgradeResult = ModelUtils.upgradeModel(root);
                 if (upgradeResult.success && upgradeResult.rootModel) {
 
-                    // let showAutodetectNamespaceDialog = false;
-
                     // fix missing 'Namespace' for 'Csharp' code generator...
                     if (upgradeResult.rootModel.codeGenerator) {
                         const settings = upgradeResult.rootModel.codeGenerator.settings;
@@ -1214,73 +1212,87 @@ export class DocumentContext implements IDocumentContext {
         return undefined;
     }
 
-    private async showAutodetectNamespaceDialog(): Promise<void> {
-        const root = this._rootModel;
-        if (!root || !root.codeGenerator || isNullOrEmpty(root.codeGenerator.templateId)) {
-            return;
-        }
-
-        if (this._autodetectNamespaceDialogActive) {
-            return;
-        }
-
-        this._autodetectNamespaceDialogActive = true;
-
-        try {
-            if (!await showConfirmBox('Code generator error', `Namespace value for C# generator is not set, but it is mandatory!\n` +
-                "Do you want to try to auto-detect the namespace value from associated C# project file?")) {
+    private showAutodetectNamespaceDialog(): void {
+        nextTick(async () => {
+            const root = this._rootModel;
+            if (!root || !root.codeGenerator || isNullOrEmpty(root.codeGenerator.templateId)) {
                 return;
             }
 
-            const dir = path.dirname(this.fileName);
-            const { namespace: namespaceInfo, error: namespaceError } = (await this.autoDetectNamespace(root)) ?? {};
-            if (namespaceInfo && !isNullOrEmpty(namespaceInfo.namespace)) {
-                const csProjectFileName = namespaceInfo.csProjectFileName.full;
-                const namespace = namespaceInfo.namespace;
-                const settings = root.codeGenerator.settings;
-
-                const propertyNamespace = 'Namespace';
-                const groupCSharp = 'CSharp';
-
-                if (!isNullOrEmpty(namespaceError)) {
-                    await showMessageBox('err', `Detected namespace '${namespace}' is not valid!`,
-                        `Detected namespace '${namespace}' from C# project file '${csProjectFileName}' is not valid.\n` +
-                        `Error: ${namespaceError}\n` +
-                        `Please set the namespace value manually in code generator settings.`);
-                    return;
-                }
-
-                if (!await showConfirmBox('Auto-detect namespace',
-                    `Detected namespace '${namespace}' from C# project file '${csProjectFileName}'.\n` +
-                    `Do you want to set this value in code generator settings?`)) {
-                    return;
-                }
-
-                settings[groupCSharp][propertyNamespace] = namespace;
-                const codeGenerator = ModelUtils.createCodeGeneratorElement(this.codeGeneratorTemplateId, settings);
-                root.codeGenerator = codeGenerator;
-
-                const success = await this.commitChanges('saveModelProperties');
-
-                if (success) {
-                    logger().log(this, 'debug', `update() -> Requesting page reload for: ${this.fileName} (for showAutodetectNamespaceDialog)`);
-                    this.reflectSelectedElementToWebview(true);
-
-                    showNotificationBox('info', `Code generator template property '${groupCSharp}/${propertyNamespace}' was successfully changed to '${namespace}'.`);
-
-                    nextTick(() => {
-                        void this.runCodeGenerator();
-                    });
-                }
-
-            } else {
-                await showMessageBox('err', 'Cannot auto-detect namespace!',
-                    `Cannot find valid namespace from associated C# project files in folder: ${dir}.\n` +
-                    `Please set the namespace value manually in code generator settings.`);
+            if (this._autodetectNamespaceDialogActive) {
+                return;
             }
-        } finally {
-            this._autodetectNamespaceDialogActive = false;
-        }
+
+            this._autodetectNamespaceDialogActive = true;
+
+            try {
+                if (!await showConfirmBox(`Missing 'Namespace' value for C# generator! `,
+                    "Auto-detect this value from associated C# project file?", { warn: true })) {
+                    return;
+                }
+
+                const dir = path.dirname(this.fileName);
+                const { namespace: namespaceInfo, error: namespaceError } = (await this.autoDetectNamespace(root)) ?? {};
+                if (namespaceInfo && !isNullOrEmpty(namespaceInfo.namespace)) {
+                    const csProjectFileName = namespaceInfo.csProjectFileName.full;
+                    const namespace = namespaceInfo.namespace;
+                    const settings = root.codeGenerator.settings;
+
+                    const propertyNamespace = 'Namespace';
+                    const groupCSharp = 'CSharp';
+
+                    if (!isNullOrEmpty(namespaceError)) {
+                        // const yesBtn = 'Show detail...';
+                        // const showError = await showConfirmBox(`Detected namespace '${namespace}' from C# project file '${csProjectFileName}' is not valid.`,
+                        //     undefined, { yesText: yesBtn, noText: 'Hide', modal: false, warn: true });
+                        // if (showError) {
+                        //     void showMessageBox('err', `Detected namespace '${namespace}' is not valid.`,
+                        //         `Detected namespace '${namespace}' from C# project file '${csProjectFileName}' is not valid.\n\n` +
+                        //         `Error: ${namespaceError}\n\n` +
+                        //         `Please set the namespace value manually in code generator settings.`);
+                        // }
+
+                        void showMessageBox('err', `Detected namespace '${namespace}' is not valid.`,
+                            `Detected namespace '${namespace}' from C# project file '${csProjectFileName}' is not valid.\n\n` +
+                            `Error: ${namespaceError}\n\n` +
+                            `Please set the namespace value manually in code generator settings.`);
+                        return;
+                    }
+
+                    showNotificationBox('info', `Namespace '${namespace}' from C# project file '${csProjectFileName}' was detected and used.`);
+
+                    settings[groupCSharp][propertyNamespace] = namespace;
+                    const codeGenerator = ModelUtils.createCodeGeneratorElement(this.codeGeneratorTemplateId, settings);
+                    root.codeGenerator = codeGenerator;
+
+                    const success = await this.commitChanges('saveModelProperties');
+
+                    if (success) {
+                        logger().log(this, 'debug', `update() -> Requesting page reload for: ${this.fileName} (for showAutodetectNamespaceDialog)`);
+                        this.reflectSelectedElementToWebview(true);
+
+                        showNotificationBox('info', `Code generator template property '${groupCSharp}/${propertyNamespace}' was successfully changed to '${namespace}'.`);
+
+                        nextTick(() => {
+                            void this.runCodeGenerator();
+                        });
+                    }
+                } else {
+                    const noCsProj = isNullOrEmpty(namespaceInfo) || isNullOrEmpty(namespaceInfo.csProjectFileName) || isNullOrEmpty(namespaceInfo.csProjectFileName.full);
+                    const err = noCsProj
+                        ? `No C# project file (*.csproj) found in the same folder as current file!`
+                        : `No 'Namespace' value was found in associated C# project file folder: ${dir}.`;
+
+                    showNotificationBox('err', `${err}\n\n` + `Manually set 'CSharp/Namespace' value in code generator settings.`);
+                }
+            }
+            catch (error) {
+                logger().log(this, 'error', `showAutodetectNamespaceDialog -> Error while auto-detecting namespace`, error as Error);
+            }
+            finally {
+                this._autodetectNamespaceDialogActive = false;
+            }
+        });
     }
 
     private async saveGenFile(generatedFile: GeneratedFile, outputPath?: string): Promise<string> {

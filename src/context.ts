@@ -231,8 +231,8 @@ export class AppContext implements IAppContext {
         return culture ? `${culture?.engName ?? ''} (${culture?.name ?? ''})` : name;
     }
 
-    public async updateConfig(newConfig: Partial<IAppConfig>): Promise<void> {
-        await this._appConfig.updateConfig(newConfig);
+    public async updateConfig(newConfig: Partial<IAppConfig>, target?: vscode.ConfigurationTarget): Promise<void> {
+        await this._appConfig.updateConfig(newConfig, target);
     }
 
     private async handleDidChangeTextDocument(e: vscode.TextDocumentChangeEvent) {

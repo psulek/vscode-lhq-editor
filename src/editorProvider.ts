@@ -3,10 +3,11 @@ import debounce from 'lodash.debounce';
 import { ITreeElement } from '@lhq/lhq-generators';
 
 import { LhqTreeDataProvider } from './treeDataProvider';
-import { isValidDocument, logger, showConfirmBox, showNotificationBox } from './utils';
+import { isValidDocument, logger, showConfirmBox, showMessageBox, showNotificationBox } from './utils';
 import { AppToPageMessage, IDocumentContext, SelectionChangedCallback, StatusBarItemUpdateInfo } from './types';
 import { DocumentContext } from './documentContext';
 import { AvailableCommands, Commands, ContextEvents, GlobalCommands } from './context';
+import { nextTick } from 'node:process';
 
 export class LhqEditorProvider implements vscode.CustomTextEditorProvider {
     // public static readonly viewType = 'lhq.customEditor';
@@ -287,17 +288,32 @@ export class LhqEditorProvider implements vscode.CustomTextEditorProvider {
     public onDidSaveTextDocument(document: vscode.TextDocument) {
         if (isValidDocument(document)) {
             if (!appConfig.runGeneratorOnSave) {
+                nextTick(async () => {
+                    if (appConfig.suggestRunGeneratorOnSave) {
+                        const runGeneratorOnSave = await showConfirmBox(
+                            'Do you want to run code generator automatically on save?', undefined,
+                            { modal: false, yesText: 'Yes', noText: 'Dont suggest again' });
+
+                        if (runGeneratorOnSave) {
+                            await appContext.updateConfig({ runGeneratorOnSave: true }, vscode.ConfigurationTarget.Workspace);
+
+                            void this.runCodeGenerator();
+                        } else {
+                            await appContext.updateConfig({ suggestRunGeneratorOnSave: false }, vscode.ConfigurationTarget.Workspace);
+                        }
+                    }
+                });
+
                 return;
             }
 
             void this.runCodeGenerator().finally(async () => {
-                // if (appContext.firstTimeRun) {
                 if (appContext.getFirstTimeUsage('runGeneratorOnSave')) {
                     const runGeneratorOnSave = await showConfirmBox('Associated code generator was run automatically after save.\n' +
                         'Do you want to always run code generator on save?', undefined, { modal: false });
 
                     if (runGeneratorOnSave !== undefined) {
-                        await appContext.updateConfig({ runGeneratorOnSave });
+                        await appContext.updateConfig({ runGeneratorOnSave }, vscode.ConfigurationTarget.Workspace);
                     }
                 }
             });

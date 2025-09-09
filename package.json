@@ -2,7 +2,7 @@
   "name": "lhq-editor",
   "displayName": "LHQ Editor",
   "description": "Editor for LHQ files, a format for localization and internationalization of software applications.",
-  "version": "0.0.1",
+  "version": "1.0.0",
   "publisher": "psulek-solo",
   "license": "MIT",
   "author": "Peter Šulek",
@@ -35,13 +35,6 @@
   ],
   "main": "./dist/extension.js",
   "contributes": {
-    "iconThemes": [
-      {
-        "id": "lhq-icons",
-        "label": "LHQ File Icons",
-        "path": "./lhq-theme.json"
-      }
-    ],
     "configurationDefaults": {
       "workbench.editorAssociations": {
         "{git,gitlens}:/**/*.{lhq}": "default"
@@ -56,7 +49,11 @@
         ],
         "extensions": [
           ".lhq"
-        ]
+        ],
+        "icon": {
+          "dark": "./media/logo.png",
+          "light": "./media/logo.png"
+        }
       }
     ],
     "customEditors": [
@@ -417,6 +414,12 @@
             "default": true,
             "scope": "window",
             "markdownDescription": "Run associated code generator after `*.lhq` file is saved. When disabled, you will need to run it manually using the command `LHQ: Run Code Generator`."
+          },
+          "lhqeditor.suggestRunGeneratorOnSave": {
+            "type": "boolean",
+            "default": true,
+            "scope": "window",
+            "markdownDescription": "Suggest enabling `Run Code Generator on Save` option after saving the `*.lhq` file."
           }
         }
       }
@@ -457,7 +460,7 @@
     "typescript": "^5.8.3"
   },
   "dependencies": {
-    "@lhq/lhq-generators": "1.0.0-rc.133",
+    "@lhq/lhq-generators": "1.0.0-rc.134",
     "class-transformer": "^0.5.1",
     "exceljs": "^4.4.0",
     "fs-extra": "11.3.0",

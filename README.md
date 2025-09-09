@@ -22,6 +22,10 @@ Theme (light or dark) is automatically detect from vscode theme.
 
 ## Commands
 
+Commands can be accessed from the Command Palette (`Ctrl+Shift+P`) and some commands can be accessed from context menu in the LHQ Tree View.
+
+Commands available only when LHQ file is open in the editor:
+
 | Command                         | Keybinding       | Description
 | --------------------------------| ---------------- |--------------
 | LHQ: Focus Tree View            | `F2`             | Focus the LHQ Tree View, only when lhq editor panel is active
@@ -40,10 +44,15 @@ Theme (light or dark) is automatically detect from vscode theme.
 | LHQ: Mark language as primary   | none             | Mark currently selected language as primary language
 | LHQ: Toggle languages (show)    | none             | Toggle/show all languages in the tree view
 | LHQ: Toggle languages (hide)    | none             | Toggle/hide all languages in the tree view
-| LHQ: Create strings localization file | none | Create a new LHQ file with selected code generator template and 'English' as the primary language
 | LHQ: Run code generator         | none             | Run associated code generator for the current LHQ file
 | LHQ: Import resources from file | none             | Import translations from Excel file
 | LHQ: Export resources to file   | none             | Export resources to a file (Currently only Microsoft Excel *.xlsx)
+
+Commands available anytime from Command Palette (`Ctrl+Shift+P`):
+
+| Command                         | Keybinding       | Description
+| --------------------------------| ---------------- |--------------
+| LHQ: Create strings localization file | none | Create a new LHQ file with selected code generator template and 'English' as the primary language
 
 
 ## Install

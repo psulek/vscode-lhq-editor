@@ -1,5 +1,5 @@
 import type { FormattingOptions, ICodeGeneratorElement, IRootModelElement, ITreeElement, LhqModel, LhqModelOptionsResources, LhqModelOptionsValues, TemplateMetadataDefinition, TreeElementType } from '@lhq/lhq-generators';
-import type { MarkdownString, TextDocument, ThemeColor, Uri, Webview } from 'vscode';
+import type { ConfigurationTarget, MarkdownString, TextDocument, ThemeColor, Uri, Webview } from 'vscode';
 
 export type SearchTreeKind = 'path' | 'name' | 'translation' | 'language';
 
@@ -170,13 +170,21 @@ export type PageToAppMessage = {
 };
 
 export interface IAppConfig {
+    /**
+     * If true, the code generator will be run automatically after saving the *.lhq file.
+     */
     get runGeneratorOnSave(): boolean;
+
+    /**
+     * If true, the user will be suggested to enable "runGeneratorOnSave" option after saving the *.lhq file and when 'runGeneratorOnSave' is disabled.
+     */
+    get suggestRunGeneratorOnSave(): boolean;
 }
 
 export type FirstTimeUsage = 'runGeneratorOnSave';
 
 export interface IAppContext {
-    updateConfig(newConfig: Partial<IAppConfig>): Promise<void>;
+    updateConfig(newConfig: Partial<IAppConfig>, target?: ConfigurationTarget): Promise<void>;
 
     getCurrentFolder(): Uri | undefined;
 
