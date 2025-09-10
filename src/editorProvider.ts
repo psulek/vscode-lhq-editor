@@ -294,6 +294,10 @@ export class LhqEditorProvider implements vscode.CustomTextEditorProvider {
                             'Do you want to run code generator automatically on save?', undefined,
                             { modal: false, yesText: 'Yes', noText: 'Dont suggest again' });
 
+                        if (runGeneratorOnSave === undefined) {
+                            return;
+                        }
+
                         if (runGeneratorOnSave) {
                             await appContext.updateConfig({ runGeneratorOnSave: true }, vscode.ConfigurationTarget.Workspace);
 
@@ -309,8 +313,8 @@ export class LhqEditorProvider implements vscode.CustomTextEditorProvider {
 
             void this.runCodeGenerator().finally(async () => {
                 if (appContext.getFirstTimeUsage('runGeneratorOnSave')) {
-                    const runGeneratorOnSave = await showConfirmBox('Associated code generator was run automatically after save.\n' +
-                        'Do you want to always run code generator on save?', undefined, { modal: false });
+                    const runGeneratorOnSave = await showConfirmBox('Code generator', 'Associated code generator was run automatically after save.\n' +
+                        'Always run code generator after save?', undefined);
 
                     if (runGeneratorOnSave !== undefined) {
                         await appContext.updateConfig({ runGeneratorOnSave }, vscode.ConfigurationTarget.Workspace);

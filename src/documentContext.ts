@@ -2139,6 +2139,7 @@ export class DocumentContext implements IDocumentContext {
         await this.commitChanges('addLanguageComplete');
 
         await this.treeContext.clearSelection(true);
+        this._virtualRootElement!.refresh();
         langRoot.refresh();
 
         this.treeContext.refreshTree([langRoot]);
@@ -2209,11 +2210,11 @@ export class DocumentContext implements IDocumentContext {
             }
         });
 
-        const success = await this.commitChanges('deleteLanguage');
-
+        await this.commitChanges('deleteLanguage');
         const langRoot = this._virtualRootElement!.languagesRoot;
 
         await this.treeContext.clearSelection(true);
+        this._virtualRootElement!.refresh();
         langRoot.refresh();
 
         this.treeContext.refreshTree([langRoot]);
@@ -2263,6 +2264,7 @@ export class DocumentContext implements IDocumentContext {
         if (success) {
             await this.treeContext.clearSelection(true);
 
+            this._virtualRootElement!.refresh();
             this.treeContext.refreshTree([langRoot]);
             await this.treeContext.revealElement(langRoot, { expand: true, select: true, focus: true });
 
