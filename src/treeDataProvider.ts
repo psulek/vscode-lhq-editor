@@ -63,6 +63,18 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
             this.view.onDidChangeSelection(e => {
                 this.selectedElements = [...(e.selection && e.selection.length > 0 ? e.selection : [])];
                 appContext.setTreeSelection(this.selectedElements);
+            }),
+
+            this.view.onDidExpandElement(e => {
+                if (isVirtualTreeElement(e.element, 'languages')) {
+                    appContext.languagesExpanded = true;
+                }
+            }),
+
+            this.view.onDidCollapseElement(e => {
+                if (isVirtualTreeElement(e.element, 'languages')) {
+                    appContext.languagesExpanded = false;
+                }
             })
         );
 
@@ -104,12 +116,14 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
             : this.currentRootModel!.getElementByPath(paths, elementType as CategoryOrResourceType);
     }
 
-    public async selectElementByPath(elementType: TreeElementType, path: string[], expand?: boolean): Promise<void> {
+    public async selectElementByPath(elementType: TreeElementType, path: string[], expand?: boolean): Promise<boolean> {
         const elem = this.getElementByPath(elementType, path);
 
         if (elem) {
             await this.revealElement(elem, { select: true, focus: true, expand: expand ?? false });
         }
+
+        return !isNullOrEmpty(elem);
     }
 
     public async advancedFind(): Promise<void> {
@@ -485,9 +499,9 @@ export class LhqTreeDataProvider implements vscode.TreeDataProvider<ITreeElement
 
         if (element) {
             if (isVirtualTreeElement(element, 'languages')) {
-                if (appContext.languagesVisible) {
+                //if (appContext.languagesVisible) {
                     result.push(...this.currentVirtualRootElement!.languagesRoot.virtualLanguages);
-                }
+                //}
             } else if (isVirtualTreeElement(element) || element.elementType === 'resource') {
                 // nothing...
             } else {

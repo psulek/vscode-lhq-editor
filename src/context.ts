@@ -2,7 +2,10 @@ import path from 'path';
 import * as vscode from 'vscode';
 import fse from 'fs-extra';
 import { glob } from 'glob';
-import { AppToPageMessage, CheckAnyActiveDocumentCallback, CultureInfo, FirstTimeUsage, IAppConfig, IAppContext, ITreeContext, IVirtualLanguageElement, SelectionChangedCallback } from './types';
+import {
+    AppToPageMessage, CheckAnyActiveDocumentCallback, CultureInfo, FirstTimeUsage, IAppConfig,
+    IAppContext, ITreeContext, IVirtualLanguageElement, LastSelectedElement, SelectionChangedCallback
+} from './types';
 import { Generator, GeneratorInitialization, HbsTemplateManager, ITreeElement, ModelUtils, generatorUtils, isNullOrEmpty, strCompare } from '@lhq/lhq-generators';
 import { VirtualTreeElement } from './elements';
 import {
@@ -18,9 +21,12 @@ import { VsCodeLogger } from './logger';
 import { AppConfig } from './config';
 
 const globalStateKeys = {
-    languagesVisible: 'lhqeditor.languagesVisible',
-    firstTimeRunPrefix: 'lhqeditor.firstTimeRun.'
+    languagesExpanded: 'lhqeditor.languagesExpanded',
+    firstTimeRunPrefix: 'lhqeditor.firstTimeRun.',
+    lastSelectedElement: 'lhqeditor.lastSelectedElement.',
 };
+
+const maxLastSelectedElements = 20;
 
 export const Commands = {
     addElement: 'lhqTreeView.addElement',
@@ -34,10 +40,8 @@ export const Commands = {
     addLanguage: 'lhqTreeView.addLanguage',
     deleteLanguage: 'lhqTreeView.deleteLanguage',
     markLanguageAsPrimary: 'lhqTreeView.markLanguageAsPrimary',
-    showLanguages: 'lhqTreeView.showLanguages',
-    hideLanguages: 'lhqTreeView.hideLanguages',
     projectProperties: 'lhqTreeView.projectProperties',
-    focusTree: 'lhqTreeView.focusTree',
+    // focusTree: 'lhqTreeView.focusTree',
     focusEditor: 'lhqTreeView.focusEditor',
 } as const;
 
@@ -62,7 +66,6 @@ export const ContextKeys = {
     hasPrimaryLanguageSelected: 'lhqTreeHasPrimaryLanguageSelected',
     hasSelectedResource: 'lhqTreeHasSelectedResource',
     hasSelectedModelRoot: 'lhqTreeHasSelectedModelRoot',
-    hasLanguagesVisible: 'lhqTreeHasLanguagesVisible',
 
     generatorIsRunning: 'lhqGeneratorIsRunning',
     isReadonlyMode: 'lhqIsReadonlyMode',
@@ -132,6 +135,85 @@ export class AppContext implements IAppContext {
         return false;
     }
 
+    public getLastSelectedElementPath(fsPath: string): LastSelectedElement | undefined {
+        const key = globalStateKeys.lastSelectedElement;
+        for (let i = 0; i < maxLastSelectedElements; i++) {
+            const fullKey = `${key}${i}`;
+            const data = this._ctx.globalState.get<LastSelectedElement>(fullKey);
+            if (data && data.fileName === fsPath) {
+                return data;
+            }
+        }
+
+        return undefined;
+    }
+
+    public setLastSelectedElementPath(fileName: string, element: ITreeElement | undefined): void {
+        if (isNullOrEmpty(fileName)) {
+            return;
+        }
+
+        const key = globalStateKeys.lastSelectedElement;
+        const elementPath = element ? getElementFullPath(element) : undefined;
+
+        let updated = false;
+        for (let i = 0; i < maxLastSelectedElements; i++) {
+            const fullKey = `${key}${i}`;
+            let data = this._ctx.globalState.get<LastSelectedElement>(fullKey);
+            if (data && data.fileName === fileName) {
+                if (elementPath) {
+                    data = {
+                        fileName: fileName,
+                        elementPath,
+                        elementType: element!.elementType
+                    };
+                    this._ctx.globalState.update(fullKey, data);
+                } else {
+                    this._ctx.globalState.update(fullKey, undefined);
+                }
+                updated = true;
+                break;
+            }
+        }
+
+        if (!updated && elementPath) {
+            // add new
+            for (let i = 0; i < maxLastSelectedElements; i++) {
+                const fullKey = `${key}${i}`;
+                const data = this._ctx.globalState.get<LastSelectedElement>(fullKey);
+                if (!data) {
+                    this._ctx.globalState.update(fullKey, { fileName, elementPath, elementType: element!.elementType });
+                    break;
+                }
+            }
+        }
+
+        if (this._ctx.extensionMode !== vscode.ExtensionMode.Production) {
+            this.dumpLastSelectedElements();
+        }
+    }
+
+    private dumpLastSelectedElements(): void {
+        const key = globalStateKeys.lastSelectedElement;
+        const items: LastSelectedElement[] = [];
+        for (let i = 0; i < maxLastSelectedElements; i++) {
+            const fullKey = `${key}${i}`;
+            const data = this._ctx.globalState.get<LastSelectedElement>(fullKey);
+            if (data) {
+                items.push(data);
+            }
+        }
+
+        if (items.length === 0) {
+            console.log('LastSelectedElements: <no data>');
+        } else {
+            console.log(`LastSelectedElements: ${items.length} items`);
+            for (const item of items) {
+                console.log(`  ${item.fileName} => ${item.elementPath} (${item.elementType})`);
+            }
+        }
+    }
+
     public async init(ctx: vscode.ExtensionContext, reset: boolean = false): Promise<void> {
         this._ctx = ctx;
 
@@ -154,7 +236,7 @@ export class AppContext implements IAppContext {
         await this.initGenerator(ctx);
 
         // to trigger setContext calls
-        this.languagesVisible = this.languagesVisible;
+        //this.languagesVisible = this.languagesVisible;
         this.isEditorActive = false;
         this.setTreeSelection([]);
 
@@ -388,13 +470,12 @@ export class AppContext implements IAppContext {
         return this._lhqTreeDataProvider;
     }
 
-    public get languagesVisible(): boolean {
-        return this._ctx.globalState.get<boolean>(globalStateKeys.languagesVisible, true);
+    public get languagesExpanded(): boolean {
+        return this._ctx.globalState.get<boolean>(globalStateKeys.languagesExpanded, false);
     }
 
-    public set languagesVisible(visible: boolean) {
-        this._ctx.globalState.update(globalStateKeys.languagesVisible, visible);
-        vscode.commands.executeCommand('setContext', ContextKeys.hasLanguagesVisible, visible);
+    public set languagesExpanded(value: boolean) {
+        this._ctx.globalState.update(globalStateKeys.languagesExpanded, value);
     }
 
     public get readonlyMode(): boolean {
@@ -457,6 +538,7 @@ export class AppContext implements IAppContext {
         }
 
         const hasSelectedItem = selectedElements.length === 1;
+
         const hasMultiSelection = selectedElements.length > 1;
         let hasSelectedDiffParents = false;
         let hasLanguageSelection = false;

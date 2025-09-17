@@ -47,11 +47,15 @@ export class LhqTreeItem extends vscode.TreeItem {
         }
 
         if (virtualElement?.virtualElementType === 'languages') {
-            if (!appContext.languagesVisible) {
-                collapsibleState = vscode.TreeItemCollapsibleState.None;
-            } else {
-                collapsibleState = vscode.TreeItemCollapsibleState.Collapsed;
-            }
+            // if (!appContext.languagesVisible) {
+            //     collapsibleState = vscode.TreeItemCollapsibleState.None;
+            // } else {
+            //     collapsibleState = vscode.TreeItemCollapsibleState.Collapsed;
+            // }
+
+            collapsibleState = appContext.languagesExpanded
+                ? vscode.TreeItemCollapsibleState.Expanded
+                : vscode.TreeItemCollapsibleState.Collapsed;
         }
 
 

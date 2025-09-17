@@ -5,7 +5,7 @@ import { glob } from 'glob';
 import { nextTick } from 'node:process';
 import { createTreeElementPaths, delay, generateNonce, getElementFullPath, getGeneratorAppErrorMessage, isValidDocument, logger, readFileInfo, showConfirmBox, showMessageBox, showNotificationBox } from './utils';
 import { AppToPageMessage, ClientPageError, ClientPageModelProperties, ClientPageSettingsError, CultureInfo, IDocumentContext, IVirtualLanguageElement, IVirtualRootElement, NotifyDocumentActiveChangedCallback, PageToAppMessage, SelectionBackup, StatusBarItemUpdateRequestCallback, ValidationError } from './types';
-import { AppError, AppErrorCodes, AppErrorKinds, CategoryLikeTreeElementToJsonOptions, CategoryOrResourceType, CodeGeneratorGroupSettings, CSharpNamespaceInfo, detectFormatting, FileInfo, FormattingOptions, GeneratedFile, Generator, generatorUtils, HbsTemplateManager, ICategoryLikeTreeElement, ImportModelErrorKind, ImportModelResult, IResourceElement, IResourceParameterElement, IResourceValueElement, IRootModelElement, isNullOrEmpty, ITreeElement, LhqModel, LhqModelResourceTranslationState, LhqValidationResult, modelConst, ModelUtils, namespaceUtils, strCompare, TreeElementType } from '@lhq/lhq-generators';
+import { AppError, AppErrorCodes, AppErrorKinds, CategoryLikeTreeElementToJsonOptions, CategoryOrResourceType, CodeGeneratorGroupSettings, CodeGeneratorValidateResult, CSharpNamespaceInfo, detectFormatting, FileInfo, FormattingOptions, GeneratedFile, Generator, generatorUtils, HbsTemplateManager, ICategoryLikeTreeElement, ImportModelErrorKind, ImportModelResult, IResourceElement, IResourceParameterElement, IResourceValueElement, IRootModelElement, isNullOrEmpty, ITreeElement, LhqModel, LhqModelResourceTranslationState, LhqValidationResult, modelConst, ModelUtils, namespaceUtils, strCompare, TreeElementType } from '@lhq/lhq-generators';
 import { filterTreeElements, filterVirtualTreeElements, isVirtualTreeElement, validateTreeElementName, VirtualRootElement } from './elements';
 import { AvailableCommands, Commands, CustomEditorViewType, getCurrentFolder, ModelV3_Info } from './context';
 import { CodeGenStatus } from './codeGenStatus';
@@ -522,6 +522,10 @@ export class DocumentContext implements IDocumentContext {
         }
     }
 
+    public async closeDocument(): Promise<void> {
+        await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
+    }
+
     public async upgradeModelIfNeeded(): Promise<boolean> {
         const root = this._rootModel;
         if (!root) {
@@ -549,7 +553,7 @@ export class DocumentContext implements IDocumentContext {
 
                 if (!doUpgrade) {
                     showNotificationBox('warn', `File upgrade was cancelled. Closing the file, as LHQ Editor does not support older file versions.`);
-                    await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
+                    await this.closeDocument();
                     return false;
                 }
 
@@ -582,7 +586,7 @@ export class DocumentContext implements IDocumentContext {
                         }
                     }
 
-                    await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
+                    await this.closeDocument();
 
                     const json = this.serializeRootModel(upgradeResult.rootModel).json;
                     await fse.writeFile(this.fileName, json, { encoding: 'utf8' });
@@ -823,7 +827,12 @@ export class DocumentContext implements IDocumentContext {
         }
 
         try {
-            const exportInfo = await ExportFileSelector.showRoot(this._exportFileSelectedData, this.rootModel);
+            const rootModel = this.rootModel;
+            if (!ModelUtils.hasAnyResources(rootModel)) {
+                return await showMessageBox('err', 'Export resources to file', 'No resources defined in the model. Cannot export to file.');
+            }
+
+            const exportInfo = await ExportFileSelector.showRoot(this._exportFileSelectedData, rootModel);
             if (!exportInfo) {
                 return;
             }
@@ -844,7 +853,7 @@ export class DocumentContext implements IDocumentContext {
                 cancellable: false,
                 title: `Exporting file: ${file} (${engine}) ...`
             }, async () => {
-                exportError = await ImportExportManager.exportToFile(engine, file, this.rootModel!, this.fileName, exportInfo.languages);
+                exportError = await ImportExportManager.exportToFile(engine, file, rootModel!, this.fileName, exportInfo.languages);
             });
 
             if (!await fse.pathExists(file)) {
@@ -1057,6 +1066,16 @@ export class DocumentContext implements IDocumentContext {
                     const group = validateResult.group;
                     const property = validateResult.property;
                     const detail = `Validation of template setting(s) failed, '${group}/${property}' -> ${validateResult.error} for: ${filename} `;
+
+                    if (this.isCSharpNamespaceError(settings, validateResult)) {
+                        this.resetGeneratorStatus();
+
+                        nextTick(() => {
+                            void this.showAutodetectNamespaceDialog({ codeGenError: detail, templateId });
+                        });
+                        return;
+                    }
+
                     this._codeGenStatus.update({
                         kind: 'error',
                         message: msg,
@@ -1065,17 +1084,6 @@ export class DocumentContext implements IDocumentContext {
 
                     msg = `Code generator template '${templateId}' failed. ${detail} `;
                     logger().log('this', 'error', msg);
-
-                    // if CSharp generator and Namespace is missing, then offer to auto-detect it
-                    const propertyNamespace = 'Namespace';
-                    const groupCSharp = 'CSharp';
-                    if (validateResult.group === groupCSharp && validateResult.property === propertyNamespace &&
-                        isNullOrEmpty(settings[groupCSharp][propertyNamespace])
-                    ) {
-                        nextTick(() => {
-                            void this.showAutodetectNamespaceDialog();
-                        });
-                    }
 
                     return;
                 }
@@ -1176,6 +1184,13 @@ export class DocumentContext implements IDocumentContext {
         }
     }
 
+    private isCSharpNamespaceError(settings: CodeGeneratorGroupSettings, validationResult: CodeGeneratorValidateResult): boolean {
+        const propertyNamespace = 'Namespace';
+        const groupCSharp = 'CSharp';
+        return validationResult.group === groupCSharp && validationResult.property === propertyNamespace &&
+            isNullOrEmpty(settings[groupCSharp][propertyNamespace]);
+    }
+
     private async autoDetectNamespace(root: IRootModelElement): Promise<{ namespace: CSharpNamespaceInfo; error: string | undefined } | undefined> {
         if (!root || !root.codeGenerator || isNullOrEmpty(root.codeGenerator.templateId) || isNullOrEmpty(this.fileName)) {
             return undefined;
@@ -1197,7 +1212,7 @@ export class DocumentContext implements IDocumentContext {
 
         await Promise.all(csprojMap);
 
-        const namespaceInfo = namespaceUtils.findNamespaceForModel(lhqFile, csProjectFiles);
+        const namespaceInfo = namespaceUtils.findNamespaceForModel({ lhqModelFile: lhqFile, csProjectFiles, allowFileName: false });
 
         if (namespaceInfo && !isNullOrEmpty(namespaceInfo.namespace)) {
             const propertyNamespace = 'Namespace';
@@ -1209,10 +1224,11 @@ export class DocumentContext implements IDocumentContext {
             return { namespace: namespaceInfo, error: namespaceError };
         }
 
-        return undefined;
+        // return undefined;
+        return namespaceInfo ? { namespace: namespaceInfo, error: undefined } : undefined;
     }
 
-    private showAutodetectNamespaceDialog(): void {
+    private showAutodetectNamespaceDialog(options?: { codeGenError: string, templateId: string }): void {
         nextTick(async () => {
             const root = this._rootModel;
             if (!root || !root.codeGenerator || isNullOrEmpty(root.codeGenerator.templateId)) {
@@ -1225,9 +1241,31 @@ export class DocumentContext implements IDocumentContext {
 
             this._autodetectNamespaceDialogActive = true;
 
+            let errLogged = false;
+            const logCodeGenError = (): void => {
+                if (errLogged) {
+                    return;
+                }
+
+                if (options && !isNullOrEmpty(options.codeGenError) && !isNullOrEmpty(options.templateId)) {
+                    let msg = `Code generator failed.`;
+                    this._codeGenStatus.update({
+                        kind: 'error',
+                        message: msg,
+                        detail: options.codeGenError
+                    });
+
+                    msg = `Code generator template '${options.templateId}' failed. ${options.codeGenError} `;
+                    logger().log('this', 'error', msg);
+                    errLogged = true;
+                }
+            };
+
             try {
                 if (!await showConfirmBox(`Missing 'Namespace' value for C# generator! `,
                     "Auto-detect this value from associated C# project file?", { warn: true })) {
+
+                    logCodeGenError();
                     return;
                 }
 
@@ -1242,20 +1280,12 @@ export class DocumentContext implements IDocumentContext {
                     const groupCSharp = 'CSharp';
 
                     if (!isNullOrEmpty(namespaceError)) {
-                        // const yesBtn = 'Show detail...';
-                        // const showError = await showConfirmBox(`Detected namespace '${namespace}' from C# project file '${csProjectFileName}' is not valid.`,
-                        //     undefined, { yesText: yesBtn, noText: 'Hide', modal: false, warn: true });
-                        // if (showError) {
-                        //     void showMessageBox('err', `Detected namespace '${namespace}' is not valid.`,
-                        //         `Detected namespace '${namespace}' from C# project file '${csProjectFileName}' is not valid.\n\n` +
-                        //         `Error: ${namespaceError}\n\n` +
-                        //         `Please set the namespace value manually in code generator settings.`);
-                        // }
-
                         void showMessageBox('err', `Detected namespace '${namespace}' is not valid.`,
                             `Detected namespace '${namespace}' from C# project file '${csProjectFileName}' is not valid.\n\n` +
                             `Error: ${namespaceError}\n\n` +
                             `Please set the namespace value manually in code generator settings.`);
+
+                        logCodeGenError();
                         return;
                     }
 
@@ -1271,23 +1301,27 @@ export class DocumentContext implements IDocumentContext {
                         logger().log(this, 'debug', `update() -> Requesting page reload for: ${this.fileName} (for showAutodetectNamespaceDialog)`);
                         this.reflectSelectedElementToWebview(true);
 
-                        showNotificationBox('info', `Code generator template property '${groupCSharp}/${propertyNamespace}' was successfully changed to '${namespace}'.`);
+                        //showNotificationBox('info', `Code generator template property '${groupCSharp}/${propertyNamespace}' was successfully changed to '${namespace}'.`);
 
                         nextTick(() => {
                             void this.runCodeGenerator();
                         });
+                    } else {
+                        showNotificationBox('err', `Code generator template property '${groupCSharp}/${propertyNamespace}' failed to be changed to '${namespace}'.`);
                     }
                 } else {
                     const noCsProj = isNullOrEmpty(namespaceInfo) || isNullOrEmpty(namespaceInfo.csProjectFileName) || isNullOrEmpty(namespaceInfo.csProjectFileName.full);
                     const err = noCsProj
                         ? `No C# project file (*.csproj) found in the same folder as current file!`
-                        : `No 'Namespace' value was found in associated C# project file folder: ${dir}.`;
+                        : `No 'Namespace' value was found in associated C# project file in folder: ${dir}.`;
 
                     showNotificationBox('err', `${err}\n\n` + `Manually set 'CSharp/Namespace' value in code generator settings.`);
+                    logCodeGenError();
                 }
             }
             catch (error) {
                 logger().log(this, 'error', `showAutodetectNamespaceDialog -> Error while auto-detecting namespace`, error as Error);
+                logCodeGenError();
             }
             finally {
                 this._autodetectNamespaceDialogActive = false;
@@ -1499,6 +1533,16 @@ export class DocumentContext implements IDocumentContext {
         }
 
         this._selectedElements = selectedElements ?? [];
+
+        if (selectedElements.length === 0) {
+            appContext.setLastSelectedElementPath(this.fileName, undefined);
+        } if (selectedElements.length === 1) {
+            const elem = selectedElements[0];
+            if (elem && !isVirtualTreeElement(elem)) {
+                appContext.setLastSelectedElementPath(this.fileName, elem);
+            }
+        }
+
         this.reflectSelectedElementToWebview();
     }
 
@@ -1754,14 +1798,10 @@ export class DocumentContext implements IDocumentContext {
                 return this.deleteLanguage(treeElement);
             case Commands.markLanguageAsPrimary:
                 return this.markLanguageAsPrimary(treeElement);
-            case Commands.showLanguages:
-                return this.toggleLanguages(true);
-            case Commands.hideLanguages:
-                return this.toggleLanguages(false);
             case Commands.projectProperties:
                 return this.showProjectProperties();
-            case Commands.focusTree:
-                return this.focusTree();
+            // case Commands.focusTree:
+            //     return this.focusTree();
             case Commands.focusEditor:
                 return this.focusEditor();
         }
@@ -2058,7 +2098,8 @@ export class DocumentContext implements IDocumentContext {
     }
 
     private async findInTreeView(): Promise<void> {
-        await vscode.commands.executeCommand(Commands.focusTree);
+        // await vscode.commands.executeCommand(Commands.focusTree);
+        await this.focusTree();
         await vscode.commands.executeCommand('list.find', 'lhqTreeView');
     }
 
@@ -2275,19 +2316,6 @@ export class DocumentContext implements IDocumentContext {
         showNotificationBox('info', `Language '${appContext.getCultureDesc(langElement.name)}' is now marked as primary.`);
     }
 
-    private async toggleLanguages(visible: boolean): Promise<void> {
-        appContext.languagesVisible = visible;
-
-        if (!this._virtualRootElement) {
-            return;
-        }
-
-        this.treeContext.refreshTree(undefined);
-        this._virtualRootElement.refresh();
-
-        const langRoot = this._virtualRootElement!.languagesRoot;
-        await this.treeContext.revealElement(langRoot, { select: true, focus: false, expand: true });
-    }
 
     private async showProjectProperties(): Promise<void> {
         if (!this._rootModel) {

@@ -79,11 +79,6 @@
     },
     "commands": [
       {
-        "command": "lhqTreeView.focusTree",
-        "category": "LHQ",
-        "title": "Focus Tree View"
-      },
-      {
         "command": "lhqTreeView.focusEditor",
         "category": "LHQ",
         "title": "Focus Editor"
@@ -159,18 +154,6 @@
         "icon": "$(check)"
       },
       {
-        "command": "lhqTreeView.showLanguages",
-        "category": "LHQ",
-        "title": "Toggle languages (show)",
-        "icon": "$(layers)"
-      },
-      {
-        "command": "lhqTreeView.hideLanguages",
-        "category": "LHQ",
-        "title": "Toggle languages (hide)",
-        "icon": "$(layers-active)"
-      },
-      {
         "command": "lhqTreeView.createNewLhqFile",
         "category": "LHQ",
         "title": "Create strings localization file",
@@ -197,10 +180,6 @@
     ],
     "menus": {
       "commandPalette": [
-        {
-          "command": "lhqTreeView.focusTree",
-          "when": "lhqEditorIsActive && !lhqIsReadonlyMode"
-        },
         {
           "command": "lhqTreeView.focusEditor",
           "when": "lhqEditorIsActive  && !lhqIsReadonlyMode"
@@ -254,14 +233,6 @@
           "when": "false"
         },
         {
-          "command": "lhqTreeView.showLanguages",
-          "when": "false"
-        },
-        {
-          "command": "lhqTreeView.hideLanguages",
-          "when": "false"
-        },
-        {
           "command": "lhqTreeView.runGenerator",
           "when": "lhqEditorIsActive && !lhqIsReadonlyMode"
         },
@@ -302,14 +273,6 @@
         }
       ],
       "view/item/context": [
-        {
-          "command": "lhqTreeView.showLanguages",
-          "when": "view == lhqTreeView && (viewItem == languages) && !lhqTreeHasLanguagesVisible && !lhqIsReadonlyMode"
-        },
-        {
-          "command": "lhqTreeView.hideLanguages",
-          "when": "view == lhqTreeView && (viewItem == languages) && lhqTreeHasLanguagesVisible && !lhqIsReadonlyMode"
-        },
         {
           "command": "lhqTreeView.addCategory",
           "when": "view == lhqTreeView && (viewItem == category || viewItem == model) && !lhqTreeHasMultiSelection && !lhqTreeHasLanguageSelection && !lhqIsReadonlyMode"
@@ -372,11 +335,6 @@
         "command": "lhqTreeView.addLanguage",
         "key": "insert",
         "when": "lhqEditorIsActive && lhqTreeHasLanguageSelection && !lhqIsReadonlyMode"
-      },
-      {
-        "command": "lhqTreeView.focusTree",
-        "key": "f2",
-        "when": "lhqEditorIsActive && !lhqIsReadonlyMode"
       },
       {
         "command": "lhqTreeView.focusEditor",
@@ -460,7 +418,7 @@
     "typescript": "^5.8.3"
   },
   "dependencies": {
-    "@lhq/lhq-generators": "1.0.0-rc.134",
+    "@lhq/lhq-generators": "1.0.0-rc.136",
     "class-transformer": "^0.5.1",
     "exceljs": "^4.4.0",
     "fs-extra": "11.3.0",

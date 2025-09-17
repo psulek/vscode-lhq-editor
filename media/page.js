@@ -94,6 +94,14 @@
     /** @type Array<RegExp> */
     const valuesRegexValidators = [];
 
+    window.addEventListener('blur', function () {
+        console.warn('window lost focus ');
+    });
+
+    window.addEventListener('focus', function () {
+        console.warn('window got focus');
+    });
+
     // returns error string if value is invalid, otherwise returns empty string
     function validateResourceValue(value) {
         if (value !== undefined && value !== null && typeof value === 'string' && value.length > 0) {
@@ -1313,7 +1321,8 @@
                         tag: function (tagData) {
                             const title = tagData.__isValid !== true ? tagData.__isValid : 'Double click to edit parameter';
                             const txt1 = tagData.value || '';
-                            const txt2 = tagData.__isValid !== true ? '&#9679;' : `(${tagData.order + 1})`;
+                            // const txt2 = tagData.__isValid !== true ? '&#9679;' : `(${tagData.order + 1})`;
+                            const txt2 = tagData.__isValid !== true ? '&#9679;' : `(${tagData.order})`;
 
                             return `<tag title='${title}'
                 contenteditable='false'

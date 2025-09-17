@@ -1,9 +1,9 @@
 import * as vscode from 'vscode';
 import debounce from 'lodash.debounce';
-import { ITreeElement } from '@lhq/lhq-generators';
+import { isNullOrEmpty, ITreeElement } from '@lhq/lhq-generators';
 
 import { LhqTreeDataProvider } from './treeDataProvider';
-import { isValidDocument, logger, showConfirmBox, showMessageBox, showNotificationBox } from './utils';
+import { createTreeElementPaths, isValidDocument, logger, showConfirmBox, showMessageBox, showNotificationBox } from './utils';
 import { AppToPageMessage, IDocumentContext, SelectionChangedCallback, StatusBarItemUpdateInfo } from './types';
 import { DocumentContext } from './documentContext';
 import { AvailableCommands, Commands, ContextEvents, GlobalCommands } from './context';
@@ -243,8 +243,19 @@ export class LhqEditorProvider implements vscode.CustomTextEditorProvider {
             // 3rd - update webview content with the document
             await docCtx.updateWebviewContent();
 
+            // get last selected element path for the document
+            const lastElemInfo = appContext.getLastSelectedElementPath(document.fileName);
+
             // 4th - select root element in the tree , this will reflect the selection to the webview
-            await this.treeDataProvider.selectRootElement();
+            let selected = false;
+            if (lastElemInfo && !isNullOrEmpty(lastElemInfo.elementPath)) {
+                const paths = createTreeElementPaths(lastElemInfo.elementPath).getPaths(true);
+                selected = await this.treeDataProvider.selectElementByPath(lastElemInfo.elementType, paths, true);
+            }
+
+            if (!selected) {
+                await this.treeDataProvider.selectRootElement();
+            }
 
             // appContext.isEditorActive = true;
             appContext.enableEditorActive();
@@ -262,6 +273,7 @@ export class LhqEditorProvider implements vscode.CustomTextEditorProvider {
         setTimeout(async () => {
             try {
                 if (!await docCtx.upgradeModelIfNeeded()) {
+                    void docCtx.closeDocument();
                     return;
                 }
 
@@ -274,6 +286,11 @@ export class LhqEditorProvider implements vscode.CustomTextEditorProvider {
     }
 
     public onWillSaveTextDocument(event: vscode.TextDocumentWillSaveEvent) {
+        if (!isValidDocument(event.document)) {
+            return;
+        }
+
+
         const activeDoc = this.activeDocument;
         if (!activeDoc) {
             logger().log(this, 'warn', 'onWillSaveTextDocument -> No active document context found. Cannot handle will save event.');

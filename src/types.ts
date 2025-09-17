@@ -188,6 +188,9 @@ export interface IAppContext {
 
     getCurrentFolder(): Uri | undefined;
 
+    getLastSelectedElementPath(fsPath: string): LastSelectedElement | undefined;
+    setLastSelectedElementPath(fsPath: string, element: ITreeElement | undefined): void;
+
     getAllCultures(): CultureInfo[];
     findCulture(name: string, ignoreCase?: boolean): CultureInfo | undefined;
     getCultureDesc(name: string): string;
@@ -198,8 +201,8 @@ export interface IAppContext {
 
     get isEditorActive(): boolean;
 
-    get languagesVisible(): boolean;
-    set languagesVisible(visible: boolean);
+    get languagesExpanded(): boolean;
+    set languagesExpanded(value: boolean);
 
     get readonlyMode(): boolean;
     set readonlyMode(value: boolean);
@@ -237,7 +240,7 @@ export interface ITreeContext {
 
     getElementByPath(elementType: TreeElementType, path: string[]): ITreeElement | undefined;
 
-    selectElementByPath(elementType: TreeElementType, path: string[], expand?: boolean): Promise<void>;
+    selectElementByPath(elementType: TreeElementType, path: string[], expand?: boolean): Promise<boolean>;
 
     refreshTree(elements: ITreeElement[] | undefined): unknown;
 
@@ -280,6 +283,8 @@ export interface IDocumentContext {
     commitChanges(message: string): Promise<boolean>;
 
     isSameDocument(document: TextDocument): boolean;
+
+    closeDocument(): Promise<void>;
 }
 
 export type SelectionChangedCallback = (selectedElements: ITreeElement[]) => void;
@@ -334,3 +339,9 @@ export type StatusBarItemUpdateInfo = {
 };
 
 export type StatusBarItemUpdateRequestCallback = (docContext: IDocumentContext, updateInfo: StatusBarItemUpdateInfo) => void;
+
+export type LastSelectedElement = {
+    fileName: string;
+    elementType: TreeElementType;
+    elementPath: string;
+}

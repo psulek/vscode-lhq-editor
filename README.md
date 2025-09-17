@@ -42,8 +42,6 @@ Commands available only when LHQ file is open in the editor:
 | LHQ: Find in Tree               | `Ctr+F`          | Shows simple 'Find in Tree' input box to search for text in the tree view
 | LHQ: Advanced Find              | `Ctr+Alt+F`      | Shows 'Advanced Find' dialog to search for text in the tree view with more options
 | LHQ: Mark language as primary   | none             | Mark currently selected language as primary language
-| LHQ: Toggle languages (show)    | none             | Toggle/show all languages in the tree view
-| LHQ: Toggle languages (hide)    | none             | Toggle/hide all languages in the tree view
 | LHQ: Run code generator         | none             | Run associated code generator for the current LHQ file
 | LHQ: Import resources from file | none             | Import translations from Excel file
 | LHQ: Export resources to file   | none             | Export resources to a file (Currently only Microsoft Excel *.xlsx)
