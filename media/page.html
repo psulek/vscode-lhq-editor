@@ -163,7 +163,10 @@
                                         :title="translation.valueRef.locked ? 'Editing of translation is locked.':''"></textarea>
                                     <div v-if="getTranslationUnicodeError(translation)"
                                         class="error-text small-2lines-trim">
-                                        {{ getTranslationUnicodeError(translation) }}
+                                        <a href="#" @click="sanitizeTranslation(translation)" class="error"
+                                            title="Click to sanitize translation (remove unsupported unicode characters)">
+                                            {{ getTranslationUnicodeError(translation) }}
+                                        </a>
                                     </div>
                                 </td>
                             </tr>

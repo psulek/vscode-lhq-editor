@@ -8,8 +8,6 @@ const configKeys = {
     suggestRunGeneratorOnSave: 'suggestRunGeneratorOnSave'
 };
 
-// export type AppConfigKey =  typeof configKeys[keyof typeof configKeys];
-
 export class AppConfig implements IAppConfig {
     public get runGeneratorOnSave(): boolean {
         const cfg = vscode.workspace.getConfiguration(sectionName);

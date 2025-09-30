@@ -1,430 +1,430 @@
 {
-  "name": "lhq-editor",
-  "displayName": "LHQ Editor",
-  "description": "Editor for LHQ files, a format for localization and internationalization of software applications.",
-  "version": "1.0.0",
-  "publisher": "psulek-solo",
-  "license": "MIT",
-  "author": "Peter Šulek",
-  "icon": "./media/logo.png",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/psulek/vscode-lhq-editor"
-  },
-  "bugs": {
-    "url": "https://github.com/psulek/vscode-lhq-editor/issues"
-  },
-  "homepage": "https://github.com/psulek/vscode-lhq-editor/blob/main/README.md",
-  "engines": {
-    "vscode": "^1.100.0"
-  },
-  "keywords": [
-    "lhq",
-    "localization",
-    "internationalization",
-    "editor",
-    "visualization",
-    "code-generator"
-  ],
-  "categories": [
-    "Visualization",
-    "Other"
-  ],
-  "activationEvents": [
-    "onUri"
-  ],
-  "main": "./dist/extension.js",
-  "contributes": {
-    "configurationDefaults": {
-      "workbench.editorAssociations": {
-        "{git,gitlens}:/**/*.{lhq}": "default"
-      }
+    "name": "lhq-editor",
+    "displayName": "LHQ Editor",
+    "description": "Editor for LHQ files, a format for localization and internationalization of software applications.",
+    "version": "1.0.0",
+    "publisher": "psulek-solo",
+    "license": "MIT",
+    "author": "Peter Šulek",
+    "icon": "./media/logo.png",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/psulek/vscode-lhq-editor"
     },
-    "languages": [
-      {
-        "id": "lhq",
-        "aliases": [
-          "LHQ",
-          "lhq"
-        ],
-        "extensions": [
-          ".lhq"
-        ],
-        "icon": {
-          "dark": "./media/logo.png",
-          "light": "./media/logo.png"
-        }
-      }
-    ],
-    "customEditors": [
-      {
-        "viewType": "lhq.customEditor",
-        "displayName": "LHQ File Editor",
-        "selector": [
-          {
-            "filenamePattern": "*.lhq"
-          }
-        ],
-        "priority": "default"
-      }
-    ],
-    "views": {
-      "explorer": [
-        {
-          "id": "lhqTreeView",
-          "name": "LHQ Structure",
-          "when": "lhqEditorIsActive"
-        }
-      ]
+    "bugs": {
+        "url": "https://github.com/psulek/vscode-lhq-editor/issues"
     },
-    "commands": [
-      {
-        "command": "lhqTreeView.focusEditor",
-        "category": "LHQ",
-        "title": "Focus Editor"
-      },
-      {
-        "command": "lhqTreeView.projectProperties",
-        "category": "LHQ",
-        "title": "Model Properties",
-        "icon": "$(settings-gear)"
-      },
-      {
-        "command": "lhqTreeView.addElement",
-        "category": "LHQ",
-        "title": "Add element",
-        "icon": "$(new-file)"
-      },
-      {
-        "command": "lhqTreeView.addLanguage",
-        "category": "LHQ",
-        "title": "Add language",
-        "icon": "$(new-file)"
-      },
-      {
-        "command": "lhqTreeView.addCategory",
-        "category": "LHQ",
-        "title": "Add category"
-      },
-      {
-        "command": "lhqTreeView.addResource",
-        "category": "LHQ",
-        "title": "Add resource"
-      },
-      {
-        "command": "lhqTreeView.renameElement",
-        "category": "LHQ",
-        "title": "Rename element",
-        "icon": "$(edit)"
-      },
-      {
-        "command": "lhqTreeView.deleteElement",
-        "category": "LHQ",
-        "title": "Delete element(s)",
-        "icon": "$(trash)"
-      },
-      {
-        "command": "lhqTreeView.duplicateElement",
-        "category": "LHQ",
-        "title": "Duplicate element",
-        "icon": "$(copy)"
-      },
-      {
-        "command": "lhqTreeView.deleteLanguage",
-        "category": "LHQ",
-        "title": "Delete language(s)",
-        "icon": "$(trash)"
-      },
-      {
-        "command": "lhqTreeView.findInTreeView",
-        "category": "LHQ",
-        "title": "Find in Tree",
-        "icon": "$(search)"
-      },
-      {
-        "command": "lhqTreeView.advancedFind",
-        "category": "LHQ",
-        "title": "Advanced Find",
-        "icon": "$(search)"
-      },
-      {
-        "command": "lhqTreeView.markLanguageAsPrimary",
-        "category": "LHQ",
-        "title": "Mark language as primary",
-        "icon": "$(check)"
-      },
-      {
-        "command": "lhqTreeView.createNewLhqFile",
-        "category": "LHQ",
-        "title": "Create strings localization file",
-        "icon": "$(new-file)"
-      },
-      {
-        "command": "lhqTreeView.runGenerator",
-        "category": "LHQ",
-        "title": "Run code generator",
-        "icon": "$(run-all)"
-      },
-      {
-        "command": "lhqTreeView.importFromFile",
-        "category": "LHQ",
-        "title": "Import resources from file...",
-        "icon": "$(file-import)"
-      },
-      {
-        "command": "lhqTreeView.exportToFile",
-        "category": "LHQ",
-        "title": "Export resources to file...",
-        "icon": "$(file-export)"
-      }
-    ],
-    "menus": {
-      "commandPalette": [
-        {
-          "command": "lhqTreeView.focusEditor",
-          "when": "lhqEditorIsActive  && !lhqIsReadonlyMode"
-        },
-        {
-          "command": "lhqTreeView.projectProperties",
-          "when": "lhqEditorIsActive  && !lhqIsReadonlyMode"
-        },
-        {
-          "command": "lhqTreeView.addElement",
-          "when": "false"
-        },
-        {
-          "command": "lhqTreeView.addLanguage",
-          "when": "lhqEditorIsActive && !lhqIsReadonlyMode"
-        },
-        {
-          "command": "lhqTreeView.addCategory",
-          "when": "false"
-        },
-        {
-          "command": "lhqTreeView.addResource",
-          "when": "false"
-        },
-        {
-          "command": "lhqTreeView.renameElement",
-          "when": "false"
-        },
-        {
-          "command": "lhqTreeView.deleteElement",
-          "when": "false"
-        },
-        {
-          "command": "lhqTreeView.duplicateElement",
-          "when": "false"
-        },
-        {
-          "command": "lhqTreeView.deleteLanguage",
-          "when": "false"
-        },
-        {
-          "command": "lhqTreeView.findInTreeView",
-          "when": "false"
-        },
-        {
-          "command": "lhqTreeView.advancedFind",
-          "when": "lhqEditorIsActive && !lhqIsReadonlyMode"
-        },
-        {
-          "command": "lhqTreeView.markLanguageAsPrimary",
-          "when": "false"
-        },
-        {
-          "command": "lhqTreeView.runGenerator",
-          "when": "lhqEditorIsActive && !lhqIsReadonlyMode"
-        },
-        {
-          "command": "lhqTreeView.importFromFile",
-          "when": "lhqEditorIsActive && !lhqIsReadonlyMode"
-        },
-        {
-          "command": "lhqTreeView.exportToFile",
-          "when": "lhqEditorIsActive && !lhqIsReadonlyMode"
-        }
-      ],
-      "view/title": [
-        {
-          "command": "lhqTreeView.projectProperties",
-          "when": "view == lhqTreeView && !lhqIsReadonlyMode",
-          "group": "navigation"
-        },
-        {
-          "command": "lhqTreeView.findInTreeView",
-          "group": "navigation",
-          "when": "!lhqIsReadonlyMode"
-        },
-        {
-          "command": "lhqTreeView.addElement",
-          "when": "view == lhqTreeView && !lhqTreeHasMultiSelection && !lhqTreeHasLanguageSelection && !lhqIsReadonlyMode",
-          "group": "navigation"
-        },
-        {
-          "command": "lhqTreeView.addLanguage",
-          "when": "view == lhqTreeView && lhqTreeHasLanguageSelection && !lhqIsReadonlyMode",
-          "group": "navigation"
-        },
-        {
-          "command": "lhqTreeView.runGenerator",
-          "when": "view == lhqTreeView && !lhqGeneratorIsRunning && !lhqIsReadonlyMode",
-          "group": "navigation"
-        }
-      ],
-      "view/item/context": [
-        {
-          "command": "lhqTreeView.addCategory",
-          "when": "view == lhqTreeView && (viewItem == category || viewItem == model) && !lhqTreeHasMultiSelection && !lhqTreeHasLanguageSelection && !lhqIsReadonlyMode"
-        },
-        {
-          "command": "lhqTreeView.addResource",
-          "when": "view == lhqTreeView && (viewItem == category || viewItem == model) && !lhqTreeHasMultiSelection && !lhqTreeHasLanguageSelection && !lhqIsReadonlyMode"
-        },
-        {
-          "command": "lhqTreeView.addLanguage",
-          "when": "view == lhqTreeView && (viewItem == languages || viewItem == language) && !lhqTreeHasMultiSelection && !lhqIsReadonlyMode"
-        },
-        {
-          "command": "lhqTreeView.renameElement",
-          "when": "view == lhqTreeView && lhqTreeHasSelectedItem && !lhqTreeHasLanguageSelection && !lhqIsReadonlyMode"
-        },
-        {
-          "command": "lhqTreeView.deleteElement",
-          "when": "view == lhqTreeView && (viewItem == category || viewItem == resource) && !lhqTreeHasSelectedDiffParents && !lhqTreeHasLanguageSelection && !lhqIsReadonlyMode"
-        },
-        {
-          "command": "lhqTreeView.duplicateElement",
-          "when": "view == lhqTreeView && lhqTreeHasSelectedItem && !lhqTreeHasLanguageSelection && !lhqTreeHasSelectedModelRoot && !lhqIsReadonlyMode"
-        },
-        {
-          "command": "lhqTreeView.deleteLanguage",
-          "when": "view == lhqTreeView && viewItem == language && !lhqIsReadonlyMode"
-        },
-        {
-          "command": "lhqTreeView.markLanguageAsPrimary",
-          "when": "view == lhqTreeView && viewItem == language && !lhqTreeHasPrimaryLanguageSelected && !lhqTreeHasMultiSelection && !lhqIsReadonlyMode"
-        },
-        {
-          "command": "lhqTreeView.importFromFile",
-          "when": "view == lhqTreeView && !lhqTreeHasLanguageSelection && lhqTreeHasSelectedModelRoot && !lhqIsReadonlyMode"
-        },
-        {
-          "command": "lhqTreeView.exportToFile",
-          "when": "view == lhqTreeView && !lhqTreeHasLanguageSelection && lhqTreeHasSelectedModelRoot && !lhqIsReadonlyMode"
-        }
-      ]
+    "homepage": "https://github.com/psulek/vscode-lhq-editor/blob/main/README.md",
+    "engines": {
+        "vscode": "^1.100.0"
     },
-    "keybindings": [
-      {
-        "command": "lhqTreeView.advancedFind",
-        "key": "ctrl+alt+f",
-        "when": "lhqEditorIsActive && !lhqIsReadonlyMode"
-      },
-      {
-        "command": "lhqTreeView.addCategory",
-        "key": "ctrl+insert",
-        "when": "focusedView == 'lhqTreeView' && !lhqTreeHasMultiSelection && !lhqTreeHasLanguageSelection && !lhqIsReadonlyMode"
-      },
-      {
-        "command": "lhqTreeView.addResource",
-        "key": "insert",
-        "when": "focusedView == 'lhqTreeView' && !lhqTreeHasMultiSelection && !lhqTreeHasLanguageSelection && !lhqIsReadonlyMode"
-      },
-      {
-        "command": "lhqTreeView.addLanguage",
-        "key": "insert",
-        "when": "lhqEditorIsActive && lhqTreeHasLanguageSelection && !lhqIsReadonlyMode"
-      },
-      {
-        "command": "lhqTreeView.focusEditor",
-        "key": "ctrl+enter",
-        "when": "focusedView == 'lhqTreeView' && !lhqIsReadonlyMode"
-      },
-      {
-        "command": "lhqTreeView.deleteElement",
-        "key": "delete",
-        "when": "focusedView == 'lhqTreeView' && !lhqTreeHasSelectedDiffParents && !lhqTreeHasLanguageSelection && !lhqTreeHasSelectedModelRoot && !lhqIsReadonlyMode"
-      },
-      {
-        "command": "lhqTreeView.deleteLanguage",
-        "key": "delete",
-        "when": "focusedView == 'lhqTreeView' && lhqTreeHasLanguageSelection && !lhqIsReadonlyMode"
-      },
-      {
-        "command": "lhqTreeView.renameElement",
-        "key": "Ctrl+R",
-        "when": "focusedView == 'lhqTreeView' && !lhqTreeHasSelectedDiffParents && !lhqTreeHasLanguageSelection && !lhqIsReadonlyMode"
-      },
-      {
-        "command": "lhqTreeView.duplicateElement",
-        "key": "Ctrl+D",
-        "when": "focusedView == 'lhqTreeView' && lhqTreeHasSelectedItem && !lhqTreeHasLanguageSelection && !lhqTreeHasSelectedModelRoot && !lhqIsReadonlyMode"
-      }
+    "keywords": [
+        "lhq",
+        "localization",
+        "internationalization",
+        "editor",
+        "visualization",
+        "code-generator"
     ],
-    "configuration": [
-      {
-        "id": "common",
-        "title": "LHQ Editor",
-        "properties": {
-          "lhqeditor.runGeneratorOnSave": {
-            "type": "boolean",
-            "default": true,
-            "scope": "window",
-            "markdownDescription": "Run associated code generator after `*.lhq` file is saved. When disabled, you will need to run it manually using the command `LHQ: Run Code Generator`."
-          },
-          "lhqeditor.suggestRunGeneratorOnSave": {
-            "type": "boolean",
-            "default": true,
-            "scope": "window",
-            "markdownDescription": "Suggest enabling `Run Code Generator on Save` option after saving the `*.lhq` file."
-          }
-        }
-      }
-    ]
-  },
-  "scripts": {
-    "vscode:prepublish": "pnpm run compile",
-    "package": "pnpm vsce package --no-dependencies",
-    "publish": "pnpm vsce publish --no-dependencies",
-    "compile": "pnpm run check-types && pnpm run lint && node esbuild.js",
-    "compile-prod": "pnpm run check-types && pnpm run lint && node esbuild.js --production",
-    "compile-tests": "tsc -p . --outDir out",
-    "watch": "npm-run-all -p watch:*",
-    "watch:esbuild": "node esbuild.js --watch",
-    "watch:tsc": "tsc --noEmit --watch --project tsconfig.json",
-    "watch-tests": "tsc -p . -w --outDir out",
-    "pretest": "pnpm run compile-tests && pnpm run compile && pnpm run lint",
-    "check-types": "tsc --noEmit",
-    "lint": "eslint src",
-    "test": "vscode-test"
-  },
-  "devDependencies": {
-    "@types/fs-extra": "^11.0.4",
-    "@types/lodash.debounce": "^4.0.9",
-    "@types/lodash.throttle": "^4.1.9",
-    "@types/mocha": "^10.0.10",
-    "@types/node": "20.x",
-    "@types/vscode": "^1.100.0",
-    "@types/vscode-webview": "^1.57.5",
-    "@typescript-eslint/eslint-plugin": "^8.34.0",
-    "@typescript-eslint/parser": "^8.34.0",
-    "@vscode/test-cli": "^0.0.11",
-    "@vscode/test-electron": "^2.5.2",
-    "esbuild": "^0.25.5",
-    "esbuild-plugin-copy": "^2.1.1",
-    "eslint": "^9.28.0",
-    "npm-run-all": "^4.1.5",
-    "typescript": "^5.8.3"
-  },
-  "dependencies": {
-    "@lhq/lhq-generators": "1.0.0-rc.136",
-    "class-transformer": "^0.5.1",
-    "exceljs": "^4.4.0",
-    "fs-extra": "11.3.0",
-    "glob": "^11.0.1",
-    "lodash.debounce": "4.0.8",
-    "lodash.throttle": "4.1.1",
-    "reflect-metadata": "^0.2.2"
-  }
+    "categories": [
+        "Visualization",
+        "Other"
+    ],
+    "activationEvents": [
+        "onUri"
+    ],
+    "main": "./dist/extension.js",
+    "contributes": {
+        "configurationDefaults": {
+            "workbench.editorAssociations": {
+                "{git,gitlens}:/**/*.{lhq}": "default"
+            }
+        },
+        "languages": [
+            {
+                "id": "lhq",
+                "aliases": [
+                    "LHQ",
+                    "lhq"
+                ],
+                "extensions": [
+                    ".lhq"
+                ],
+                "icon": {
+                    "dark": "./media/logo.png",
+                    "light": "./media/logo.png"
+                }
+            }
+        ],
+        "customEditors": [
+            {
+                "viewType": "lhq.customEditor",
+                "displayName": "LHQ File Editor",
+                "selector": [
+                    {
+                        "filenamePattern": "*.lhq"
+                    }
+                ],
+                "priority": "default"
+            }
+        ],
+        "views": {
+            "explorer": [
+                {
+                    "id": "lhqTreeView",
+                    "name": "LHQ Structure",
+                    "when": "lhqEditorIsActive"
+                }
+            ]
+        },
+        "commands": [
+            {
+                "command": "lhqTreeView.focusEditor",
+                "category": "LHQ",
+                "title": "Focus Editor"
+            },
+            {
+                "command": "lhqTreeView.projectProperties",
+                "category": "LHQ",
+                "title": "Model Properties",
+                "icon": "$(settings-gear)"
+            },
+            {
+                "command": "lhqTreeView.addElement",
+                "category": "LHQ",
+                "title": "Add element",
+                "icon": "$(new-file)"
+            },
+            {
+                "command": "lhqTreeView.addLanguage",
+                "category": "LHQ",
+                "title": "Add language",
+                "icon": "$(new-file)"
+            },
+            {
+                "command": "lhqTreeView.addCategory",
+                "category": "LHQ",
+                "title": "Add category"
+            },
+            {
+                "command": "lhqTreeView.addResource",
+                "category": "LHQ",
+                "title": "Add resource"
+            },
+            {
+                "command": "lhqTreeView.renameElement",
+                "category": "LHQ",
+                "title": "Rename element",
+                "icon": "$(edit)"
+            },
+            {
+                "command": "lhqTreeView.deleteElement",
+                "category": "LHQ",
+                "title": "Delete element(s)",
+                "icon": "$(trash)"
+            },
+            {
+                "command": "lhqTreeView.duplicateElement",
+                "category": "LHQ",
+                "title": "Duplicate element",
+                "icon": "$(copy)"
+            },
+            {
+                "command": "lhqTreeView.deleteLanguage",
+                "category": "LHQ",
+                "title": "Delete language(s)",
+                "icon": "$(trash)"
+            },
+            {
+                "command": "lhqTreeView.findInTreeView",
+                "category": "LHQ",
+                "title": "Find in Tree",
+                "icon": "$(search)"
+            },
+            {
+                "command": "lhqTreeView.advancedFind",
+                "category": "LHQ",
+                "title": "Advanced Find",
+                "icon": "$(search)"
+            },
+            {
+                "command": "lhqTreeView.markLanguageAsPrimary",
+                "category": "LHQ",
+                "title": "Mark language as primary",
+                "icon": "$(check)"
+            },
+            {
+                "command": "lhqTreeView.createNewLhqFile",
+                "category": "LHQ",
+                "title": "Create strings localization file",
+                "icon": "$(new-file)"
+            },
+            {
+                "command": "lhqTreeView.runGenerator",
+                "category": "LHQ",
+                "title": "Run code generator",
+                "icon": "$(run-all)"
+            },
+            {
+                "command": "lhqTreeView.importFromFile",
+                "category": "LHQ",
+                "title": "Import resources from file...",
+                "icon": "$(file-import)"
+            },
+            {
+                "command": "lhqTreeView.exportToFile",
+                "category": "LHQ",
+                "title": "Export resources to file...",
+                "icon": "$(file-export)"
+            }
+        ],
+        "menus": {
+            "commandPalette": [
+                {
+                    "command": "lhqTreeView.focusEditor",
+                    "when": "lhqEditorIsActive  && !lhqIsReadonlyMode"
+                },
+                {
+                    "command": "lhqTreeView.projectProperties",
+                    "when": "lhqEditorIsActive  && !lhqIsReadonlyMode"
+                },
+                {
+                    "command": "lhqTreeView.addElement",
+                    "when": "false"
+                },
+                {
+                    "command": "lhqTreeView.addLanguage",
+                    "when": "lhqEditorIsActive && !lhqIsReadonlyMode"
+                },
+                {
+                    "command": "lhqTreeView.addCategory",
+                    "when": "false"
+                },
+                {
+                    "command": "lhqTreeView.addResource",
+                    "when": "false"
+                },
+                {
+                    "command": "lhqTreeView.renameElement",
+                    "when": "false"
+                },
+                {
+                    "command": "lhqTreeView.deleteElement",
+                    "when": "false"
+                },
+                {
+                    "command": "lhqTreeView.duplicateElement",
+                    "when": "false"
+                },
+                {
+                    "command": "lhqTreeView.deleteLanguage",
+                    "when": "false"
+                },
+                {
+                    "command": "lhqTreeView.findInTreeView",
+                    "when": "false"
+                },
+                {
+                    "command": "lhqTreeView.advancedFind",
+                    "when": "lhqEditorIsActive && !lhqIsReadonlyMode"
+                },
+                {
+                    "command": "lhqTreeView.markLanguageAsPrimary",
+                    "when": "false"
+                },
+                {
+                    "command": "lhqTreeView.runGenerator",
+                    "when": "lhqEditorIsActive && !lhqIsReadonlyMode"
+                },
+                {
+                    "command": "lhqTreeView.importFromFile",
+                    "when": "lhqEditorIsActive && !lhqIsReadonlyMode"
+                },
+                {
+                    "command": "lhqTreeView.exportToFile",
+                    "when": "lhqEditorIsActive && !lhqIsReadonlyMode"
+                }
+            ],
+            "view/title": [
+                {
+                    "command": "lhqTreeView.projectProperties",
+                    "when": "view == lhqTreeView && !lhqIsReadonlyMode",
+                    "group": "navigation"
+                },
+                {
+                    "command": "lhqTreeView.findInTreeView",
+                    "group": "navigation",
+                    "when": "!lhqIsReadonlyMode"
+                },
+                {
+                    "command": "lhqTreeView.addElement",
+                    "when": "view == lhqTreeView && !lhqTreeHasMultiSelection && !lhqTreeHasLanguageSelection && !lhqIsReadonlyMode",
+                    "group": "navigation"
+                },
+                {
+                    "command": "lhqTreeView.addLanguage",
+                    "when": "view == lhqTreeView && lhqTreeHasLanguageSelection && !lhqIsReadonlyMode",
+                    "group": "navigation"
+                },
+                {
+                    "command": "lhqTreeView.runGenerator",
+                    "when": "view == lhqTreeView && !lhqGeneratorIsRunning && !lhqIsReadonlyMode",
+                    "group": "navigation"
+                }
+            ],
+            "view/item/context": [
+                {
+                    "command": "lhqTreeView.addCategory",
+                    "when": "view == lhqTreeView && (viewItem == category || viewItem == model) && !lhqTreeHasMultiSelection && !lhqTreeHasLanguageSelection && !lhqIsReadonlyMode"
+                },
+                {
+                    "command": "lhqTreeView.addResource",
+                    "when": "view == lhqTreeView && (viewItem == category || viewItem == model) && !lhqTreeHasMultiSelection && !lhqTreeHasLanguageSelection && !lhqIsReadonlyMode"
+                },
+                {
+                    "command": "lhqTreeView.addLanguage",
+                    "when": "view == lhqTreeView && (viewItem == languages || viewItem == language) && !lhqTreeHasMultiSelection && !lhqIsReadonlyMode"
+                },
+                {
+                    "command": "lhqTreeView.renameElement",
+                    "when": "view == lhqTreeView && lhqTreeHasSelectedItem && !lhqTreeHasLanguageSelection && !lhqIsReadonlyMode"
+                },
+                {
+                    "command": "lhqTreeView.deleteElement",
+                    "when": "view == lhqTreeView && (viewItem == category || viewItem == resource) && !lhqTreeHasSelectedDiffParents && !lhqTreeHasLanguageSelection && !lhqIsReadonlyMode"
+                },
+                {
+                    "command": "lhqTreeView.duplicateElement",
+                    "when": "view == lhqTreeView && lhqTreeHasSelectedItem && !lhqTreeHasLanguageSelection && !lhqTreeHasSelectedModelRoot && !lhqIsReadonlyMode"
+                },
+                {
+                    "command": "lhqTreeView.deleteLanguage",
+                    "when": "view == lhqTreeView && viewItem == language && !lhqIsReadonlyMode"
+                },
+                {
+                    "command": "lhqTreeView.markLanguageAsPrimary",
+                    "when": "view == lhqTreeView && viewItem == language && !lhqTreeHasPrimaryLanguageSelected && !lhqTreeHasMultiSelection && !lhqIsReadonlyMode"
+                },
+                {
+                    "command": "lhqTreeView.importFromFile",
+                    "when": "view == lhqTreeView && !lhqTreeHasLanguageSelection && lhqTreeHasSelectedModelRoot && !lhqIsReadonlyMode"
+                },
+                {
+                    "command": "lhqTreeView.exportToFile",
+                    "when": "view == lhqTreeView && !lhqTreeHasLanguageSelection && lhqTreeHasSelectedModelRoot && !lhqIsReadonlyMode"
+                }
+            ]
+        },
+        "keybindings": [
+            {
+                "command": "lhqTreeView.advancedFind",
+                "key": "ctrl+alt+f",
+                "when": "lhqEditorIsActive && !lhqIsReadonlyMode"
+            },
+            {
+                "command": "lhqTreeView.addCategory",
+                "key": "ctrl+insert",
+                "when": "focusedView == 'lhqTreeView' && !lhqTreeHasMultiSelection && !lhqTreeHasLanguageSelection && !lhqIsReadonlyMode"
+            },
+            {
+                "command": "lhqTreeView.addResource",
+                "key": "insert",
+                "when": "focusedView == 'lhqTreeView' && !lhqTreeHasMultiSelection && !lhqTreeHasLanguageSelection && !lhqIsReadonlyMode"
+            },
+            {
+                "command": "lhqTreeView.addLanguage",
+                "key": "insert",
+                "when": "lhqEditorIsActive && lhqTreeHasLanguageSelection && !lhqIsReadonlyMode"
+            },
+            {
+                "command": "lhqTreeView.focusEditor",
+                "key": "ctrl+enter",
+                "when": "focusedView == 'lhqTreeView' && !lhqIsReadonlyMode"
+            },
+            {
+                "command": "lhqTreeView.deleteElement",
+                "key": "delete",
+                "when": "focusedView == 'lhqTreeView' && !lhqTreeHasSelectedDiffParents && !lhqTreeHasLanguageSelection && !lhqTreeHasSelectedModelRoot && !lhqIsReadonlyMode"
+            },
+            {
+                "command": "lhqTreeView.deleteLanguage",
+                "key": "delete",
+                "when": "focusedView == 'lhqTreeView' && lhqTreeHasLanguageSelection && !lhqIsReadonlyMode"
+            },
+            {
+                "command": "lhqTreeView.renameElement",
+                "key": "Ctrl+R",
+                "when": "focusedView == 'lhqTreeView' && !lhqTreeHasSelectedDiffParents && !lhqTreeHasLanguageSelection && !lhqIsReadonlyMode"
+            },
+            {
+                "command": "lhqTreeView.duplicateElement",
+                "key": "Ctrl+D",
+                "when": "focusedView == 'lhqTreeView' && lhqTreeHasSelectedItem && !lhqTreeHasLanguageSelection && !lhqTreeHasSelectedModelRoot && !lhqIsReadonlyMode"
+            }
+        ],
+        "configuration": [
+            {
+                "id": "common",
+                "title": "LHQ Editor",
+                "properties": {
+                    "lhqeditor.runGeneratorOnSave": {
+                        "type": "boolean",
+                        "default": true,
+                        "scope": "window",
+                        "markdownDescription": "Run associated code generator after `*.lhq` file is saved. When disabled, you will need to run it manually using the command `LHQ: Run Code Generator`."
+                    },
+                    "lhqeditor.suggestRunGeneratorOnSave": {
+                        "type": "boolean",
+                        "default": true,
+                        "scope": "window",
+                        "markdownDescription": "Suggest enabling `Run Code Generator on Save` option after saving the `*.lhq` file."
+                    }
+                }
+            }
+        ]
+    },
+    "scripts": {
+        "vscode:prepublish": "pnpm run compile",
+        "package": "pnpm vsce package --no-dependencies",
+        "publish": "pnpm vsce publish --no-dependencies",
+        "compile": "pnpm run check-types && pnpm run lint && node esbuild.js",
+        "compile-prod": "pnpm run check-types && pnpm run lint && node esbuild.js --production",
+        "compile-tests": "tsc -p . --outDir out",
+        "watch": "npm-run-all -p watch:*",
+        "watch:esbuild": "node esbuild.js --watch",
+        "watch:tsc": "tsc --noEmit --watch --project tsconfig.json",
+        "watch-tests": "tsc -p . -w --outDir out",
+        "pretest": "pnpm run compile-tests && pnpm run compile && pnpm run lint",
+        "check-types": "tsc --noEmit",
+        "lint": "eslint src",
+        "test": "vscode-test"
+    },
+    "devDependencies": {
+        "@types/fs-extra": "11.0.4",
+        "@types/lodash.debounce": "4.0.9",
+        "@types/lodash.throttle": "4.1.9",
+        "@types/mocha": "10.0.10",
+        "@types/node": "20.17.46",
+        "@types/vscode": "1.100.0",
+        "@types/vscode-webview": "1.57.5",
+        "@typescript-eslint/eslint-plugin": "8.34.0",
+        "@typescript-eslint/parser": "8.34.0",
+        "@vscode/test-cli": "0.0.11",
+        "@vscode/test-electron": "2.5.2",
+        "esbuild": "0.25.5",
+        "esbuild-plugin-copy": "2.1.1",
+        "eslint": "9.28.0",
+        "npm-run-all": "4.1.5",
+        "typescript": "5.8.3"
+    },
+    "dependencies": {
+        "@lhq/lhq-generators": "1.0.0",
+        "class-transformer": "0.5.1",
+        "exceljs": "4.4.0",
+        "fs-extra": "11.3.0",
+        "glob": "11.0.2",
+        "lodash.debounce": "4.0.8",
+        "lodash.throttle": "4.1.1",
+        "reflect-metadata": "0.2.2"
+    }
 }

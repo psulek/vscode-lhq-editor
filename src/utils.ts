@@ -16,18 +16,16 @@ const treePathSeparator = '/';
 
 export function initializeDebugMode(ctx: vscode.ExtensionContext) {
     // TODO: remove this when the extension is stable
-    // TODO:_isDebugMode = ctx.mode === vscode.ExtensionMode.Development;
+    _isDebugMode = ctx.extensionMode === vscode.ExtensionMode.Development;
+    //_isDebugMode = false;
 
     _logger = new VsCodeLogger(ctx);
-    _isDebugMode = false;
     _logger.updateDebugMode(_isDebugMode);
     if (_isDebugMode) {
-        _logger.log('extension', 'debug', 'LHQ Editor extension activated in Development mode.');
+        _logger.log('extension', 'debug', 'LHQ Editor extension activated [Development mode]');
     } else {
         _logger.log('extension', 'info', 'LHQ Editor extension activated');
     }
-
-
 }
 
 export function getMessageBoxText(msg: string): string {
@@ -342,4 +340,33 @@ export const DefaultFormattingOptions: FormattingOptions = {
 
 export function getGeneratorAppErrorMessage(err: Error): string {
     return err instanceof AppError ? err.message : '';
+}
+
+export async function ensureFileIsWritable(filePath: string): Promise<boolean> {
+  const s = await fse.stat(filePath);
+
+  // Extract just the permission bits (ignore file type bits)
+  const beforeMode = s.mode & 0o777;
+
+  // Owner write bit is 0o200
+  if (beforeMode & 0o200) {
+    return false;
+  }
+
+  await fse.chmod(filePath, (beforeMode | 0o200));
+  return true;
+}
+
+export async function isFileWritable(filePath: string): Promise<boolean> {
+    const s = await fse.stat(filePath);
+    const mode = s.mode & 0o777;
+    return (mode & 0o200) !== 0;
+}
+
+export function pascalCasingToWords(value: string): string {
+  let idx = -1;
+  return value.replace(/([A-Z]*[^A-Z]+)/g, (match) => {
+    idx++;
+    return `${idx === 0 ? match : match.toLowerCase()} `;
+  }).trimEnd();
 }

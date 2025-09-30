@@ -235,8 +235,6 @@ export class AppContext implements IAppContext {
 
         await this.initGenerator(ctx);
 
-        // to trigger setContext calls
-        //this.languagesVisible = this.languagesVisible;
         this.isEditorActive = false;
         this.setTreeSelection([]);
 

@@ -49,7 +49,8 @@ export class VsCodeLogger implements ILogger {
     }
 
     log(ctx: string | object, level: LogType, msg: string, err?: Error | undefined): void {
-        const toConsole = this._debugMode || level === 'debug';
+        //const toConsole = this._debugMode || level === 'debug';
+        const toConsole = level === 'debug';
         const date = new Date().toISOString().replace('T', ' ').replace('Z', '');
 
         let errInfo = '';
@@ -70,7 +71,8 @@ export class VsCodeLogger implements ILogger {
             text = `${prefix} ${lines[0]}`;
             if (lines.length > 1) {
                 for (let i = 1; i < lines.length; i++) {
-                    text += `\n${' '.repeat(prefix.length)} ${lines[i]}`;
+                    // text += `\n${' '.repeat(prefix.length)} ${lines[i]}`;
+                    text += `\n${' '.repeat(5)} ${lines[i]}`;
                 }
             }
         }

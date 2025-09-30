@@ -148,6 +148,7 @@ export type PageToAppMessage = {
 } | {
     command: 'confirmQuestion';
     id: ConfirmQuestionTypes;
+    value?: unknown;
     message: string;
     detail?: string;
     warning?: boolean;
@@ -167,6 +168,11 @@ export type PageToAppMessage = {
     command: 'showNotification',
     type?: 'info' | 'warn' | 'err';
     message: string;
+} | {
+    command: 'sanitizeTranslation',
+    language: string;
+    multipleLangs: boolean;
+    paths: string[];
 };
 
 export interface IAppConfig {

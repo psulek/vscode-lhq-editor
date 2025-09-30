@@ -304,6 +304,11 @@ export class LhqEditorProvider implements vscode.CustomTextEditorProvider {
 
     public onDidSaveTextDocument(document: vscode.TextDocument) {
         if (isValidDocument(document)) {
+            const activeDoc = this.activeDocument;
+            if (activeDoc) {
+                activeDoc.reflectSelectedElementToWebview(true);
+            }
+
             if (!appConfig.runGeneratorOnSave) {
                 nextTick(async () => {
                     if (appConfig.suggestRunGeneratorOnSave) {

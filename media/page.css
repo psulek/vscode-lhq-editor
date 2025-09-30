@@ -32,6 +32,11 @@ a {
   text-decoration: none;
 }
 
+a.error {
+  color: var(--vscode-errorForeground);
+  background-color: var(--vscode-errorBackground);
+}
+
 a:hover {
   text-decoration: underline;
 }

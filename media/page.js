@@ -1140,6 +1140,33 @@
                 return error ? error.message : '';
             },
 
+            sanitizeTranslation(translation) {
+                if (translation && translation.valueRef) {
+                    if (this.blockPanelVisible) {
+                        logMsg('Block panel is already visible, ignoring "sanitizeTranslation"');
+                        return;
+                    }
+
+                    this.blockPanelVisible = true;
+
+                    if (this.item.elementType !== 'resource') {
+                        logMsg('Sanitize translation is only supported for resource elements.');
+                        return;
+                    }
+
+                    const languageName = translation.valueRef.languageName;
+                    const multipleLangs = this.invalidData.errors.filter(x => x.type === 'badunicodechars').length > 1;
+                    const paths = toRaw(this.item.paths);
+
+                    postMessage({
+                        command: 'sanitizeTranslation',
+                        language: languageName,
+                        multipleLangs,
+                        paths
+                    });
+                }
+            },
+
             editElementName() {
                 if (this.blockPanelVisible) {
                     logMsg('Block panel is already visible, ignoring "editElementName"');

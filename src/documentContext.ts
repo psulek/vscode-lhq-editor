@@ -3,9 +3,17 @@ import path from 'node:path';
 import fse from 'fs-extra';
 import { glob } from 'glob';
 import { nextTick } from 'node:process';
-import { createTreeElementPaths, delay, generateNonce, getElementFullPath, getGeneratorAppErrorMessage, isValidDocument, logger, readFileInfo, showConfirmBox, showMessageBox, showNotificationBox } from './utils';
+import { createTreeElementPaths, delay, generateNonce, getElementFullPath, getGeneratorAppErrorMessage, isFileWritable, isValidDocument, logger, pascalCasingToWords, readFileInfo, showConfirmBox, showMessageBox, showNotificationBox } from './utils';
 import { AppToPageMessage, ClientPageError, ClientPageModelProperties, ClientPageSettingsError, CultureInfo, IDocumentContext, IVirtualLanguageElement, IVirtualRootElement, NotifyDocumentActiveChangedCallback, PageToAppMessage, SelectionBackup, StatusBarItemUpdateRequestCallback, ValidationError } from './types';
-import { AppError, AppErrorCodes, AppErrorKinds, CategoryLikeTreeElementToJsonOptions, CategoryOrResourceType, CodeGeneratorGroupSettings, CodeGeneratorValidateResult, CSharpNamespaceInfo, detectFormatting, FileInfo, FormattingOptions, GeneratedFile, Generator, generatorUtils, HbsTemplateManager, ICategoryLikeTreeElement, ImportModelErrorKind, ImportModelResult, IResourceElement, IResourceParameterElement, IResourceValueElement, IRootModelElement, isNullOrEmpty, ITreeElement, LhqModel, LhqModelResourceTranslationState, LhqValidationResult, modelConst, ModelUtils, namespaceUtils, strCompare, TreeElementType } from '@lhq/lhq-generators';
+import {
+    AppError, AppErrorCodes, AppErrorKinds, CategoryLikeTreeElementToJsonOptions, CategoryOrResourceType,
+    CodeGeneratorGroupSettings, CodeGeneratorValidateResult, CSharpNamespaceInfo, detectFormatting,
+    FileInfo, FormattingOptions, GeneratedFile, Generator, generatorUtils,
+    HbsTemplateManager, ICategoryLikeTreeElement, ImportModelErrorKind, ImportModelResult, IResourceElement,
+    IResourceParameterElement, IResourceValueElement, IRootModelElement, isNullOrEmpty, ITreeElement, LhqModel,
+    LhqModelResourceTranslationState, LhqValidationResult, modelConst, ModelUtils,
+    namespaceUtils, strCompare, TreeElementType, sanitizeUnsupportedUnicodeChars
+} from '@lhq/lhq-generators';
 import { filterTreeElements, filterVirtualTreeElements, isVirtualTreeElement, validateTreeElementName, VirtualRootElement } from './elements';
 import { AvailableCommands, Commands, CustomEditorViewType, getCurrentFolder, ModelV3_Info } from './context';
 import { CodeGenStatus } from './codeGenStatus';
@@ -1003,6 +1011,17 @@ export class DocumentContext implements IDocumentContext {
         };
     }
 
+    // public async runCodeGenerator(): Promise<void> {
+    //     const file = path.basename(this.fileName);
+    //     await vscode.window.withProgress({
+    //         location: vscode.ProgressLocation.Notification,
+    //         cancellable: false,
+    //         title: `Running code generator (${file}) ...`
+    //     }, async () => {
+    //         await this._runCodeGenerator();
+    //     });
+    // }
+
     public async runCodeGenerator(): Promise<void> {
         if (!this.jsonModel || !this._rootModel) {
             logger().log(this, 'debug', 'runCodeGenerator -> No current document or model found.');
@@ -1082,7 +1101,7 @@ export class DocumentContext implements IDocumentContext {
                         detail: detail
                     });
 
-                    msg = `Code generator template '${templateId}' failed. ${detail} `;
+                    msg = `Code generator template '${templateId}' failed. ${detail} (errorCode: ${validateResult.errorCode ?? '-'}) `;
                     logger().log('this', 'error', msg);
 
                     return;
@@ -1130,22 +1149,37 @@ export class DocumentContext implements IDocumentContext {
                     return;
                 }
 
+                let saveFailedCount = 0;
                 const saveFilesMap = result.generatedFiles.map(async (file) => {
-                    const filename = await this.saveGenFile(file, output);
-                    fileNames.push(filename);
+                    const saveResult = await this.saveGenFile(file, output);
+                    if (saveResult.readonly) {
+                        saveFailedCount++;
+                        logger().log(this, 'error', `Error saving generated file: ${file.fileName} / cannot write to file (readonly?).`);
+                    } else {
+                        fileNames.push(filename);
+                    }
                 });
                 await Promise.all(saveFilesMap);
 
+                if (saveFailedCount > 0) {
+                    logger().log(this, 'error', `Code generator template '${templateId}' failed for: ${filename}.`);
 
-                logger().log(this, 'info', `Code generator template '${templateId}' for: ${filename} successfully generated ${fileNames.length} files: \n` +
-                    `${fileNames.join('\n')} `);
+                    this._codeGenStatus.update({
+                        kind: 'error',
+                        message: 'Code generator failed.',
+                        detail: `${saveFailedCount} generated file(s) failed on save.`
+                    });
+                } else {
+                    logger().log(this, 'info', `Code generator template '${templateId}' for: ${filename} successfully generated ${fileNames.length} files: \n` +
+                        `${fileNames.join('\n')} `);
 
-                this._codeGenStatus.update({
-                    kind: 'status',
-                    message: `Generated ${result.generatedFiles.length} files.`,
-                    success: true,
-                    timeout: 2000
-                });
+                    this._codeGenStatus.update({
+                        kind: 'status',
+                        message: `Generated ${result.generatedFiles.length} files.`,
+                        success: true,
+                        timeout: 2000
+                    });
+                }
             } else {
                 this._codeGenStatus.update({
                     kind: 'error',
@@ -1188,7 +1222,7 @@ export class DocumentContext implements IDocumentContext {
         const propertyNamespace = 'Namespace';
         const groupCSharp = 'CSharp';
         return validationResult.group === groupCSharp && validationResult.property === propertyNamespace &&
-            isNullOrEmpty(settings[groupCSharp][propertyNamespace]);
+            validationResult.errorCode === 'csharp.namespace.missing';
     }
 
     private async autoDetectNamespace(root: IRootModelElement): Promise<{ namespace: CSharpNamespaceInfo; error: string | undefined } | undefined> {
@@ -1221,7 +1255,7 @@ export class DocumentContext implements IDocumentContext {
                 .getCodeGeneratorSettingsConvertor()
                 .validateSetting(this.codeGeneratorTemplateId, groupCSharp, propertyNamespace, namespaceInfo.namespace, false);
 
-            return { namespace: namespaceInfo, error: namespaceError };
+            return { namespace: namespaceInfo, error: namespaceError?.error };
         }
 
         // return undefined;
@@ -1329,7 +1363,7 @@ export class DocumentContext implements IDocumentContext {
         });
     }
 
-    private async saveGenFile(generatedFile: GeneratedFile, outputPath?: string): Promise<string> {
+    private async saveGenFile(generatedFile: GeneratedFile, outputPath?: string): Promise<{ fileName: string, readonly: boolean }> {
         const content = generatorUtils.getGeneratedFileContent(generatedFile, true);
         const bom = generatedFile.bom ? '\uFEFF' : '';
         const encodedText = Buffer.from(bom + content, 'utf8');
@@ -1338,8 +1372,17 @@ export class DocumentContext implements IDocumentContext {
         const dir = path.dirname(fileName);
 
         await fse.ensureDir(dir);
-        await fse.writeFile(fileName, encodedText, { encoding: 'utf8' });
-        return fileName;
+
+        const readonly = await isFileWritable(fileName) === false;
+        // if () {
+        //     throw new Error(`Cannot write to file '${fileName}' (readonly?).`);
+        // }
+
+        if (!readonly) {
+            await fse.writeFile(fileName, encodedText, { encoding: 'utf8' });
+        }
+
+        return { fileName, readonly };
     }
 
     public validateDocument(showError: boolean = true): ValidationError | undefined {
@@ -1517,6 +1560,64 @@ export class DocumentContext implements IDocumentContext {
             }
             case 'showNotification': {
                 showNotificationBox(message.type ?? 'info', message.message, { logger: false });
+                break;
+            }
+            case 'sanitizeTranslation': {
+                if (!this._rootModel) {
+                    logger().log(this, 'error', `${header} No current root model found.`);
+                    return;
+                }
+
+                const languageName = message.language;
+                const multipleLangs = message.multipleLangs;
+
+                const paths = createTreeElementPaths('/' + message.paths.join('/'), true);
+                const elem = this._rootModel.getElementByPath(paths, 'resource');
+                if (!elem) {
+                    logger().log(this, 'error', `${header} No resource found at path: ${paths.getPaths(true).join('/')}`);
+                    return;
+                }
+
+                const msg = `Sanitize translation(s) text ?`;
+
+                const culture = appContext.getCultureDesc(languageName);
+
+                const hint = this._rootModel.options.values?.sanitize === true
+                    ? ''
+                    : '\n\nEnable "Sanitize unsupported unicode characters" in project properties to automatically sanitize text on save.';
+
+                const detail = (multipleLangs
+                    ? `Sanitize only '${culture}' translation or all translations that contain invalid unicode characters?`
+                    : `Sanitize '${culture}' translation text ?`) +
+                    '\n\nSanitizing will remove/replace unsupported unicode characters in the translation text.' +
+                    hint;
+
+                const yesText = multipleLangs ? `All languages` : `Yes`;
+                const noText = multipleLangs ? `Only ${culture}` : `No`;
+                const noHidden = !multipleLangs;
+
+                const selected = await showConfirmBox(msg, detail, { yesText, noText, noHidden });
+                if (selected !== undefined) {
+                    const sanitizeAll = multipleLangs && selected;
+
+                    let changes = false;
+                    elem.values.forEach(translation => {
+                        if ((translation.languageName === languageName || sanitizeAll) && translation.value) {
+                            const sanitized = sanitizeUnsupportedUnicodeChars(translation.value);
+                            if (sanitized !== translation.value) {
+                                translation.value = sanitized;
+                                changes = true;
+                            }
+                        }
+                    });
+
+                    if (changes) {
+                        await this.commitChanges(`sanitizeTranslation`);
+                    }
+                }
+                this.reflectSelectedElementToWebview(true);
+
+                break;
             }
         }
     }
@@ -1980,6 +2081,7 @@ export class DocumentContext implements IDocumentContext {
             } else {
                 if (isResource) {
                     newElement = parentCategory.addResource(itemName);
+                    (newElement as IResourceElement).addValue(this.rootModel!.primaryLanguage!, pascalCasingToWords(itemName));
                 } else {
                     newElement = parentCategory.addCategory(itemName);
                 }
