@@ -384,6 +384,7 @@
         ]
     },
     "scripts": {
+        "preinstall": "node preinstall.js",
         "vscode:prepublish": "pnpm run compile",
         "package": "pnpm vsce package --no-dependencies",
         "publish": "pnpm vsce publish --no-dependencies",
@@ -400,6 +401,7 @@
         "test": "vscode-test"
     },
     "devDependencies": {
+        "@dotenvx/dotenvx": "1.51.1",
         "@types/fs-extra": "11.0.4",
         "@types/lodash.debounce": "4.0.9",
         "@types/lodash.throttle": "4.1.9",

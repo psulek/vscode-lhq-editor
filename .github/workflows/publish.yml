@@ -29,11 +29,17 @@ jobs:
           cache: 'pnpm'
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm add -g vsce
 
 
-      - name: Build package
-        run: pnpm run build-all --version=${{ steps.extract_version.outputs.version }}
+      - name: Build extension
+        run: |
+          pnpm run compile
+          pnpm vsce publish --no-dependencies
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
 
       - name: Publish to GitHub Packages
         run: |
@@ -42,23 +48,23 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Update release with package link
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const package_url = `https://github.com/${context.repo.owner}/${context.repo.repo}/pkgs/npm/lhq-generators`;
-            const release = await github.rest.repos.getRelease({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              release_id: context.payload.release.id
-            });
+    #   - name: Update release with package link
+    #     uses: actions/github-script@v7
+    #     with:
+    #       script: |
+    #         const package_url = `https://github.com/${context.repo.owner}/${context.repo.repo}/pkgs/npm/lhq-generators`;
+    #         const release = await github.rest.repos.getRelease({
+    #           owner: context.repo.owner,
+    #           repo: context.repo.repo,
+    #           release_id: context.payload.release.id
+    #         });
             
-            const currentBody = release.data.body || '';
-            const packageSection = `\n\n---\n\n📦 **Package:** [View on GitHub Packages](${package_url})`;
+    #         const currentBody = release.data.body || '';
+    #         const packageSection = `\n\n---\n\n📦 **Package:** [View on GitHub Packages](${package_url})`;
             
-            await github.rest.repos.updateRelease({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              release_id: context.payload.release.id,
-              body: currentBody + packageSection
-            });
+    #         await github.rest.repos.updateRelease({
+    #           owner: context.repo.owner,
+    #           repo: context.repo.repo,
+    #           release_id: context.payload.release.id,
+    #           body: currentBody + packageSection
+    #         });
