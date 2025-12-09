@@ -39,6 +39,10 @@ jobs:
           echo "//npm.pkg.github.com/:_authToken=$GH_READ_PACKAGES_TOKEN" >> .npmrc
         env:
           GH_READ_PACKAGES_TOKEN: ${{ secrets.GH_READ_PACKAGES_TOKEN }}
+
+      - name: Remove preinstall script
+        run: |
+          node -e "let pkg=require('./package.json'); delete pkg.preinstall; require('fs').writeFileSync('package.json', JSON.stringify(pkg, null, 2));"
           
       - name: Install dependencies
         run: |
