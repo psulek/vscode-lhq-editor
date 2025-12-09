@@ -18,8 +18,11 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v5
 
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v4
+        name: Install pnpm
+        with:
+          version: 10
+          run_install: false
 
       - name: Setup Node.js for GitHub Packages
         uses: actions/setup-node@v4
@@ -33,7 +36,6 @@ jobs:
         run: |
           pnpm install --frozen-lockfile
           pnpm add -g vsce
-
 
       - name: Build extension
         run: |
