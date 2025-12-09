@@ -1,4 +1,4 @@
-import { arraySortBy, CategoryOrResourceType, ICategoryLikeTreeElement, IRootModelElement, isNullOrEmpty, ITreeElement, ITreeElementPaths, ModelUtils, TreeElementToJsonOptions, TreeElementType } from '@lhq/lhq-generators';
+import { arraySortBy, CategoryOrResourceType, ICategoryLikeTreeElement, IRootModelElement, isNullOrEmpty, ITreeElement, ITreeElementPaths, ModelUtils, TreeElementToJsonOptions, TreeElementType } from '@psulek/lhq-generators';
 import { createTreeElementPaths, getElementFullPath } from './utils';
 
 import type { ILanguagesElement, IVirtualLanguageElement, IVirtualRootElement, IVirtualTreeElement, VirtualElementType } from './types';

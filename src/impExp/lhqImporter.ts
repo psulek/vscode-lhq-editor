@@ -1,6 +1,6 @@
 import fse from 'fs-extra';
 
-import { generatorUtils, ImportModelOptions, ModelUtils } from '@lhq/lhq-generators';
+import { generatorUtils, ImportModelOptions, ModelUtils } from '@psulek/lhq-generators';
 
 import { DataImporterBase, ImporterEngine } from './types';
 import { FileFilter, safeReadFile } from '../utils';

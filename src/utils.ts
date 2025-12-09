@@ -1,8 +1,8 @@
 import * as vscode from 'vscode';
 import path from 'path';
 import fse from 'fs-extra';
-import type { FileInfo, ReadFileInfoOptions, ITreeElementPaths, ITreeElement, IRootModelElement, ICategoryLikeTreeElement, FormattingOptions } from '@lhq/lhq-generators';
-import { AppError, fileUtils, isNullOrEmpty, ModelUtils, strCompare } from '@lhq/lhq-generators';
+import type { FileInfo, ReadFileInfoOptions, ITreeElementPaths, ITreeElement, IRootModelElement, ICategoryLikeTreeElement, FormattingOptions } from '@psulek/lhq-generators';
+import { AppError, fileUtils, isNullOrEmpty, ModelUtils, strCompare } from '@psulek/lhq-generators';
 
 import { ILogger, LogType, VsCodeLogger } from './logger';
 import { ConfirmBoxOptions, MatchForSubstringResult, MessageBoxOptions, NotificationBoxOptions } from './types';
@@ -343,30 +343,34 @@ export function getGeneratorAppErrorMessage(err: Error): string {
 }
 
 export async function ensureFileIsWritable(filePath: string): Promise<boolean> {
-  const s = await fse.stat(filePath);
+    const s = await fse.stat(filePath);
 
-  // Extract just the permission bits (ignore file type bits)
-  const beforeMode = s.mode & 0o777;
+    // Extract just the permission bits (ignore file type bits)
+    const beforeMode = s.mode & 0o777;
 
-  // Owner write bit is 0o200
-  if (beforeMode & 0o200) {
-    return false;
-  }
+    // Owner write bit is 0o200
+    if (beforeMode & 0o200) {
+        return false;
+    }
 
-  await fse.chmod(filePath, (beforeMode | 0o200));
-  return true;
+    await fse.chmod(filePath, (beforeMode | 0o200));
+    return true;
 }
 
 export async function isFileWritable(filePath: string): Promise<boolean> {
-    const s = await fse.stat(filePath);
-    const mode = s.mode & 0o777;
-    return (mode & 0o200) !== 0;
+    if (await fse.exists(filePath)) {
+        const s = await fse.stat(filePath);
+        const mode = s.mode & 0o777;
+        return (mode & 0o200) !== 0;
+    }
+
+    return true;
 }
 
 export function pascalCasingToWords(value: string): string {
-  let idx = -1;
-  return value.replace(/([A-Z]*[^A-Z]+)/g, (match) => {
-    idx++;
-    return `${idx === 0 ? match : match.toLowerCase()} `;
-  }).trimEnd();
+    let idx = -1;
+    return value.replace(/([A-Z]*[^A-Z]+)/g, (match) => {
+        idx++;
+        return `${idx === 0 ? match : match.toLowerCase()} `;
+    }).trimEnd();
 }

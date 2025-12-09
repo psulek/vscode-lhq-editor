@@ -6,7 +6,7 @@ import {
     AppToPageMessage, CheckAnyActiveDocumentCallback, CultureInfo, FirstTimeUsage, IAppConfig,
     IAppContext, ITreeContext, IVirtualLanguageElement, LastSelectedElement, SelectionChangedCallback
 } from './types';
-import { Generator, GeneratorInitialization, HbsTemplateManager, ITreeElement, ModelUtils, generatorUtils, isNullOrEmpty, strCompare } from '@lhq/lhq-generators';
+import { Generator, GeneratorInitialization, HbsTemplateManager, ITreeElement, ModelUtils, generatorUtils, isNullOrEmpty, strCompare } from '@psulek/lhq-generators';
 import { VirtualTreeElement } from './elements';
 import {
     DefaultFormattingOptions, getElementFullPath, initializeDebugMode, isValidDocument,

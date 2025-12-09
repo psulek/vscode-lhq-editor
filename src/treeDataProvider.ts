@@ -4,9 +4,9 @@ import * as vscode from 'vscode';
 import type {
     CategoryOrResourceType, ICategoryLikeTreeElement, IRootModelElement,
     ITreeElement, TreeElementType
-} from '@lhq/lhq-generators';
+} from '@psulek/lhq-generators';
 
-import { isNullOrEmpty } from '@lhq/lhq-generators';
+import { isNullOrEmpty } from '@psulek/lhq-generators';
 
 import { LhqTreeItem } from './treeItem';
 import { isVirtualTreeElement, VirtualElementLoading, VirtualTreeElement } from './elements';

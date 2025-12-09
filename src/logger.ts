@@ -1,4 +1,4 @@
-import { AppError, isNullOrEmpty } from '@lhq/lhq-generators';
+import { AppError, isNullOrEmpty } from '@psulek/lhq-generators';
 import * as vscode from 'vscode';
 
 export type LogType = 'debug' | 'info' | 'warn' | 'error';

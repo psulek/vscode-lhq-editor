@@ -13,7 +13,7 @@ import {
     IResourceParameterElement, IResourceValueElement, IRootModelElement, isNullOrEmpty, ITreeElement, LhqModel,
     LhqModelResourceTranslationState, LhqValidationResult, modelConst, ModelUtils,
     namespaceUtils, strCompare, TreeElementType, sanitizeUnsupportedUnicodeChars
-} from '@lhq/lhq-generators';
+} from '@psulek/lhq-generators';
 import { filterTreeElements, filterVirtualTreeElements, isVirtualTreeElement, validateTreeElementName, VirtualRootElement } from './elements';
 import { AvailableCommands, Commands, CustomEditorViewType, getCurrentFolder, ModelV3_Info } from './context';
 import { CodeGenStatus } from './codeGenStatus';

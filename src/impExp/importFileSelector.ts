@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
-import { isNullOrEmpty } from '@lhq/lhq-generators';
-import type { ImportModelMode } from '@lhq/lhq-generators';
+import { isNullOrEmpty } from '@psulek/lhq-generators';
+import type { ImportModelMode } from '@psulek/lhq-generators';
 
 import { showOpenFileDialog, showMessageBox } from '../utils';
 import type { ImporterEngine, ImportFileSelectedData } from './types';

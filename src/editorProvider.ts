@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import debounce from 'lodash.debounce';
-import { isNullOrEmpty, ITreeElement } from '@lhq/lhq-generators';
+import { isNullOrEmpty, ITreeElement } from '@psulek/lhq-generators';
 
 import { LhqTreeDataProvider } from './treeDataProvider';
 import { createTreeElementPaths, isValidDocument, logger, showConfirmBox, showMessageBox, showNotificationBox } from './utils';

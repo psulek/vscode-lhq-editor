@@ -1,4 +1,4 @@
-import type { ImportModelMode, ImportModelOptions, ImportResourceItem, IRootModelElement } from '@lhq/lhq-generators';
+import type { ImportModelMode, ImportModelOptions, ImportResourceItem, IRootModelElement } from '@psulek/lhq-generators';
 import type { FileFilter } from '../utils';
 
 export type ImportPreparedData = {

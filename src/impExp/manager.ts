@@ -1,4 +1,4 @@
-import { ImportModelOptions, IRootModelElement } from '@lhq/lhq-generators';
+import { ImportModelOptions, IRootModelElement } from '@psulek/lhq-generators';
 import { ExcelDataImporter } from './excelImporter';
 import { ExporterEngine, IDataExporter, IDataImporter, ImporterEngine } from './types';
 import { LhqModelDataImporter } from './lhqImporter';

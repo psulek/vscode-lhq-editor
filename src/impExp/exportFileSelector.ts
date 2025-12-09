@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { IRootModelElement, isNullOrEmpty } from '@lhq/lhq-generators';
+import { IRootModelElement, isNullOrEmpty } from '@psulek/lhq-generators';
 import { ImportExportManager } from './manager';
 import { ExporterEngine, ExportFileSelectedData, IDataExporter } from './types';
 import { showMessageBox, showSaveFileDialog } from '../utils';

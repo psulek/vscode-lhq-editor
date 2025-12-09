@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { ICategoryLikeTreeElement, ITreeElement, ModelUtils } from '@lhq/lhq-generators';
+import { ICategoryLikeTreeElement, ITreeElement, ModelUtils } from '@psulek/lhq-generators';
 import { getElementFullPath, toPascalCasing } from './utils';
 import { isVirtualTreeElement, VirtualTreeElement } from './elements';
 import { SearchTreeOptions, AppTreeElementType, IVirtualLanguageElement } from './types';

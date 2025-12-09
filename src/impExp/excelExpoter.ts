@@ -1,5 +1,5 @@
 import * as ExcelJS from 'exceljs';
-import { arraySortBy, type ICategoryElement, type IResourceElement, type IRootModelElement } from '@lhq/lhq-generators';
+import { arraySortBy, type ICategoryElement, type IResourceElement, type IRootModelElement } from '@psulek/lhq-generators';
 import { excelWorksheetName, ExporterEngine, IDataExporter } from './types';
 import path from 'path';
 import { FileFilter } from '../utils';

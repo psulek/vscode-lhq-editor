@@ -1,4 +1,4 @@
-import type { FormattingOptions, ICodeGeneratorElement, IRootModelElement, ITreeElement, LhqModel, LhqModelOptionsResources, LhqModelOptionsValues, TemplateMetadataDefinition, TreeElementType } from '@lhq/lhq-generators';
+import type { FormattingOptions, ICodeGeneratorElement, IRootModelElement, ITreeElement, LhqModel, LhqModelOptionsResources, LhqModelOptionsValues, TemplateMetadataDefinition, TreeElementType } from '@psulek/lhq-generators';
 import type { ConfigurationTarget, MarkdownString, TextDocument, ThemeColor, Uri, Webview } from 'vscode';
 
 export type SearchTreeKind = 'path' | 'name' | 'translation' | 'language';

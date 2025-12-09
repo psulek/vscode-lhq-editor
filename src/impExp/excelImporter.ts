@@ -1,6 +1,6 @@
 import fse from 'fs-extra';
 import * as ExcelJS from 'exceljs';
-import { ImportResourceItem, isNullOrEmpty, ITreeElementPaths, ModelUtils } from '@lhq/lhq-generators';
+import { ImportResourceItem, isNullOrEmpty, ITreeElementPaths, ModelUtils } from '@psulek/lhq-generators';
 import { DataImporterBase, ImporterEngine, ImportPreparedData, excelWorksheetName } from './types';
 import { FileFilter } from '../utils';
 

@@ -1,3 +1,6 @@
+shamefullyHoist: true
+enablePrePostScripts: true
+
 onlyBuiltDependencies:
   - esbuild
 

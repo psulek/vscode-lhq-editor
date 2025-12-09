@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { isNullOrEmpty } from '@lhq/lhq-generators';
+import { isNullOrEmpty } from '@psulek/lhq-generators';
 
 import { CodeGeneratorStatusInfo, CodeGeneratorStatusKind, ICodeGenStatus, IDocumentContext, StatusBarItemUpdateInfo, StatusBarItemUpdateRequestCallback } from './types';
 import { ContextKeys, GlobalCommands } from './context';

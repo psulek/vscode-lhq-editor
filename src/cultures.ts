@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { CultureInfo } from './types';
 import { logger } from './utils';
-import { isNullOrEmpty, strCompare } from '@lhq/lhq-generators';
+import { isNullOrEmpty, strCompare } from '@psulek/lhq-generators';
 
 export class AppCultures {
     private _cultures: CultureInfo[] = [];

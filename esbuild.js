@@ -31,7 +31,7 @@ const copyFilesPlugin = copy({
         to: './dist/',
     },
     {
-        from: './node_modules/@lhq/lhq-generators/hbs/**/*',
+        from: './node_modules/@psulek/lhq-generators/hbs/**/*',
         to: './dist/hbs',
     }],
     watch: watch
