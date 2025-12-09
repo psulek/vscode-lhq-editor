@@ -1,0 +1,64 @@
+name: Publish Package
+
+on:
+  workflow_dispatch:
+
+env:
+  NODE_VERSION: '20.x'
+  MOCHA_COLORS: '0'
+  REGISTRY_URL: 'https://npm.pkg.github.com'
+  
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js for GitHub Packages
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          registry-url: ${{ env.REGISTRY_URL }}
+          scope: '@psulek'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+
+      - name: Build package
+        run: pnpm run build-all --version=${{ steps.extract_version.outputs.version }}
+
+      - name: Publish to GitHub Packages
+        run: |
+          cd dist
+          pnpm publish --access public --provenance --no-git-checks
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update release with package link
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const package_url = `https://github.com/${context.repo.owner}/${context.repo.repo}/pkgs/npm/lhq-generators`;
+            const release = await github.rest.repos.getRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              release_id: context.payload.release.id
+            });
+            
+            const currentBody = release.data.body || '';
+            const packageSection = `\n\n---\n\n📦 **Package:** [View on GitHub Packages](${package_url})`;
+            
+            await github.rest.repos.updateRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              release_id: context.payload.release.id,
+              body: currentBody + packageSection
+            });
