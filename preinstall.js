@@ -1,3 +1,9 @@
+if (process.env.GITHUB_ACTIONS === 'true') {
+  // In GitHub Actions, we assume the token is set via secrets
+  process.exit(0);
+}
+
+
 const token = process.env.GH_READ_PACKAGES_TOKEN;
 
 if (!token || token.trim() === "") {
