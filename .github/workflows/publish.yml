@@ -32,12 +32,20 @@ jobs:
           scope: '@psulek'
           cache: 'pnpm'
 
+      - name: Set token config
+        run: |
+          echo "registry=https://registry.npmjs.org/" > .npmrc
+          echo "@psulek:registry=https://npm.pkg.github.com" >> .npmrc
+          echo "//npm.pkg.github.com/:_authToken=$GH_READ_PACKAGES_TOKEN" >> .npmrc
+        env:
+          GH_READ_PACKAGES_TOKEN: ${{ secrets.GH_READ_PACKAGES_TOKEN }}
+          
       - name: Install dependencies
         run: |
           pnpm install --frozen-lockfile
           pnpm add -g vsce
-        env:
-          GH_READ_PACKAGES_TOKEN: ${{ secrets.GH_READ_PACKAGES_TOKEN }}
+        # env:
+        #   GH_READ_PACKAGES_TOKEN: ${{ secrets.GH_READ_PACKAGES_TOKEN }}
 
       - name: Build extension
         run: |
