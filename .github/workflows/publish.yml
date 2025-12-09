@@ -36,6 +36,8 @@ jobs:
         run: |
           pnpm install --frozen-lockfile
           pnpm add -g vsce
+        env:
+          GH_READ_PACKAGES_TOKEN: ${{ secrets.GH_READ_PACKAGES_TOKEN }}
 
       - name: Build extension
         run: |
