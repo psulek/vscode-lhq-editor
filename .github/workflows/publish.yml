@@ -51,13 +51,18 @@ jobs:
         # env:
         #   GH_READ_PACKAGES_TOKEN: ${{ secrets.GH_READ_PACKAGES_TOKEN }}
 
+      - name: Print directory tree
+        run: |
+          tree -a -L 5 media
+        shell: bash
+
       - name: Build extension
         run: |
-          pnpm run compile
-          
           if [ "${PREREALSE}" = "1" ]; then
+            echo "Building pre-release version..."
             pnpm vsce publish --no-dependencies --pre-release
           else
+            echo "Building stable release version..."
             pnpm vsce publish --no-dependencies
           fi
         env:
