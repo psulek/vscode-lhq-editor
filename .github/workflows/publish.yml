@@ -32,7 +32,18 @@ jobs:
           jq -r '"PACKAGE_VERSION=" + .version, "PKG_NAME=" + .name' package.json >> $GITHUB_ENV
           echo "PACKAGE_VERSION=$PACKAGE_VERSION"
           echo "PKG_NAME=$PKG_NAME"
+
+          echo "data_version=$(jq -r .version package.json)" >> $GITHUB_ENV
+          echo "data_name=$(jq -r .name package.json)" >> $GITHUB_ENV
+
+      - name: test read env
+        run: |
+          echo "data_version: ${{ env.data_version }}"
+          echo "data_name: ${{ env.data_name }}"
+          echo "PACKAGE_VERSION: ${{ env.PACKAGE_VERSION }}"
+          echo "PKG_NAME: ${{ env.PKG_NAME }}"
           exit 1
+
 
     #   - name: test
     #     run: |
