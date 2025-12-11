@@ -128,7 +128,7 @@ jobs:
               console.log(`Previous version from package.json: ${prev_version}`);
 
               // create vscode package with version but without creating git tag
-              const args = ['vsce', 'publish', '--no-dependencies', '--no-git-tag-version'];
+              const args = ['vsce', 'publish', '--no-dependencies', '--no-git-tag-version', version];
               if (prerelease) {
                 args.push('--pre-release');
               }
