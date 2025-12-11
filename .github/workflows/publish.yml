@@ -23,10 +23,6 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          echo "${GITHUB_ACTOR_ID}+${GITHUB_ACTOR}@users.noreply.github.com"
-          echo "$(gh api /users/${GITHUB_ACTOR} | jq .name -r)"
-          exit 1
-
           git config --global user.email "${GITHUB_ACTOR_ID}+${GITHUB_ACTOR}@users.noreply.github.com"
           git config --global user.name "$(gh api /users/${GITHUB_ACTOR} | jq .name -r)"
           git config -l
@@ -68,16 +64,21 @@ jobs:
     #       tree -a -L 5 media
     #     shell: bash
 
-      - name: Extract version from tag
-        id: extract_version
-        run: |
-          TAG="${{ github.event.release.tag_name }}"
-          VERSION=${TAG#v}
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-        shell: bash
+    #   - name: Extract version from tag
+    #     id: extract_version
+    #     run: |
+    #       TAG="${{ github.event.release.tag_name }}"
+    #       VERSION=${TAG#v}
+    #       echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+    #     shell: bash
 
-      - name: Read package version
-        run: echo "PACKAGE_VERSION=$(jq -r .version package.json)" >> $GITHUB_ENV
+      - name: Update package version
+        run: |
+          echo "PREV_PACKAGE_VERSION=$(jq -r .version package.json)" >> $GITHUB_ENV
+
+          pnpm version patch --allow-same-version --no-git-tag-version
+          NEW_PACKAGE_VERSION=$(jq -r .version package.json)
+          echo "NEW_PACKAGE_VERSION=${NEW_PACKAGE_VERSION#v}" >> $GITHUB_ENV
 
       - name: Publish vscode package
         id: publish_vscode_package
@@ -86,9 +87,10 @@ jobs:
           script: |
             try {
               const prerelease = process.env.PRERELEASE === 'true';
-              const version = process.env.VERSION;
-              const prev_version = process.env.PACKAGE_VERSION;
-              
+              //const version = process.env.VERSION;
+              const prev_version = process.env.PREV_PACKAGE_VERSION;
+              const version = process.env.NEW_PACKAGE_VERSION;
+
               console.log(`Previous version from package.json: ${prev_version}`);
 
               // create vscode package with version but without creating git tag
@@ -113,22 +115,11 @@ jobs:
               
               if (exitCode !== 0) {
                   throw new Error(`Reverting version failed with exit code ${exitCode}`);
-              }
-              
-              console.log(`Marking release as draft ...`);
-              const release_id = context.payload.release.id;
-              await github.rest.repos.updateRelease({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                release_id: release_id,
-                draft: true
-              });
-              core.setFailed('Failed to create VSCode package. Release marked as draft.');
+              }              
             }
         env:
           VSCE_PAT: ${{ secrets.VSCE_PAT }}
           PRERELEASE: ${{ github.event.release.prerelease }}
-          VERSION: ${{ steps.extract_version.outputs.version }}
 
       - name: Update release with package link
         uses: actions/github-script@v7
