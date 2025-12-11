@@ -27,6 +27,13 @@ jobs:
           git config --global user.name "$(gh api /users/${GITHUB_ACTOR} | jq .name -r)"
           git config -l
 
+      - name: Read and print package version and name
+        run: |
+          jq -r '"PACKAGE_VERSION=" + .version, "PKG_NAME=" + .name' package.json >> $GITHUB_ENV
+          echo "PACKAGE_VERSION=$PACKAGE_VERSION"
+          echo "PKG_NAME=$PKG_NAME"
+          exit 1
+
     #   - name: test
     #     run: |
     #       echo "ref_name: ${{ github.ref_name }}"
