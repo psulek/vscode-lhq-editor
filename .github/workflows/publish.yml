@@ -62,15 +62,18 @@ jobs:
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
         shell: bash
 
+      - name: Read package version
+        run: echo "PACKAGE_VERSION=$(jq -r .version package.json)" >> $GITHUB_ENV
+
       - name: Create vscode package
         id: create_vscode_package
         uses: actions/github-script@v7
         with:
           script: |
-            let prev_version = '';
             try {
-              prev_version = require('package.json').version;
+              //prev_version = require('package.json').version;
               console.log(`Previous version from package.json: ${prev_version}`);
+              const prev_version = process.env.PACKAGE_VERSION;
 
               const prerelease = process.env.PRERELEASE === 'true';
               const version = process.env.VERSION;
@@ -90,7 +93,7 @@ jobs:
             } catch (error) {
               console.error('Error during package creation:', error);
 
-              const args = ['version', prev_version, '--allow-same-version', '--no-git-tag-version'];              }
+              const args = ['version', prev_version, '--allow-same-version', '--no-git-tag-version'];              
               console.log(`Reverting to previous version ${prev_version} in package.json ...`);
               const exitCode = await exec.exec('pnpm', args);
               
@@ -107,6 +110,7 @@ jobs:
                 draft: true
               });
               core.setFailed('Failed to create VSCode package. Release marked as draft.');
+            }
         env:
           PRERELEASE: ${{ github.event.release.prerelease }}
           VERSION: ${{ steps.extract_version.outputs.version }}
@@ -145,6 +149,7 @@ jobs:
                 draft: true
               });
               core.setFailed('Failed to create VSCode package. Release marked as draft.');
+            }
         env:
           VSCE_PAT: ${{ secrets.VSCE_PAT }}
           PRERELEASE: ${{ github.event.release.prerelease }}
