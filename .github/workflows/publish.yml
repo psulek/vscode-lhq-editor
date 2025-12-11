@@ -1,16 +1,20 @@
 name: Publish Package
 
 on:
+  release:
+    types: [published]
   workflow_dispatch:
 
 env:
   NODE_VERSION: '20.x'
   MOCHA_COLORS: '0'
   REGISTRY_URL: 'https://npm.pkg.github.com'
-  PREREALSE: 1
+  #PREREALSE: 1
   
 jobs:
   build-and-publish:
+    # act only only on published & draft releases
+    if: github.event.release.draft == true
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -39,54 +43,135 @@ jobs:
           echo "//npm.pkg.github.com/:_authToken=$GH_READ_PACKAGES_TOKEN" >> .npmrc
         env:
           GH_READ_PACKAGES_TOKEN: ${{ secrets.GH_READ_PACKAGES_TOKEN }}
-
-    #   - name: Remove preinstall script
-    #     run: |
-    #       node -e "let pkg=require('./package.json'); delete pkg.preinstall; require('fs').writeFileSync('package.json', JSON.stringify(pkg, null, 2));"
           
       - name: Install dependencies
         run: |
           pnpm install --frozen-lockfile
           pnpm add -g vsce
-        # env:
-        #   GH_READ_PACKAGES_TOKEN: ${{ secrets.GH_READ_PACKAGES_TOKEN }}
 
-      - name: Print directory tree
+    #   - name: Print directory tree
+    #     run: |
+    #       tree -a -L 5 media
+    #     shell: bash
+
+      - name: Extract version from tag
+        id: extract_version
         run: |
-          tree -a -L 5 media
+          TAG="${{ github.event.release.tag_name }}"
+          VERSION=${TAG#v}
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
         shell: bash
 
-      - name: Build extension
-        run: |
-          if [ "${PREREALSE}" = "1" ]; then
-            echo "Building pre-release version..."
-            pnpm vsce publish --no-dependencies --pre-release
-          else
-            echo "Building stable release version..."
-            pnpm vsce publish --no-dependencies
-          fi
+      - name: Create vscode package
+        id: create_vscode_package
+        uses: actions/github-script@v7
+        with:
+          script: |
+            let prev_version = '';
+            try {
+              prev_version = require('package.json').version;
+              console.log(`Previous version from package.json: ${prev_version}`);
+
+              const prerelease = process.env.PRERELEASE === 'true';
+              const version = process.env.VERSION;
+              // create vscode package with version but without creating git tag
+              const args = ['vsce', 'package', '--no-dependencies', '--no-git-tag-version', version];
+              if (prerelease) {
+                args.push('--pre-release');
+              }
+              console.log(`Creating package for ${(prerelease?'pre-release':'')} version ${version} ...`);
+              const exitCode = await exec.exec('pnpm', args);
+              
+              if (exitCode !== 0) {
+                  throw new Error(`Package creation failed with exit code ${exitCode}`);
+              }
+              
+              console.log('Package created successfully.');
+            } catch (error) {
+              console.error('Error during package creation:', error);
+
+              const args = ['version', prev_version, '--allow-same-version', '--no-git-tag-version'];              }
+              console.log(`Reverting to previous version ${prev_version} in package.json ...`);
+              const exitCode = await exec.exec('pnpm', args);
+              
+              if (exitCode !== 0) {
+                  throw new Error(`Reverting version failed with exit code ${exitCode}`);
+              }
+
+              const release_id = context.payload.release.id;
+              console.log(`Marking release ID ${release_id} as draft ...`);
+              await github.rest.repos.updateRelease({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                release_id: release_id,
+                draft: true
+              });
+              core.setFailed('Failed to create VSCode package. Release marked as draft.');
+              return;
+            }
+        env:
+          PRERELEASE: ${{ github.event.release.prerelease }}
+          VERSION: ${{ steps.extract_version.outputs.version }}
+
+      - name: Publish vscode package
+        id: publish_vscode_package
+        uses: actions/github-script@v7
+        with:
+          script: |
+            try {
+              const prerelease = process.env.PRERELEASE === 'true';
+              const version = process.env.VERSION;
+              // create vscode package with version but without creating git tag
+              const vsixFile = `lhq-editor-${version}.vsix`;
+              const args = ['vsce', 'publish', '--no-dependencies', '--no-git-tag-version', '--no-update-package-json', '-i', vsixFile];
+              if (prerelease) {
+                args.push('--pre-release');
+              }
+              console.log(`Publishing package for ${(prerelease?'pre-release':'')} version ${version} ...`);
+              const exitCode = await exec.exec('pnpm', args);
+              
+              if (exitCode !== 0) {
+                  throw new Error(`Package publishing failed with exit code ${exitCode}`);
+              }
+              
+              console.log('Package published successfully.');
+            } catch (error) {
+              console.error('Error during package publishing:', error);
+
+              console.log(`Marking release as draft ...`);
+              const release_id = context.payload.release.id;
+              await github.rest.repos.updateRelease({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                release_id: release_id,
+                draft: true
+              });
+              core.setFailed('Failed to create VSCode package. Release marked as draft.');
+              return;
+            }
         env:
           VSCE_PAT: ${{ secrets.VSCE_PAT }}
-          PREREALSE: ${{ env.PREREALSE }}
+          PRERELEASE: ${{ github.event.release.prerelease }}
+          VERSION: ${{ steps.extract_version.outputs.version }}
 
-
-    #   - name: Update release with package link
-    #     uses: actions/github-script@v7
-    #     with:
-    #       script: |
-    #         const package_url = `https://github.com/${context.repo.owner}/${context.repo.repo}/pkgs/npm/lhq-generators`;
-    #         const release = await github.rest.repos.getRelease({
-    #           owner: context.repo.owner,
-    #           repo: context.repo.repo,
-    #           release_id: context.payload.release.id
-    #         });
+      - name: Update release with package link
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const package_url = `https://marketplace.visualstudio.com/items?itemName=psulek-solo.lhq-editor`;
+            const release = await github.rest.repos.getRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              release_id: context.payload.release.id
+            });
             
-    #         const currentBody = release.data.body || '';
-    #         const packageSection = `\n\n---\n\n📦 **Package:** [View on GitHub Packages](${package_url})`;
+            const currentBody = release.data.body || '';
+            const packageSection = `\n\n---\n\n📦 **VSCode Extension:** [View on VS Marketplace](${package_url})`;
             
-    #         await github.rest.repos.updateRelease({
-    #           owner: context.repo.owner,
-    #           repo: context.repo.repo,
-    #           release_id: context.payload.release.id,
-    #           body: currentBody + packageSection
-    #         });
+            await github.rest.repos.updateRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              release_id: context.payload.release.id,
+              body: currentBody + packageSection,
+              draft: false
+            });
