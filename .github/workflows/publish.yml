@@ -14,7 +14,7 @@ env:
 jobs:
   build-and-publish:
     # act only only on published & draft releases
-    if: github.event.release.draft == true
+    # if: github.event.release.draft == true
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -172,6 +172,5 @@ jobs:
               owner: context.repo.owner,
               repo: context.repo.repo,
               release_id: context.payload.release.id,
-              body: currentBody + packageSection,
-              draft: false
+              body: currentBody + packageSection
             });
