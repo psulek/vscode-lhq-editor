@@ -107,8 +107,6 @@ jobs:
                 draft: true
               });
               core.setFailed('Failed to create VSCode package. Release marked as draft.');
-              return;
-            }
         env:
           PRERELEASE: ${{ github.event.release.prerelease }}
           VERSION: ${{ steps.extract_version.outputs.version }}
@@ -147,8 +145,6 @@ jobs:
                 draft: true
               });
               core.setFailed('Failed to create VSCode package. Release marked as draft.');
-              return;
-            }
         env:
           VSCE_PAT: ${{ secrets.VSCE_PAT }}
           PRERELEASE: ${{ github.event.release.prerelease }}
