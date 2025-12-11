@@ -9,7 +9,6 @@ env:
   NODE_VERSION: '20.x'
   MOCHA_COLORS: '0'
   REGISTRY_URL: 'https://npm.pkg.github.com'
-  #PREREALSE: 1
   
 jobs:
   build-and-publish:
@@ -20,11 +19,22 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v5
 
-      - name: test
+      - name: set git config
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          echo "head_ref: ${{ github.head_ref }}"
-          echo "ref_name: ${{ github.ref_name }}"
+          echo "${GITHUB_ACTOR_ID}+${GITHUB_ACTOR}@users.noreply.github.com"
+          echo "$(gh api /users/${GITHUB_ACTOR} | jq .name -r)"
           exit 1
+
+          git config --global user.email "${GITHUB_ACTOR_ID}+${GITHUB_ACTOR}@users.noreply.github.com"
+          git config --global user.name "$(gh api /users/${GITHUB_ACTOR} | jq .name -r)"
+          git config -l
+
+    #   - name: test
+    #     run: |
+    #       echo "ref_name: ${{ github.ref_name }}"
+    #       exit 1
 
       - uses: pnpm/action-setup@v4
         name: Install pnpm
