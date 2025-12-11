@@ -72,8 +72,8 @@ jobs:
           script: |
             try {
               //prev_version = require('package.json').version;
-              console.log(`Previous version from package.json: ${prev_version}`);
               const prev_version = process.env.PACKAGE_VERSION;
+              console.log(`Previous version from package.json: ${prev_version}`);
 
               const prerelease = process.env.PRERELEASE === 'true';
               const version = process.env.VERSION;
