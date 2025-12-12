@@ -1,0 +1,21 @@
+name: release created
+
+on:
+  release:
+    types: [created]
+  workflow_dispatch:
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: test
+        run: |
+          TAG="${{ github.event.release.tag_name }}"
+          echo "TAG: $TAG"
+          TAG_VERSION=${TAG#v}
+          echo "TAG_VERSION=$TAG_VERSION"
+          exit 1
+
