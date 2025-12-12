@@ -3,7 +3,7 @@ name: Publish Package
 on:
   release:
     types: [published]
-  workflow_dispatch:
+#   workflow_dispatch:
 
 env:
   NODE_VERSION: '20.x'
@@ -20,13 +20,29 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v5
 
+      - name: Extract version from tag
+        id: get_tag_version
+        run: |
+          TAG="${{ github.event.release.tag_name }}"
+          TAG_VERSION=${TAG#v}
+          echo "version=$TAG_VERSION" >> "$GITHUB_OUTPUT"
+        shell: bash
+
       - name: check if version exist in vs marketplace
         id: check_version
         env:
           EXTENSION_ID: ${{ env.EXTENSION_ID }}
+          TAG_VERSION: ${{ steps.get_tag_version.outputs.version }}
         run: |
           targetVersion=$(jq -r .version package.json)
           echo "PACKAGE_VERSION=$targetVersion"
+          echo "PACKAGE_VERSION=${PACKAGE_VERSION}" >> $GITHUB_ENV
+
+          echo "Extension ID: ${{ env.EXTENSION_ID }}"
+          echo "Tag Version: $TAG_VERSION"
+          echo "Tag version 2: ${{ steps.get_tag_version.outputs.version }}"
+          exit 1
+  
           bodyObj=$(cat <<EOF
           {"filters":[{"criteria":[{"filterType":7,"value":"$EXTENSION_ID"}]}],"flags":131}
           EOF
@@ -119,21 +135,17 @@ jobs:
     #       tree -a -L 5 media
     #     shell: bash
 
-    #   - name: Extract version from tag
-    #     id: extract_version
+    #   - name: Update package version
     #     run: |
-    #       TAG="${{ github.event.release.tag_name }}"
-    #       VERSION=${TAG#v}
-    #       echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-    #     shell: bash
+    #       echo "PREV_PACKAGE_VERSION=$(jq -r .version package.json)" >> $GITHUB_ENV
 
-      - name: Update package version
+    #       pnpm version patch --allow-same-version --no-git-tag-version
+    #       NEW_PACKAGE_VERSION=$(jq -r .version package.json)
+    #       echo "NEW_PACKAGE_VERSION=${NEW_PACKAGE_VERSION#v}" >> $GITHUB_ENV
+
+      - name: early exit if version exists
         run: |
-          echo "PREV_PACKAGE_VERSION=$(jq -r .version package.json)" >> $GITHUB_ENV
-
-          pnpm version patch --allow-same-version --no-git-tag-version
-          NEW_PACKAGE_VERSION=$(jq -r .version package.json)
-          echo "NEW_PACKAGE_VERSION=${NEW_PACKAGE_VERSION#v}" >> $GITHUB_ENV
+          exit 1
 
       - name: Publish vscode package
         id: publish_vscode_package
@@ -142,14 +154,10 @@ jobs:
           script: |
             try {
               const prerelease = process.env.PRERELEASE === 'true';
-              //const version = process.env.VERSION;
-              const prev_version = process.env.PREV_PACKAGE_VERSION;
-              const version = process.env.NEW_PACKAGE_VERSION;
-
-              console.log(`Previous version from package.json: ${prev_version}`);
+              const version = process.env.PACKAGE_VERSION;
 
               // create vscode package with version but without creating git tag
-              const args = ['vsce', 'publish', '--no-dependencies', '--no-git-tag-version', version];
+              const args = ['vsce', 'publish', '--no-dependencies'];
               if (prerelease) {
                 args.push('--pre-release');
               }
@@ -162,15 +170,7 @@ jobs:
               
               console.log('Package published successfully.');
             } catch (error) {
-              console.error('Error during package publishing:', error);
-
-              const args = ['version', prev_version, '--allow-same-version', '--no-git-tag-version'];              
-              console.log(`Reverting to previous version ${prev_version} in package.json ...`);
-              const exitCode = await exec.exec('pnpm', args);
-              
-              if (exitCode !== 0) {
-                  throw new Error(`Reverting version failed with exit code ${exitCode}`);
-              }              
+              console.error('Error during package publishing:', error);              
             }
         env:
           VSCE_PAT: ${{ secrets.VSCE_PAT }}
