@@ -3,7 +3,7 @@ name: Publish Package
 on:
   release:
     types: [published]
-#   workflow_dispatch:
+  workflow_dispatch:
 
 env:
   NODE_VERSION: '20.x'
