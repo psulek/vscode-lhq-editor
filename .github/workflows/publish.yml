@@ -48,9 +48,21 @@ jobs:
             exit 1
           fi
 
-          echo "versionExists: [$versionExists]"
+          # Check if the highest version in Marketplace is greater than the current version
+          highestMarketplaceVersion=$(echo "$response" | jq -r '.results[0].extensions[0].versions[].version' | sort -V | tail -n 1)
+          echo "Highest version in Marketplace: $highestMarketplaceVersion"
 
-          exit 1
+          # Use npm's semver for comparison if available, otherwise fallback to string compare
+          if command -v npx &> /dev/null; then
+            isGreater=$(npx semver "$highestMarketplaceVersion" -r ">$targetVersion" || echo "false")
+            if [[ "$isGreater" == "$highestMarketplaceVersion" ]]; then
+              echo "Error: Marketplace already contains a higher version ($highestMarketplaceVersion) than your package.json ($targetVersion)."
+              exit 1
+            fi
+          else
+            echo "Error: npx command not found. Cannot continue"
+            exit 1
+          fi
 
       - name: set git config
         env:
