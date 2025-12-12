@@ -22,6 +22,8 @@ jobs:
 
       - name: check if version exist in vs marketplace
         id: check_version
+        env:
+          EXTENSION_ID: ${{ env.EXTENSION_ID }}
         run: |
           targetVersion=$(jq -r .version package.json)
           echo "PACKAGE_VERSION=$targetVersion"
