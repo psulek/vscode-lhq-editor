@@ -1,9 +1,9 @@
 name: Publish Package
 
 on:
-#   release:
-#     types: [published]
-  workflow_dispatch:
+  release:
+    types: [published]
+#   workflow_dispatch:
 
 env:
   NODE_VERSION: '20.x'
@@ -19,6 +19,28 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v5
 
+      - name: check if version exist in vs marketplace
+        id: check_version
+        run: |
+          targetVersion=$(jq -r .version package.json)
+          echo "PACKAGE_VERSION=$targetVersion"
+          bodyObj='{"filters":[{"criteria":[{"filterType":7,"value":"psulek-solo.lhq-editor"}]}],"flags":131}'
+              
+          response=$(curl -s -X POST "https://marketplace.visualstudio.com/_apis/public/gallery/extensionquery" \
+            -H "Content-Type: application/json" \
+            -H "Accept: application/json;api-version=3.0-preview.1" \
+            -d "$bodyObj")
+              
+          versionExists=$(echo "$response" | jq -r \
+            --arg ver "$targetVersion" \
+            '.results[0].extensions[0].versions[] | select(.version == $ver) | .version')
+              
+          if [[ "$versionExists" == "$targetVersion" ]]; then
+            echo "Version $targetVersion already exists in VS Marketplace."
+            exit 1
+          fi
+
+          exit 1
       - name: set git config
         env:
           GH_TOKEN: ${{ github.token }}
@@ -32,10 +54,10 @@ jobs:
           # jq -r '"PACKAGE_VERSION=" + .version, "PKG_NAME=" + .name' package.json >> $GITHUB_ENV
           echo "PACKAGE_VERSION=$(jq -r .version package.json)" >> $GITHUB_ENV
 
-      - name: test read env
-        run: |
-          echo "PACKAGE_VERSION: ${{ env.PACKAGE_VERSION }}"
-          exit 1
+    #   - name: test read env
+    #     run: |
+    #       echo "PACKAGE_VERSION: ${{ env.PACKAGE_VERSION }}"
+    #       exit 1
 
     #   - name: test
     #     run: |
