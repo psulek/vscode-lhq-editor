@@ -28,7 +28,11 @@ jobs:
           targetVersion=$(jq -r .version package.json)
           echo "PACKAGE_VERSION=$targetVersion"
           # bodyObj='{"filters":[{"criteria":[{"filterType":7,"value":"psulek-solo.lhq-editor"}]}],"flags":131}'
-          bodyObj='{"filters":[{"criteria":[{"filterType":7,"value":"$EXTENSION_ID"}]}],"flags":131}'
+          # bodyObj='{"filters":[{"criteria":[{"filterType":7,"value":"$EXTENSION_ID"}]}],"flags":131}'
+          bodyObj=$(cat <<EOF
+          {"filters":[{"criteria":[{"filterType":7,"value":"$EXTENSION_ID"}]}],"flags":131}
+          EOF
+          )
           echo "bodyObj: $bodyObj"
               
           response=$(curl -s -X POST "https://marketplace.visualstudio.com/_apis/public/gallery/extensionquery" \
