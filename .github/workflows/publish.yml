@@ -9,6 +9,7 @@ env:
   NODE_VERSION: '20.x'
   MOCHA_COLORS: '0'
   REGISTRY_URL: 'https://npm.pkg.github.com'
+  EXTENSION_ID: 'psulek-solo.lhq-editor'
   
 jobs:
   build-and-publish:
@@ -22,14 +23,18 @@ jobs:
       - name: check if version exist in vs marketplace
         id: check_version
         run: |
+          extid={{ env.EXTENSION_ID }}
           targetVersion=$(jq -r .version package.json)
           echo "PACKAGE_VERSION=$targetVersion"
-          bodyObj='{"filters":[{"criteria":[{"filterType":7,"value":"psulek-solo.lhq-editor"}]}],"flags":131}'
+          # bodyObj='{"filters":[{"criteria":[{"filterType":7,"value":"psulek-solo.lhq-editor"}]}],"flags":131}'
+          bodyObj='{"filters":[{"criteria":[{"filterType":7,"value":"'"$extid"'"}]}],"flags":131}'
               
           response=$(curl -s -X POST "https://marketplace.visualstudio.com/_apis/public/gallery/extensionquery" \
             -H "Content-Type: application/json" \
             -H "Accept: application/json;api-version=3.0-preview.1" \
             -d "$bodyObj")
+
+          targetVersion="2.0.0"
               
           versionExists=$(echo "$response" | jq -r \
             --arg ver "$targetVersion" \
@@ -41,6 +46,7 @@ jobs:
           fi
 
           exit 1
+
       - name: set git config
         env:
           GH_TOKEN: ${{ github.token }}
