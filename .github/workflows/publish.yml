@@ -48,6 +48,8 @@ jobs:
             exit 1
           fi
 
+          echo "versionExists: [$versionExists]"
+
           exit 1
 
       - name: set git config
