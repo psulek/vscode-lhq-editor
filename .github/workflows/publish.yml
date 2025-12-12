@@ -23,18 +23,17 @@ jobs:
       - name: check if version exist in vs marketplace
         id: check_version
         run: |
-          extid={{ env.EXTENSION_ID }}
           targetVersion=$(jq -r .version package.json)
           echo "PACKAGE_VERSION=$targetVersion"
           # bodyObj='{"filters":[{"criteria":[{"filterType":7,"value":"psulek-solo.lhq-editor"}]}],"flags":131}'
-          bodyObj='{"filters":[{"criteria":[{"filterType":7,"value":"'"$extid"'"}]}],"flags":131}'
+          bodyObj='{"filters":[{"criteria":[{"filterType":7,"value":"$EXTENSION_ID"}]}],"flags":131}'
               
           response=$(curl -s -X POST "https://marketplace.visualstudio.com/_apis/public/gallery/extensionquery" \
             -H "Content-Type: application/json" \
             -H "Accept: application/json;api-version=3.0-preview.1" \
             -d "$bodyObj")
 
-          targetVersion="2.0.0"
+          #targetVersion="2.0.0"
               
           versionExists=$(echo "$response" | jq -r \
             --arg ver "$targetVersion" \
