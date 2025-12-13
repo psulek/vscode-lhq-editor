@@ -1,15 +1,16 @@
 name: Publish Package
 
 on:
-#   release:
-#     types: [published]
-  workflow_dispatch:
+  release:
+    types: [published]
+#   workflow_dispatch:
 
 env:
   NODE_VERSION: '20.x'
   MOCHA_COLORS: '0'
   REGISTRY_URL: 'https://npm.pkg.github.com'
-  #PREREALSE: 1
+  EXTENSION_ID: 'psulek-solo.lhq-editor'
+  PACKAGE_NAME: 'lhq-editor'
   
 jobs:
   build-and-publish:
@@ -19,12 +20,6 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
-
-      - name: test
-        run: |
-          echo "head_ref: ${{ github.head_ref }}"
-          echo "ref_name: ${{ github.ref_name }}"
-          exit 1
 
       - uses: pnpm/action-setup@v4
         name: Install pnpm
@@ -51,74 +46,175 @@ jobs:
       - name: Install dependencies
         run: |
           pnpm install --frozen-lockfile
-          pnpm add -g vsce
+          pnpm add -g vsce semver
+
+      - name: Validate release tag value
+        run: |
+          TAG="${{ github.event.release.tag_name }}"
+          echo "::notice::TAG: $TAG"
+          
+          # Require tag to be in format vX.Y.Z
+          if [[ ! "$TAG" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+            echo "::error::Release tag '$TAG' is not in the format vX.Y.Z"
+            echo "TAG_VALID=0" >> $GITHUB_ENV
+            exit 0
+          fi
+
+          TAG_VERSION=${TAG#v}
+          echo "TAG_VERSION=$TAG_VERSION" >> $GITHUB_ENV
+        
+          # Check if TAG_VERSION is valid semver
+          if ! semver "$TAG_VERSION" &> /dev/null; then
+            echo "::error::Release tag version '$TAG_VERSION' is not a valid semantic version."
+            echo "TAG_VALID=0" >> $GITHUB_ENV
+            exit 0
+          fi
+
+          echo "::notice::TAG_VERSION: $TAG_VERSION"
+
+          PACKAGE_VERSION=$(jq -r .version package.json)
+          echo "PACKAGE_VERSION=$PACKAGE_VERSION" >> $GITHUB_ENV
+          echo "::notice::PACKAGE_VERSION: $PACKAGE_VERSION"
+
+          if [[ "$TAG_VERSION" != "$PACKAGE_VERSION" ]]; then
+            echo "::error::Release tag version '$TAG_VERSION' does not match package.json version '$PACKAGE_VERSION'."
+            echo "TAG_VALID=0" >> $GITHUB_ENV
+            exit 0
+          fi
+
+          echo "TAG_VALID=1" >> $GITHUB_ENV
+
+      - name: Mark release as draft on invalid release tag
+        if: env.TAG_VALID == '0'
+        uses: ./.github/actions/mark-draft
+        with:
+          reason: "Invalid tag format"
+
+        # uses: actions/github-script@v7
+        # with:
+        #   script: |
+        #     core.warning("Marking release as draft due to invalid tag...");
+
+        #     await github.rest.repos.updateRelease({
+        #       owner: context.repo.owner,
+        #       repo: context.repo.repo,
+        #       release_id: context.payload.release.id,
+        #       draft: true
+        #     });
+
+        #     process.exit(1);
+          
+      - name: Check Marketplace for existing version
+        run: |  
+          bodyObj=$(cat <<EOF
+          {"filters":[{"criteria":[{"filterType":7,"value":"$EXTENSION_ID"}]}],"flags":131}
+          EOF
+          )
+              
+          response=$(curl -s -X POST "https://marketplace.visualstudio.com/_apis/public/gallery/extensionquery" \
+            -H "Content-Type: application/json" \
+            -H "Accept: application/json;api-version=3.0-preview.1" \
+            -d "$bodyObj")
+
+          targetVersion="$PACKAGE_VERSION"
+              
+          versionExists=$(echo "$response" | jq -r \
+            --arg ver "$targetVersion" \
+            '.results[0].extensions[0].versions[] | select(.version == $ver) | .version')
+              
+          if [[ "$versionExists" == "$targetVersion" ]]; then
+            echo "Version $targetVersion already exists in VS Marketplace."
+            exit 1
+          fi
+
+          # Check if the highest version in Marketplace is greater than the current version
+          highestMarketplaceVersion=$(echo "$response" | jq -r '.results[0].extensions[0].versions[].version' | sort -V | tail -n 1)
+          echo "Highest version in Marketplace: $highestMarketplaceVersion"
+
+          isGreater=$(semver "$highestMarketplaceVersion" -r ">$targetVersion" || echo "false")
+          if [[ "$isGreater" == "$highestMarketplaceVersion" ]]; then
+            echo "Error: Marketplace already contains a higher version ($highestMarketplaceVersion) than your package.json ($targetVersion)."
+            exit 1
+          fi
+
+      - name: set git config
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git config --global user.email "${GITHUB_ACTOR_ID}+${GITHUB_ACTOR}@users.noreply.github.com"
+          git config --global user.name "$(gh api /users/${GITHUB_ACTOR} | jq .name -r)"
+          git config -l
 
     #   - name: Print directory tree
     #     run: |
     #       tree -a -L 5 media
     #     shell: bash
 
-      - name: Extract version from tag
-        id: extract_version
-        run: |
-          TAG="${{ github.event.release.tag_name }}"
-          VERSION=${TAG#v}
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-        shell: bash
-
-      - name: Read package version
-        run: echo "PACKAGE_VERSION=$(jq -r .version package.json)" >> $GITHUB_ENV
-
       - name: Publish vscode package
-        id: publish_vscode_package
         uses: actions/github-script@v7
         with:
           script: |
             try {
-              const prerelease = process.env.PRERELEASE === 'true';
-              const version = process.env.VERSION;
-              const prev_version = process.env.PACKAGE_VERSION;
-              
-              console.log(`Previous version from package.json: ${prev_version}`);
+              const fs = require('fs');
+              const path = require('path');
 
-              // create vscode package with version but without creating git tag
-              const args = ['vsce', 'publish', '--no-dependencies', '--no-git-tag-version', version];
+              const prerelease = process.env.PRERELEASE === 'true';
+              const version = process.env.PACKAGE_VERSION;
+              const packageName = process.env.PACKAGE_NAME;
+              const prereleaseTag = prerelease ? 'pre-release' : 'release';
+
+              const args = ['vsce', 'publish', '--no-dependencies'];
               if (prerelease) {
                 args.push('--pre-release');
               }
-              console.log(`Publishing package for ${(prerelease?'pre-release':'')} version ${version} ...`);
+
+              
+              core.info(`Publishing package for '${packageName}' for '${prereleaseTag}' version '${version}' ...`);
               const exitCode = await exec.exec('pnpm', args);
               
               if (exitCode !== 0) {
                   throw new Error(`Package publishing failed with exit code ${exitCode}`);
               }
-              
-              console.log('Package published successfully.');
-            } catch (error) {
-              console.error('Error during package publishing:', error);
 
-              const args = ['version', prev_version, '--allow-same-version', '--no-git-tag-version'];              
-              console.log(`Reverting to previous version ${prev_version} in package.json ...`);
+              core.notice(`Package '${packageName}' for '${prereleaseTag}' version '${version}' published successfully.`);
+
+              core.info(`Creating local package '${packageName}' for '${prereleaseTag}' version '${version}' ...`);
+              args.splice(1, 1, 'package');
               const exitCode = await exec.exec('pnpm', args);
               
               if (exitCode !== 0) {
-                  throw new Error(`Reverting version failed with exit code ${exitCode}`);
+                  throw new Error(`Package creating failed with exit code ${exitCode}`);
               }
-              
-              console.log(`Marking release as draft ...`);
-              const release_id = context.payload.release.id;
-              await github.rest.repos.updateRelease({
+
+              const vsixFile = `${packageName}-${version}.vsix`;
+              if (!fs.existsSync(vsixFile)) {
+                throw new Error(`VSIX file '${vsixFile}' not found after packaging.`);
+              }
+  
+              await github.rest.repos.uploadReleaseAsset({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                release_id: release_id,
-                draft: true
+                release_id: context.payload.release.id,
+                name: path.basename(vsixFile),
+                data: await fs.promises.readFile(vsixFile)
               });
-              core.setFailed('Failed to create VSCode package. Release marked as draft.');
+
+              core.notice(`File '${vsixFile}' was attached to the release successfully.`);
+              
+              core.exportVariable('PUBLISH_SUCCESS', '1');
+            } catch (err) {
+              core.error(`Error during package publishing: ${err}`);
+              core.exportVariable('PUBLISH_SUCCESS', '0');
             }
         env:
           VSCE_PAT: ${{ secrets.VSCE_PAT }}
           PRERELEASE: ${{ github.event.release.prerelease }}
-          VERSION: ${{ steps.extract_version.outputs.version }}
+
+      - name: Mark release as draft on package publish failure
+        if: env.PUBLISH_SUCCESS == '0'
+        uses: ./.github/actions/mark-draft
+        with:
+          reason: "Package publish failed"
 
       - name: Update release with package link
         uses: actions/github-script@v7
