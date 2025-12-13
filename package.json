@@ -2,7 +2,7 @@
     "name": "lhq-editor",
     "displayName": "LHQ Editor",
     "description": "Editor for LHQ files, a format for localization and internationalization of software applications.",
-    "version": "1.0.2",
+    "version": "1.0.4",
     "publisher": "psulek-solo",
     "license": "MIT",
     "author": "Peter Šulek",
