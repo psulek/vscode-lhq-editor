@@ -170,7 +170,7 @@ jobs:
 
               
               core.info(`Publishing package for '${packageName}' for '${prereleaseTag}' version '${version}' ...`);
-              const exitCode = await exec.exec('pnpm', args);
+              let exitCode = await exec.exec('pnpm', args);
               
               if (exitCode !== 0) {
                   throw new Error(`Package publishing failed with exit code ${exitCode}`);
@@ -180,7 +180,7 @@ jobs:
 
               core.info(`Creating local package '${packageName}' for '${prereleaseTag}' version '${version}' ...`);
               args.splice(1, 1, 'package');
-              const exitCode = await exec.exec('pnpm', args);
+              exitCode = await exec.exec('pnpm', args);
               
               if (exitCode !== 0) {
                   throw new Error(`Package creating failed with exit code ${exitCode}`);
