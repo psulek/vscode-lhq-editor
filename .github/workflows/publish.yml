@@ -3,7 +3,6 @@ name: Publish Package
 on:
   release:
     types: [published]
-#   workflow_dispatch:
 
 env:
   NODE_VERSION: '20.x'
@@ -47,42 +46,6 @@ jobs:
         run: |
           pnpm install --frozen-lockfile
           pnpm add -g vsce semver
-
-    #   - name: Validate release tag value
-    #     run: |
-    #       TAG="${{ github.event.release.tag_name }}"
-    #       echo "::notice::TAG: $TAG"
-          
-    #       # Require tag to be in format vX.Y.Z
-    #       if [[ ! "$TAG" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
-    #         echo "::error::Release tag '$TAG' is not in the format vX.Y.Z"
-    #         echo "TAG_VALID=0" >> $GITHUB_ENV
-    #         exit 0
-    #       fi
-
-    #       TAG_VERSION=${TAG#v}
-    #       echo "TAG_VERSION=$TAG_VERSION" >> $GITHUB_ENV
-        
-    #       # Check if TAG_VERSION is valid semver
-    #       if ! semver "$TAG_VERSION" &> /dev/null; then
-    #         echo "::error::Release tag version '$TAG_VERSION' is not a valid semantic version."
-    #         echo "TAG_VALID=0" >> $GITHUB_ENV
-    #         exit 0
-    #       fi
-
-    #       echo "::notice::TAG_VERSION: $TAG_VERSION"
-
-    #       PACKAGE_VERSION=$(jq -r .version package.json)
-    #       echo "PACKAGE_VERSION=$PACKAGE_VERSION" >> $GITHUB_ENV
-    #       echo "::notice::PACKAGE_VERSION: $PACKAGE_VERSION"
-
-    #       if [[ "$TAG_VERSION" != "$PACKAGE_VERSION" ]]; then
-    #         echo "::error::Release tag version '$TAG_VERSION' does not match package.json version '$PACKAGE_VERSION'."
-    #         echo "TAG_VALID=0" >> $GITHUB_ENV
-    #         exit 0
-    #       fi
-
-    #       echo "TAG_VALID=1" >> $GITHUB_ENV
 
       - name: Validate release tag value
         id: validate_tag
@@ -143,11 +106,6 @@ jobs:
           git config --global user.email "${GITHUB_ACTOR_ID}+${GITHUB_ACTOR}@users.noreply.github.com"
           git config --global user.name "$(gh api /users/${GITHUB_ACTOR} | jq .name -r)"
           git config -l
-
-    #   - name: Print directory tree
-    #     run: |
-    #       tree -a -L 5 media
-    #     shell: bash
 
       - name: Publish vscode package
         uses: actions/github-script@v7

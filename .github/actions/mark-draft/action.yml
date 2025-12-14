@@ -11,8 +11,6 @@ runs:
     - uses: actions/github-script@v7
       with:
         script: |
-          // core.warning('Marking release as draft: ${{ inputs.reason }}');
-
           await github.rest.repos.updateRelease({
             owner: context.repo.owner,
             repo: context.repo.repo,
