@@ -48,64 +48,63 @@ jobs:
           pnpm install --frozen-lockfile
           pnpm add -g vsce semver
 
-      - name: Validate release tag value
-        run: |
-          TAG="${{ github.event.release.tag_name }}"
-          echo "::notice::TAG: $TAG"
+    #   - name: Validate release tag value
+    #     run: |
+    #       TAG="${{ github.event.release.tag_name }}"
+    #       echo "::notice::TAG: $TAG"
           
-          # Require tag to be in format vX.Y.Z
-          if [[ ! "$TAG" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
-            echo "::error::Release tag '$TAG' is not in the format vX.Y.Z"
-            echo "TAG_VALID=0" >> $GITHUB_ENV
-            exit 0
-          fi
+    #       # Require tag to be in format vX.Y.Z
+    #       if [[ ! "$TAG" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+    #         echo "::error::Release tag '$TAG' is not in the format vX.Y.Z"
+    #         echo "TAG_VALID=0" >> $GITHUB_ENV
+    #         exit 0
+    #       fi
 
-          TAG_VERSION=${TAG#v}
-          echo "TAG_VERSION=$TAG_VERSION" >> $GITHUB_ENV
+    #       TAG_VERSION=${TAG#v}
+    #       echo "TAG_VERSION=$TAG_VERSION" >> $GITHUB_ENV
         
-          # Check if TAG_VERSION is valid semver
-          if ! semver "$TAG_VERSION" &> /dev/null; then
-            echo "::error::Release tag version '$TAG_VERSION' is not a valid semantic version."
-            echo "TAG_VALID=0" >> $GITHUB_ENV
-            exit 0
-          fi
+    #       # Check if TAG_VERSION is valid semver
+    #       if ! semver "$TAG_VERSION" &> /dev/null; then
+    #         echo "::error::Release tag version '$TAG_VERSION' is not a valid semantic version."
+    #         echo "TAG_VALID=0" >> $GITHUB_ENV
+    #         exit 0
+    #       fi
 
-          echo "::notice::TAG_VERSION: $TAG_VERSION"
+    #       echo "::notice::TAG_VERSION: $TAG_VERSION"
 
-          PACKAGE_VERSION=$(jq -r .version package.json)
-          echo "PACKAGE_VERSION=$PACKAGE_VERSION" >> $GITHUB_ENV
-          echo "::notice::PACKAGE_VERSION: $PACKAGE_VERSION"
+    #       PACKAGE_VERSION=$(jq -r .version package.json)
+    #       echo "PACKAGE_VERSION=$PACKAGE_VERSION" >> $GITHUB_ENV
+    #       echo "::notice::PACKAGE_VERSION: $PACKAGE_VERSION"
 
-          if [[ "$TAG_VERSION" != "$PACKAGE_VERSION" ]]; then
-            echo "::error::Release tag version '$TAG_VERSION' does not match package.json version '$PACKAGE_VERSION'."
-            echo "TAG_VALID=0" >> $GITHUB_ENV
-            exit 0
-          fi
+    #       if [[ "$TAG_VERSION" != "$PACKAGE_VERSION" ]]; then
+    #         echo "::error::Release tag version '$TAG_VERSION' does not match package.json version '$PACKAGE_VERSION'."
+    #         echo "TAG_VALID=0" >> $GITHUB_ENV
+    #         exit 0
+    #       fi
 
-          echo "TAG_VALID=1" >> $GITHUB_ENV
+    #       echo "TAG_VALID=1" >> $GITHUB_ENV
+
+      - name: Validate release tag value
+        id: validate_tag
+        uses: ./.github/actions/validate-tag
+        with:
+          tag: ${{ github.event.release.tag_name }}
+
+      - name: Update tag environment variables
+        run: | 
+          echo "TAG_VERSION=${{ steps.validate_tag.outputs.tag_version }}" >> $GITHUB_ENV
+          echo "PACKAGE_VERSION=${{ steps.validate_tag.outputs.package_version }}" >> $GITHUB_ENV
+          echo "TAG_VALID=${{ steps.validate_tag.outputs.tag_valid }}" >> $GITHUB_ENV
 
       - name: Mark release as draft on invalid release tag
         if: env.TAG_VALID == '0'
         uses: ./.github/actions/mark-draft
         with:
           reason: "Invalid tag format"
-
-        # uses: actions/github-script@v7
-        # with:
-        #   script: |
-        #     core.warning("Marking release as draft due to invalid tag...");
-
-        #     await github.rest.repos.updateRelease({
-        #       owner: context.repo.owner,
-        #       repo: context.repo.repo,
-        #       release_id: context.payload.release.id,
-        #       draft: true
-        #     });
-
-        #     process.exit(1);
           
       - name: Check Marketplace for existing version
-        run: |  
+        run: |
+          exit 1
           bodyObj=$(cat <<EOF
           {"filters":[{"criteria":[{"filterType":7,"value":"$EXTENSION_ID"}]}],"flags":131}
           EOF
