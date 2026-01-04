@@ -15,8 +15,8 @@ importers:
   .:
     dependencies:
       '@psulek/lhq-generators':
-        specifier: 1.0.0-rc.1
-        version: 1.0.0-rc.1(typescript@5.8.3)
+        specifier: 1.0.0
+        version: 1.0.0(typescript@5.8.3)
       class-transformer:
         specifier: 0.5.1
         version: 0.5.1
@@ -383,8 +383,8 @@ packages:
     resolution: {integrity: sha512-+1VkjdD0QBLPodGrJUeqarH8VAIvQODIbwh9XpP5Syisf7YoQgsJKPNFoqqLQlu+VQ/tVSshMR6loPMn8U+dPg==}
     engines: {node: '>=14'}
 
-  '@psulek/lhq-generators@1.0.0-rc.1':
-    resolution: {integrity: sha512-uA0uJg8SMXTzNX9UONWZ1Z0euzKsTx6Wt5DkLJ1OBYaxgjWYOT3zVbfwtF2vfQJI+CDfqX/atcONqtVASfidVg==, tarball: https://npm.pkg.github.com/download/@psulek/lhq-generators/1.0.0-rc.1/5f4c419bee9a8cc7e29423b8bacbffe28dada563}
+  '@psulek/lhq-generators@1.0.0':
+    resolution: {integrity: sha512-RRIxK5s2Eh1iIjDpGacZJsCShq09OenlNfC7/f/NARn6n5GEsUx9WQACZS5i2ym699Bj4f2PzJke7CpCGu944w==, tarball: https://npm.pkg.github.com/download/@psulek/lhq-generators/1.0.0/92813c9bc139ebff651157ebbece1bef8e0802d5}
     hasBin: true
     peerDependencies:
       typescript: ^5.0.2
@@ -2356,7 +2356,7 @@ snapshots:
   '@pkgjs/parseargs@0.11.0':
     optional: true
 
-  '@psulek/lhq-generators@1.0.0-rc.1(typescript@5.8.3)':
+  '@psulek/lhq-generators@1.0.0(typescript@5.8.3)':
     dependencies:
       '@commander-js/extra-typings': 13.1.0(commander@13.1.0)
       '@xmldom/xmldom': 0.9.8

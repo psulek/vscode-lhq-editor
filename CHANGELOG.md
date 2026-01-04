@@ -1,5 +1,9 @@
 # ChangeLog
 
+## [1.0.5]
+
+- Updated dependency `@psulek/lhq-generators` to version `1.0.0` containing stable release
+
 ## [1.0.4]
 
 - Minor bug fixes

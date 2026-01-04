@@ -37,3 +37,11 @@ To apply .env file in windows/powershell (v7+), follow these steps:
         Import-Dotenv ".env"
     }
     ```
+
+7. Test in powershell by running:
+
+    ```powershell
+    $env:GH_READ_PACKAGES_TOKEN
+    ```
+
+   It should display the value of the token set in the `.env` file. 

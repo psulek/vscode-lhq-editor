@@ -2,7 +2,7 @@
     "name": "lhq-editor",
     "displayName": "LHQ Editor",
     "description": "Editor for LHQ files, a format for localization and internationalization of software applications.",
-    "version": "1.0.4",
+    "version": "1.0.5",
     "publisher": "psulek-solo",
     "license": "MIT",
     "author": "Peter Šulek",
@@ -420,8 +420,8 @@
         "typescript": "5.8.3"
     },
     "dependencies": {
-        "@psulek/lhq-generators": "1.0.0-rc.1",
         "class-transformer": "0.5.1",
+        "@psulek/lhq-generators": "1.0.0",
         "exceljs": "4.4.0",
         "fs-extra": "11.3.0",
         "glob": "11.0.2",

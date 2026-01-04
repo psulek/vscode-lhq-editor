@@ -66,8 +66,10 @@ jobs:
           reason: "Invalid tag format"
           
       - name: Check Marketplace for existing version
+        shell: bash
         run: |
-          exit 1
+          TARGET_VERSION="$PACKAGE_VERSION"
+
           bodyObj=$(cat <<EOF
           {"filters":[{"criteria":[{"filterType":7,"value":"$EXTENSION_ID"}]}],"flags":131}
           EOF
@@ -77,27 +79,44 @@ jobs:
             -H "Content-Type: application/json" \
             -H "Accept: application/json;api-version=3.0-preview.1" \
             -d "$bodyObj")
-
-          targetVersion="$PACKAGE_VERSION"
-              
+          
+          # Check if extension exists
+          extensionCount=$(echo "$response" | jq -r '.results[0].extensions | length')
+          
+          if [[ "$extensionCount" == "0" || "$extensionCount" == "null" ]]; then
+            echo "Extension not found in Marketplace. This appears to be a new extension."
+            exit 0
+          fi
+          
+          # Get all versions
+          versions=$(echo "$response" | jq -r '.results[0].extensions[0].versions[].version')
+          echo "Published versions in Marketplace:"
+          echo "$versions"
+          
+          # Check if target version already exists
           versionExists=$(echo "$response" | jq -r \
-            --arg ver "$targetVersion" \
+            --arg ver "$TARGET_VERSION" \
             '.results[0].extensions[0].versions[] | select(.version == $ver) | .version')
-              
-          if [[ "$versionExists" == "$targetVersion" ]]; then
-            echo "Version $targetVersion already exists in VS Marketplace."
+          
+          if [[ "$versionExists" == "$TARGET_VERSION" ]]; then
+            echo "Error: Version $TARGET_VERSION already exists in VS Marketplace."
             exit 1
           fi
-
-          # Check if the highest version in Marketplace is greater than the current version
-          highestMarketplaceVersion=$(echo "$response" | jq -r '.results[0].extensions[0].versions[].version' | sort -V | tail -n 1)
+          
+          # Get the highest version in Marketplace
+          highestMarketplaceVersion=$(echo "$versions" | sort -V | tail -n 1)
           echo "Highest version in Marketplace: $highestMarketplaceVersion"
 
-          isGreater=$(semver "$highestMarketplaceVersion" -r ">$targetVersion" || echo "false")
+          highestMarketplaceVersion=$(semver -c "$highestMarketplaceVersion")
+          
+          # Check if Marketplace version is greater than target version
+          isGreater=$(semver -c "$highestMarketplaceVersion" -r ">$TARGET_VERSION" || echo "false")
           if [[ "$isGreater" == "$highestMarketplaceVersion" ]]; then
-            echo "Error: Marketplace already contains a higher version ($highestMarketplaceVersion) than your package.json ($targetVersion)."
+            echo "Error: Marketplace already contains a higher version ($highestMarketplaceVersion) than in your package.json ($TARGET_VERSION)."
             exit 1
           fi
+          
+          echo "Version check passed. Ready to publish version $TARGET_VERSION"
 
       - name: set git config
         env:
@@ -173,23 +192,32 @@ jobs:
         with:
           reason: "Package publish failed"
 
-      - name: Update release with package link
-        uses: actions/github-script@v7
+      - name: Add published package to the release
+        if: env.PUBLISH_SUCCESS == '1'
+        uses: softprops/action-gh-release@v2
         with:
-          script: |
-            const package_url = `https://marketplace.visualstudio.com/items?itemName=psulek-solo.lhq-editor`;
-            const release = await github.rest.repos.getRelease({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              release_id: context.payload.release.id
-            });
+          body: '📦 **VSCode Extension:** [View on VS Marketplace](https://marketplace.visualstudio.com/items?itemName=psulek-solo.lhq-editor)'
+          append_body: true
+          tag_name: ${{ github.event.release.tag_name }}
+        #   files: ${{ env.PACKAGE_PATH }}
+
+    #   - name: Update release with package link
+    #     uses: actions/github-script@v7
+    #     with:
+    #       script: |
+    #         const package_url = `https://marketplace.visualstudio.com/items?itemName=psulek-solo.lhq-editor`;
+    #         const release = await github.rest.repos.getRelease({
+    #           owner: context.repo.owner,
+    #           repo: context.repo.repo,
+    #           release_id: context.payload.release.id
+    #         });
             
-            const currentBody = release.data.body || '';
-            const packageSection = `\n\n---\n\n📦 **VSCode Extension:** [View on VS Marketplace](${package_url})`;
+    #         const currentBody = release.data.body || '';
+    #         const packageSection = `\n\n---\n\n📦 **VSCode Extension:** [View on VS Marketplace](${package_url})`;
             
-            await github.rest.repos.updateRelease({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              release_id: context.payload.release.id,
-              body: currentBody + packageSection
-            });
+    #         await github.rest.repos.updateRelease({
+    #           owner: context.repo.owner,
+    #           repo: context.repo.repo,
+    #           release_id: context.payload.release.id,
+    #           body: currentBody + packageSection
+    #         });
